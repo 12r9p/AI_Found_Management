@@ -9,6 +9,7 @@ import { MapPicker, type Pin } from "../../components/MapPicker";
 import { ItemEditModal } from "../../components/ItemEditModal";
 import { RegisteredModal } from "../../components/RegisteredModal";
 import { api, imageUrl } from "../../lib/api";
+import { normalizeImageFiles } from "../../lib/image";
 import type { Item, Match } from "../../lib/types";
 
 /** 拾得日時のクイック入力。現場は「今 / さっき」が大半。 */
@@ -72,13 +73,13 @@ export default function RegisterPage() {
     const picked = Array.from(files).slice(0, 2 - keys.length);
     setUploading(true);
     try {
-      const { keys: newKeys } = await api.upload(picked);
-      const merged = [...keys, ...newKeys].slice(0, 2);
-      setKeys(merged);
-      setUploading(false);
-      await analyze(merged);
+      const normalized = await normalizeImageFiles(picked);
+      const { keys: newKeys } = await api.upload(normalized);
+      setKeys([...keys, ...newKeys].slice(0, 2));
+      // AI解析は自動実行しない（複数枚まとめて追加してから「AIで特徴を解析」で手動起動する運用のため）
     } catch (e) {
       toast(`アップロード失敗: ${(e as Error).message}`, "error");
+    } finally {
       setUploading(false);
     }
   };
@@ -220,13 +221,13 @@ export default function RegisterPage() {
           }}
         />
         <Button variant="outline" block onClick={() => analyze()} disabled={busy || keys.length === 0}>
-          {analyzing ? "AI解析中…" : "AIで特徴を再解析"}
+          {analyzing ? "AI解析中…" : "AIで特徴を解析"}
         </Button>
       </Card>
 
       <Card variant="bordered" className="mb-16">
         <div className="rb-label mb-8">拾得場所（地図をタップ）</div>
-        <MapPicker value={pin} onChange={setPin} height={280} />
+        <MapPicker value={pin} onChange={setPin} />
       </Card>
 
       <Card variant="bordered">

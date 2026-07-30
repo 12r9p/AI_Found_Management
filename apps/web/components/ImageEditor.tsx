@@ -2,6 +2,7 @@
 import { useRef, useState } from "react";
 import { Button, useToast } from "./ui";
 import { api, imageUrl } from "../lib/api";
+import { normalizeImageFiles } from "../lib/image";
 
 /**
  * 編集画面共通の画像アップローダー。
@@ -31,7 +32,8 @@ export function ImageEditor({
     }
     setUploading(true);
     try {
-      const { keys: newKeys } = await api.upload(picked);
+      const normalized = await normalizeImageFiles(picked);
+      const { keys: newKeys } = await api.upload(normalized);
       onChange([...keys, ...newKeys].slice(0, max));
     } catch (e) {
       toast(`アップロード失敗: ${(e as Error).message}`, "error");
