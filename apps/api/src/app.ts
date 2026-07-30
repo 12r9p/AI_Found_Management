@@ -58,7 +58,8 @@ async function readList(
 }
 
 export function createApp() {
-  const app = new Elysia()
+  // aot(実行時コード生成)は Cloudflare Workers のサンドボックスで禁止されているため無効化。
+  const app = new Elysia({ aot: false })
     .onError(({ error, code, set }) => {
       const status = code === "NOT_FOUND" ? 404 : 500;
       set.status = status;

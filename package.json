@@ -8,11 +8,18 @@
   ],
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"bun run dev:api\" \"bun run dev:web\"",
-    "dev:api": "bun --cwd apps/api run dev",
-    "dev:web": "bun --cwd apps/web run dev",
-    "build": "bun --cwd apps/api run build && bun --cwd apps/web run build",
-    "seed": "bun --cwd apps/api run seed",
-    "test": "bun --cwd apps/api run test"
+    "dev:api": "bun run --cwd apps/api dev",
+    "dev:web": "bun run --cwd apps/web dev",
+    "build": "bun run --cwd apps/web build",
+    "seed": "bun run --cwd apps/api seed",
+    "test": "bun run --cwd apps/api test",
+    "cf-dev:api": "bun run --cwd apps/api cf-dev",
+    "cf-dev:web": "bun run --cwd apps/web cf:preview",
+    "migrate:local": "bun run --cwd apps/api migrate:local",
+    "migrate:remote": "bun run --cwd apps/api migrate:remote",
+    "deploy:api": "bun run --cwd apps/api deploy",
+    "deploy:web": "bun run --cwd apps/web cf:deploy",
+    "deploy": "bun run deploy:api && bun run deploy:web"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

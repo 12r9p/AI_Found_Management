@@ -20,7 +20,7 @@ export interface ScoredInquiry extends Inquiry {
  * update は任意フィールドの部分更新を許す。
  */
 export interface Store {
-  readonly kind: "memory" | "postgres";
+  readonly kind: "memory" | "d1";
   init(): Promise<void>;
 
   // --- items ---

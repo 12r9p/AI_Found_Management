@@ -22,13 +22,13 @@ apps/
 | フロント | **Next.js 15**（App Router） | Workers に OpenNext でデプロイ。API と分離。 |
 | API | **Elysia** | Bun ローカル / Workers 両対応（`src/index.ts` と `src/worker.ts`）。 |
 | インフラ | **Cloudflare Workers** | フロントと API を別 Worker として分離デプロイ。 |
-| DB | **Postgres + pgvector**（D1 ではない） | 関係データ＋ベクトル検索を一元化。`DATABASE_URL` 未設定時は**インメモリ**で起動（外部依存ゼロでデモ可）。ローカルでは `apps/api/.data/store.json` に自動保存され、再起動しても消えない。 |
+| DB | **D1 + Vectorize** | D1 が行データ（source of truth）、Vectorize が埋め込みの近似最近傍検索（items/inquiries で2インデックス）。バインディング未設定時（素の `bun run dev:api` 等）は**インメモリ**で起動（外部依存ゼロでデモ可）。ローカルでは `apps/api/.data/store.json` に自動保存され、再起動しても消えない。 |
 | ストレージ | **R2** | 遺失物画像。ローカルは `apps/api/.data/uploads/` にフォールバック（保存先はカレントディレクトリに依存しない絶対パス）。 |
 | AI | **GPT 5.6 Luna 相当 / effort=low** | 画像特徴抽出＋埋め込み。`AI_API_KEY` 未設定時は**決定論的モック**で動作（日本語は文字 n-gram 埋め込み）。 |
 
 ### 設計上のポイント
 - **抽象化レイヤ**：ストレージ（`Store`）・AI（`AIProvider`）・画像（`ImageStorage`）は
-  インターフェース化。本番設定（Postgres / 実 AI / R2）と、依存ゼロのローカル実装を透過的に切替。
+  インターフェース化。本番設定（D1+Vectorize / 実 AI / R2）と、依存ゼロのローカル実装を透過的に切替。
 - **DB をほぼ直接触れる編集権限**：一覧テーブルのセル直接編集（onBlur 自動保存）＋個別ページで
   ほぼ全カラムを編集可能。現場対応力を優先。
 - **突き合わせ**：新規登録時にベクトル類似度＋カテゴリ整合ガードで自動照合。該当なしの問い合わせは
@@ -90,6 +90,10 @@ bun run seed
 - Web: http://localhost:3000
 - API health: http://localhost:8787/api/health → `store: memory, ai: mock`
 
+> 素の `bun run dev:api`（Bun ランタイム）は D1/Vectorize バインディングに到達できず常にインメモリで動きます。
+> D1+Vectorize を実際に使う動作確認は `wrangler dev`（Miniflare のローカルバインディング）または
+> デプロイ後の環境で行ってください（下記デプロイ手順参照）。
+
 テスト:
 
 ```bash
@@ -104,7 +108,6 @@ bun test               # ベクトル・照合ロジックのユニットテス�
 
 | 変数 | 用途 |
 | --- | --- |
-| `DATABASE_URL` | Postgres 接続文字列（pgvector 拡張が有効なもの。Neon 等）。未設定＝インメモリ。 |
 | `AI_API_KEY` / `AI_BASE_URL` | AI プロバイダ（OpenAI 互換）。未設定＝モック。 |
 | `AI_VISION_MODEL` | 既定 `gpt-5.6-luna`。 |
 | `AI_EMBED_MODEL` / `EMBED_DIM` | 埋め込みモデルと次元（既定 1536）。 |
@@ -113,33 +116,33 @@ bun test               # ベクトル・照合ロジックのユニットテス�
 | `WEB_ORIGIN` | CORS 許可オリジン。 |
 | `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD` | 両方設定すると API が Cloudflare Access の JWT を検証（下記デプロイ手順参照）。未設定＝検証なし。 |
 
-### DB 準備（Postgres + pgvector）
-`DATABASE_URL` を設定して起動すると、初回接続時にスキーマ（`items`/`inquiries`/`matches`/
-`notifications` と HNSW ベクトルインデックス）を自動適用します。手動なら:
-
-```bash
-cd apps/api && bun run migrate
-```
+### DB 準備（D1 + Vectorize）
+D1 のスキーマは `wrangler d1 migrations` で適用します（`apps/api/migrations/0001_init.sql`）。
+Vectorize インデックス（`found-items`/`found-inquiries`）は別途作成が必要です。手順は
+下記デプロイ手順を参照。`bun run migrate` は適用済みかどうかの案内を表示するだけです。
 
 ---
 
 ## デプロイ（Cloudflare）
 
 > このリポジトリの手元の認証情報は別アカウントのものです。デプロイ時は対象アカウントへ
-> `wrangler login` し直してください（`DATABASE_URL`/`AI_API_KEY` は `wrangler secret put`）。
+> `wrangler login` し直してください（`AI_API_KEY` は `wrangler secret put`）。
 
 ### 1. API Worker
 
 ```bash
 cd apps/api
-wrangler r2 bucket create found-images          # R2 バケット
-wrangler secret put DATABASE_URL                # Postgres(pgvector)
-wrangler secret put AI_API_KEY                  # AI プロバイダ
-wrangler deploy                                 # src/worker.ts
+wrangler r2 bucket create found-images                                   # R2 バケット
+wrangler d1 create found-db                                              # D1（database_id を wrangler.toml に反映）
+wrangler vectorize create found-items --dimensions=1536 --metric=cosine       # Vectorize（物品）
+wrangler vectorize create found-inquiries --dimensions=1536 --metric=cosine   # Vectorize（問い合わせ）
+wrangler d1 migrations apply found-db --remote                           # スキーマ適用
+wrangler secret put AI_API_KEY                                           # AI プロバイダ
+wrangler deploy                                                          # src/worker.ts
 ```
 
-`wrangler.toml` で R2 バインディング（`IMAGES`）を定義済み。低レイテンシ化する場合は
-Hyperdrive バインディング（コメント参照）を有効化。
+`wrangler.toml` で R2（`IMAGES`）・D1（`DB`）・Vectorize（`VECTORIZE_ITEMS`/`VECTORIZE_INQUIRIES`）
+バインディングを定義済み。
 
 ### 2. Web Worker（OpenNext）
 
@@ -185,7 +188,7 @@ API の CORS は資格情報付きリクエストを許可済み（同一 Access
 | --- | --- |
 | 遺失物画像のアップロード（2枚程度） | `/api/uploads`（最大2枚, R2/disk）、登録画面のカメラ対応 |
 | AI による画像特徴のタグ付け（文章化） | `/api/analyze`（Vision → 特徴文＋タグ、個人情報を書かない指示） |
-| タグのベクトル検索 | 埋め込み＋pgvector（`<=>`）/ メモリ時は JS コサイン。`/api/search` |
+| タグのベクトル検索 | 埋め込み＋Vectorize（近似最近傍）/ メモリ時は JS コサイン。`/api/search` |
 | フィルターによる絞り込み | 種別・色・状態・拾得場所・日付範囲（種別・色は設定で編集可） |
 | 未解決問い合わせとの突き合わせ | 登録時自動照合＋カテゴリガード。該当なしは保存し後日照合＋通知 |
 | リスト表示・DB 直接編集 | 編集可能テーブル（自動保存）＋個別ページ |

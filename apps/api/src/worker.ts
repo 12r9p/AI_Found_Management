@@ -1,4 +1,4 @@
-// Cloudflare Workers エントリ。R2/Hyperdrive バインディングは env 経由で渡る。
+// Cloudflare Workers エントリ。R2/D1/Vectorize バインディングは env 経由で渡る。
 import { createApp } from "./app.ts";
 import { setEnv } from "./env-holder.ts";
 import type { Env } from "./config.ts";

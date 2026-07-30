@@ -1,7 +1,6 @@
 // 環境変数の解決。Bun (process.env) と Cloudflare Workers (env binding) の両対応。
 
 export interface Env {
-  DATABASE_URL?: string;
   AI_API_KEY?: string;
   AI_BASE_URL?: string;
   AI_VISION_MODEL?: string;
@@ -14,11 +13,15 @@ export interface Env {
   ACCESS_AUD?: string;
   // Cloudflare バインディング
   IMAGES?: R2Bucket;
-  HYPERDRIVE?: { connectionString: string };
+  DB?: D1Database;
+  VECTORIZE_ITEMS?: Vectorize;
+  VECTORIZE_INQUIRIES?: Vectorize;
 }
 
 export interface Config {
-  databaseUrl: string | null;
+  d1: D1Database | null;
+  vectorizeItems: Vectorize | null;
+  vectorizeInquiries: Vectorize | null;
   ai: {
     apiKey: string | null;
     baseUrl: string;
@@ -40,11 +43,10 @@ export function resolveConfig(env: Env = {} as Env): Config {
   const get = (k: keyof Env): string | undefined =>
     (env[k] as string | undefined) ?? p[k];
 
-  const databaseUrl =
-    env.HYPERDRIVE?.connectionString ?? get("DATABASE_URL") ?? null;
-
   return {
-    databaseUrl: databaseUrl && databaseUrl.length > 0 ? databaseUrl : null,
+    d1: env.DB ?? null,
+    vectorizeItems: env.VECTORIZE_ITEMS ?? null,
+    vectorizeInquiries: env.VECTORIZE_INQUIRIES ?? null,
     ai: {
       apiKey: get("AI_API_KEY") ?? null,
       baseUrl: get("AI_BASE_URL") ?? "https://api.openai.com/v1",

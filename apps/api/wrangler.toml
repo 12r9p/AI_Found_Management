@@ -3,18 +3,40 @@ main = "src/worker.ts"
 compatibility_date = "2024-11-27"
 compatibility_flags = ["nodejs_compat"]
 
+# found-web と同一オリジン（found.s-t.work）上で /api/* だけをこの Worker に振り分ける。
+# カスタムドメインではなくルートを使うのは、1ホスト名を複数Workerでパス分割するため
+# （カスタムドメインはホスト名全体を1つのWorkerに固定してしまい共存できない）。
+# 事前に Cloudflareダッシュボードで found.s-t.work / api.found.s-t.work の
+# カスタムドメイン設定を外しておくこと（wrangler deploy でこのルートは自動作成される）。
+[[routes]]
+pattern = "found.s-t.work/api/*"
+zone_name = "s-t.work"
+
 # R2 バケット（遺失物画像）。本番デプロイ前に `wrangler r2 bucket create found-images` を実行。
 [[r2_buckets]]
 binding = "IMAGES"
 bucket_name = "found-images"
 
-# Postgres への低レイテンシ接続に Hyperdrive を使う場合（任意）。
-# [[hyperdrive]]
-# binding = "HYPERDRIVE"
-# id = "<your-hyperdrive-id>"
+# D1（リレーショナルデータ本体）。`wrangler d1 create found-db` で作成し、database_id を反映。
+[[d1_databases]]
+binding = "DB"
+database_name = "found-db"
+database_id = "31e0fd42-2c90-4f15-af83-7d0693c15fb9"
+migrations_dir = "migrations"
+
+# Vectorize（埋め込みベクトルの近似最近傍検索）。items/inquiries で意味空間が異なるため2本。
+# `wrangler vectorize create found-items --dimensions=1536 --metric=cosine`
+# `wrangler vectorize create found-inquiries --dimensions=1536 --metric=cosine`
+[[vectorize]]
+binding = "VECTORIZE_ITEMS"
+index_name = "found-items"
+
+[[vectorize]]
+binding = "VECTORIZE_INQUIRIES"
+index_name = "found-inquiries"
 
 [vars]
-WEB_ORIGIN = "http://localhost:3000"
+WEB_ORIGIN = "https://found.s-t.work"
 AI_BASE_URL = "https://api.openai.com/v1"
 AI_VISION_MODEL = "gpt-5.6-luna"
 AI_EMBED_MODEL = "text-embedding-3-small"
@@ -23,7 +45,6 @@ EMBED_DIM = "1536"
 MATCH_THRESHOLD = "0.5"
 
 # シークレットは wrangler secret put で設定:
-#   wrangler secret put DATABASE_URL
 #   wrangler secret put AI_API_KEY
 
 # Cloudflare Access 検証（設定すると API も JWT を検証する）

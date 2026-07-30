@@ -17,9 +17,9 @@ import {
 } from "./store.ts";
 
 /**
- * インメモリ実装。DATABASE_URL 未設定時の既定。
+ * インメモリ実装。D1/Vectorize バインディング未設定時の既定。
  * 外部依存ゼロでフル機能（ベクトル検索・突き合わせ）を再現する。
- * 注: プロセス揮発。永続化には Postgres 実装を使うこと。
+ * 注: プロセス揮発。永続化には D1VectorizeStore を使うこと。
  */
 export class MemoryStore implements Store {
   readonly kind = "memory" as const;

@@ -3,11 +3,34 @@ main = ".open-next/worker.js"
 compatibility_date = "2024-11-27"
 compatibility_flags = ["nodejs_compat"]
 
+# found-api と同一オリジンにするため、カスタムドメインではなくルートで配信する。
+# /api/* は found-api 側のルートがより具体的なパターンとして優先されるため、
+# ここでは found.s-t.work の残り全パスを受ける。
+[[routes]]
+pattern = "found.s-t.work/*"
+zone_name = "s-t.work"
+
 # OpenNext がビルドする静的アセットの配信
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
 
 [vars]
-# 本番の API Worker URL に置き換える
-NEXT_PUBLIC_API_BASE = "http://localhost:8787"
+# 同一オリジン化後は found.s-t.work/api を指す（このvarはサーバー側ランタイム用。
+# クライアントバンドルに埋め込まれる実体は apps/web/.env.production 側）。
+NEXT_PUBLIC_API_BASE = "https://found.s-t.work"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
