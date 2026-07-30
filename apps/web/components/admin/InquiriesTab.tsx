@@ -320,7 +320,7 @@ function InquiryDetailModal({
                     <div className="thumb thumb--empty mb-8">画像なし</div>
                   )}
                   <div className="rb-tiny muted-text">
-                    保管: {m.item?.storage_location || "—"} / {STATUS_LABEL[m.status]}
+                    拾得場所: {m.item?.found_location || "—"} / {STATUS_LABEL[m.status]}
                   </div>
                 </Card>
               );

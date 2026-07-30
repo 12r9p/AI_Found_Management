@@ -239,7 +239,6 @@ function blankItem(): Item {
     map_key: "",
     found_x: null,
     found_y: null,
-    storage_location: "",
     image_keys: [],
     ai_description: "",
     tags: [],

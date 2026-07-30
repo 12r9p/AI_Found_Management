@@ -6,6 +6,7 @@ import { AppShell } from "../../../components/AppShell";
 import { Button, Card, Field, Input, Select, Textarea, Badge, useToast, useConfirm } from "../../../components/ui";
 import { useMeta } from "../../../components/useMeta";
 import { MapPicker, type Pin } from "../../../components/MapPicker";
+import { useLocationPresets } from "../../../components/useLocationPresets";
 import { ImageEditor } from "../../../components/ImageEditor";
 import { MatchReviewModal } from "../../../components/MatchReviewModal";
 import { api, imageUrl } from "../../../lib/api";
@@ -15,6 +16,7 @@ export default function ItemDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const meta = useMeta();
+  const presets = useLocationPresets();
   const toast = useToast();
   const confirm = useConfirm();
   const [item, setItem] = useState<Item | null>(null);
@@ -83,7 +85,6 @@ export default function ItemDetailPage() {
         brand: form.brand,
         found_location: form.found_location,
         found_at: form.found_at || null,
-        storage_location: form.storage_location,
         found_x: form.found_x ?? null,
         found_y: form.found_y ?? null,
         image_keys: imageKeys,
@@ -159,6 +160,20 @@ export default function ItemDetailPage() {
 
           <Card variant="bordered">
             <div className="rb-label mb-8">拾得場所（地図をタップで修正）</div>
+            {presets.length > 0 && (
+              <div className="rb-quick mb-8">
+                {presets.map((p) => (
+                  <Button
+                    key={p.name}
+                    variant={form.found_location === p.name ? undefined : "outline"}
+                    size="sm"
+                    onClick={() => { set("found_x", p.x); set("found_y", p.y); set("found_location", p.name); }}
+                  >
+                    {p.name}
+                  </Button>
+                ))}
+              </div>
+            )}
             <MapPicker
               value={
                 form.found_x != null && form.found_y != null
@@ -168,11 +183,9 @@ export default function ItemDetailPage() {
               onChange={(pin: Pin | null) => {
                 set("found_x", pin ? pin.x : null);
                 set("found_y", pin ? pin.y : null);
+                set("found_location", "");
               }}
             />
-            {item.found_location && (
-              <div className="rb-tiny muted-text mt-8">メモ: {item.found_location}</div>
-            )}
           </Card>
 
           <Card variant="muted">
@@ -256,14 +269,8 @@ export default function ItemDetailPage() {
             <Field label="ブランド/型番">
               {(id) => <Input id={id} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />}
             </Field>
-            <Field label="拾得場所">
-              {(id) => <Input id={id} value={form.found_location ?? ""} onChange={(e) => set("found_location", e.target.value)} />}
-            </Field>
             <Field label="拾得日時">
               {(id) => <Input id={id} type="datetime-local" value={dt} onChange={(e) => set("found_at", e.target.value ? new Date(e.target.value).toISOString() : null)} />}
-            </Field>
-            <Field label="保管場所">
-              {(id) => <Input id={id} value={form.storage_location ?? ""} onChange={(e) => set("storage_location", e.target.value)} />}
             </Field>
           </div>
           <Field label="AI特徴文">

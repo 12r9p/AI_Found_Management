@@ -4,6 +4,7 @@ import { Button, Card, Field, Input, Modal, Select, Textarea, useToast } from ".
 import { MapPicker, type Pin } from "./MapPicker";
 import { ImageEditor } from "./ImageEditor";
 import { useMeta } from "./useMeta";
+import { useLocationPresets } from "./useLocationPresets";
 import { api } from "../lib/api";
 import { STATUS_LABEL, type Item } from "../lib/types";
 
@@ -24,6 +25,7 @@ export function ItemEditModal({
   onSaved?: (updated: Item) => void;
 }) {
   const meta = useMeta();
+  const presets = useLocationPresets();
   const toast = useToast();
   const [form, setForm] = useState<Partial<Item> & { tagsText?: string }>({});
   const [pin, setPin] = useState<Pin | null>(null);
@@ -85,7 +87,6 @@ export function ItemEditModal({
         found_at: form.found_at || null,
         found_x: pin?.x ?? null,
         found_y: pin?.y ?? null,
-        storage_location: form.storage_location,
         image_keys: imageKeys,
         ai_description: form.ai_description,
         tags: (form.tagsText ?? "").split(/[、,]/).map((t) => t.trim()).filter(Boolean),
@@ -141,8 +142,22 @@ export function ItemEditModal({
             {analyzing ? "AI解析中…" : "AIで特徴を解析"}
           </Button>
 
-          <div className="rb-label mb-8">拾得場所（地図をタップ）</div>
-          <MapPicker value={pin} onChange={setPin} />
+          <div className="rb-label mb-8">拾得場所</div>
+          {presets.length > 0 && (
+            <div className="rb-quick mb-8">
+              {presets.map((p) => (
+                <Button
+                  key={p.name}
+                  variant={form.found_location === p.name ? undefined : "outline"}
+                  size="sm"
+                  onClick={() => { setPin({ x: p.x, y: p.y }); set("found_location", p.name); }}
+                >
+                  {p.name}
+                </Button>
+              ))}
+            </div>
+          )}
+          <MapPicker value={pin} onChange={(p) => { setPin(p); set("found_location", ""); }} />
         </div>
 
         <div>
@@ -179,16 +194,6 @@ export function ItemEditModal({
             </Field>
             <Field label="ブランド/型番">
               {(id) => <Input id={id} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />}
-            </Field>
-            <Field label="保管場所">
-              {(id) => (
-                <Input id={id} value={form.storage_location ?? ""} onChange={(e) => set("storage_location", e.target.value)} />
-              )}
-            </Field>
-            <Field label="拾得場所メモ">
-              {(id) => (
-                <Input id={id} value={form.found_location ?? ""} onChange={(e) => set("found_location", e.target.value)} />
-              )}
             </Field>
             <Field label="拾得日時">
               {(id) => (

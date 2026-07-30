@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import { Button, Card, Field, Input, Select, Badge, Modal, Textarea, useToast } from "../../components/ui";
 import { useMeta } from "../../components/useMeta";
+import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
 import { ItemLookupModal } from "../../components/ItemLookupModal";
 import { ItemEditModal } from "../../components/ItemEditModal";
@@ -13,6 +14,7 @@ const EMPTY_FILTERS = { category: "", color: "", status: "", location: "", from:
 
 export default function SearchPage() {
   const meta = useMeta();
+  const presets = useLocationPresets();
   const toast = useToast();
   // 検索条件と結果を保持（照会ポップアップを閉じても検索し直さなくてよい）
   const [q, setQ] = usePersistentState("search:q", "");
@@ -142,7 +144,12 @@ export default function SearchPage() {
               )}
             </Field>
             <Field label="拾得場所">
-              {(id) => <Input id={id} value={filters.location} onChange={(e) => setF("location", e.target.value)} />}
+              {(id) => (
+                <Select id={id} value={filters.location} onChange={(e) => setF("location", e.target.value)}>
+                  <option value="">すべて</option>
+                  {presets.map((p) => <option key={p.name}>{p.name}</option>)}
+                </Select>
+              )}
             </Field>
             {/* 条件カラムは狭いので日付は縦積み（横並びだと入力欄が潰れる） */}
             <Field label="拾得日 (から)">
@@ -232,7 +239,7 @@ export default function SearchPage() {
                       )}
                       <div className="rb-row mb-8" style={{ gap: 6 }}>
                         <Badge>{STATUS_LABEL[it.status]}</Badge>
-                        <span className="rb-tiny muted-text">保管: {it.storage_location || "—"}</span>
+                        <span className="rb-tiny muted-text">拾得場所: {it.found_location || "—"}</span>
                       </div>
                       <p className="rb-small" style={{ margin: 0 }}>{it.ai_description.slice(0, 80)}</p>
                     </Card>

@@ -31,7 +31,6 @@ export interface Item {
   map_key: string; // 地図画像の R2 キー（拾得場所ピン用）
   found_x: number | null; // ピンの正規化X座標 (0..1)
   found_y: number | null; // ピンの正規化Y座標 (0..1)
-  storage_location: string; // 保管場所（棚番号など）
   image_keys: string[]; // R2 オブジェクトキー（最大2枚想定）
   ai_description: string; // AI が生成した特徴文
   tags: string[]; // AI 抽出タグ

@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, Field, Input, Modal, Select, useToast, useConfirm } from "../ui";
-import { MapPicker, invalidateMapCache } from "../MapPicker";
+import { MapPicker, invalidateMapCache, type Pin } from "../MapPicker";
 import { api } from "../../lib/api";
-import type { IdRule } from "../../lib/types";
+import type { IdRule, LocationPreset } from "../../lib/types";
 
 /** 設定タブ: 会場地図と、種別・色の選択肢を編集する。 */
 export function SettingsTab() {
@@ -11,6 +11,7 @@ export function SettingsTab() {
     <div className="rb-col" id="settings">
       <IdRuleSetting />
       <MapSetting />
+      <LocationPresetSetting />
       <ListSetting
         kind="categories"
         title="種別（カテゴリ）"
@@ -230,6 +231,164 @@ function MapSetting() {
         </div>
       )}
     </Card>
+  );
+}
+
+/** 拾得場所プリセット: 名前と地図ピン位置を対応付ける。登録時にタップ1つで両方セットできる。 */
+function LocationPresetSetting() {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [presets, setPresets] = useState<LocationPreset[]>([]);
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<LocationPreset[]>([]);
+  const [pin, setPin] = useState<Pin | null>(null);
+  const [name, setName] = useState("");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = () => api.getLocationPresets().then(setPresets).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const resetForm = () => {
+    setPin(null);
+    setName("");
+    setEditingIndex(null);
+  };
+
+  const openEdit = () => {
+    setDraft(presets);
+    resetForm();
+    setOpen(true);
+  };
+  const cancel = () => {
+    setOpen(false);
+    resetForm();
+  };
+
+  const selectForEdit = (i: number) => {
+    const p = draft[i];
+    setPin({ x: p.x, y: p.y });
+    setName(p.name);
+    setEditingIndex(i);
+  };
+
+  const addOrUpdate = () => {
+    const n = name.trim();
+    if (!n) {
+      toast("名前を入力してください", "error");
+      return;
+    }
+    if (!pin) {
+      toast("地図をタップして位置を指定してください", "error");
+      return;
+    }
+    if (draft.some((p, i) => p.name === n && i !== editingIndex)) {
+      toast("すでに同じ名前があります", "error");
+      return;
+    }
+    setDraft((ds) => {
+      const next = [...ds];
+      const entry = { name: n, x: pin.x, y: pin.y };
+      if (editingIndex != null) next[editingIndex] = entry;
+      else next.push(entry);
+      return next;
+    });
+    resetForm();
+  };
+
+  const remove = async (i: number) => {
+    const ok = await confirm({
+      title: "拾得場所プリセットの削除",
+      body: `「${draft[i].name}」を削除します。登録済みの物品データは変わりません。`,
+      danger: true,
+      okLabel: "削除する",
+    });
+    if (!ok) return;
+    setDraft((ds) => ds.filter((_, idx) => idx !== i));
+    if (editingIndex === i) resetForm();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const saved = await api.updateLocationPresets(draft);
+      setPresets(saved);
+      toast("拾得場所プリセットを保存しました", "success");
+      setOpen(false);
+    } catch (e) {
+      toast(`保存に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <Card variant="bordered">
+        <div className="rb-between mb-8">
+          <h3 style={{ margin: 0 }}>拾得場所プリセット</h3>
+          <Button variant="outline" size="sm" onClick={openEdit}>編集</Button>
+        </div>
+        <p className="rb-small muted-text">
+          地図上の位置に名前を付けておくと、登録時にタップ1つで拾得場所と地図ピンを同時に設定できます。
+        </p>
+        <div className="rb-chips mt-16">
+          {presets.map((p) => (
+            <span key={p.name} className="rb-chip">{p.name}</span>
+          ))}
+          {presets.length === 0 && <span className="rb-tiny muted-text">未設定です</span>}
+        </div>
+      </Card>
+
+      <Modal
+        open={open}
+        title="拾得場所プリセットを編集"
+        context="管理 › 設定"
+        size="wide"
+        onClose={cancel}
+        footer={
+          <>
+            <Button variant="outline" onClick={cancel} disabled={saving}>キャンセル</Button>
+            <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          </>
+        }
+      >
+        <div className="rb-chips mb-16">
+          {draft.map((p, i) => (
+            <span
+              key={p.name}
+              className="rb-chip"
+              style={{ cursor: "pointer" }}
+              onClick={() => selectForEdit(i)}
+            >
+              {p.name}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); remove(i); }}
+                aria-label={`${p.name} を削除`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {draft.length === 0 && <span className="rb-tiny muted-text">プリセットがありません</span>}
+        </div>
+
+        <div className="rb-label mb-8">地図をタップして位置を指定</div>
+        <MapPicker value={pin} onChange={setPin} />
+
+        <div className="rb-grid rb-grid--2 mt-16">
+          <Field label="名前" hint="例: 正面ゲート">
+            {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}
+          </Field>
+          <div className="rb-field" style={{ justifyContent: "flex-end" }}>
+            <Button variant="outline" onClick={addOrUpdate}>
+              {editingIndex != null ? "更新" : "追加"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 

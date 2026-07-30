@@ -1,4 +1,4 @@
-import type { Item, Inquiry, Match, Notification, Meta, IdRule } from "./types";
+import type { Item, Inquiry, Match, Notification, Meta, IdRule, LocationPreset } from "./types";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
@@ -112,6 +112,15 @@ export const api = {
     fd.append("map", file);
     return req<{ key: string }>("/api/map", { method: "POST", body: fd }).then((r) => r.key);
   },
+
+  // 拾得場所プリセット（名前 ⇔ 地図ピン位置）
+  getLocationPresets: () =>
+    req<{ presets: LocationPreset[] }>("/api/location-presets").then((r) => r.presets),
+  updateLocationPresets: (presets: LocationPreset[]) =>
+    req<{ presets: LocationPreset[] }>("/api/location-presets", {
+      method: "PUT",
+      body: JSON.stringify({ presets }),
+    }).then((r) => r.presets),
 
   csvUrl: (q: Record<string, string> = {}) => `${API_BASE}/api/export/items.csv?${new URLSearchParams(q)}`,
 };

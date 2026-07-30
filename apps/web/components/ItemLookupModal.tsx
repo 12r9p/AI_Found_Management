@@ -97,8 +97,6 @@ export function ItemLookupModal({
 
           <Card variant="muted" className="mt-16">
             <div className="rb-small rb-mono">
-              保管場所: <strong>{item.storage_location || "—"}</strong>
-              <br />
               拾得場所: {item.found_location || "—"}
               <br />
               拾得日時: {item.found_at ? new Date(item.found_at).toLocaleString("ja-JP") : "—"}

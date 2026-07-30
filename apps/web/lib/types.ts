@@ -24,7 +24,6 @@ export interface Item {
   map_key: string;
   found_x: number | null;
   found_y: number | null;
-  storage_location: string;
   image_keys: string[];
   ai_description: string;
   tags: string[];
@@ -74,6 +73,12 @@ export interface Notification {
   ref_match_id: string | null;
   read: boolean;
   created_at: string;
+}
+
+export interface LocationPreset {
+  name: string;
+  x: number;
+  y: number;
 }
 
 export interface Meta {

@@ -6,12 +6,11 @@ import { Badge, Button, useToast, useConfirm } from "./ui";
 import { ItemPreviewModal } from "./ItemPreviewModal";
 import { ItemEditModal } from "./ItemEditModal";
 
-const TEXT_COLS: { key: "category" | "color" | "brand" | "found_location" | "storage_location" | "notes"; label: string; w?: number }[] = [
+const TEXT_COLS: { key: "category" | "color" | "brand" | "found_location" | "notes"; label: string; w?: number }[] = [
   { key: "category", label: "種別", w: 96 },
   { key: "color", label: "色", w: 72 },
   { key: "brand", label: "ブランド", w: 110 },
   { key: "found_location", label: "拾得場所", w: 130 },
-  { key: "storage_location", label: "保管場所", w: 110 },
   { key: "notes", label: "メモ", w: 160 },
 ];
 

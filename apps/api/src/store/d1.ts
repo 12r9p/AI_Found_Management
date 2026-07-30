@@ -43,8 +43,8 @@ export class D1VectorizeStore implements Store {
       .prepare(
         `INSERT INTO items
           (id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y,
-           storage_location, image_keys, ai_description, tags, notes, ai_status, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           image_keys, ai_description, tags, notes, ai_status, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          RETURNING ${ITEM_COLS}`,
       )
       .bind(
@@ -59,7 +59,6 @@ export class D1VectorizeStore implements Store {
         d.map_key ?? "",
         d.found_x ?? null,
         d.found_y ?? null,
-        d.storage_location ?? "",
         JSON.stringify(d.image_keys ?? []),
         d.ai_description ?? "",
         JSON.stringify(d.tags ?? []),
@@ -377,7 +376,7 @@ export class D1VectorizeStore implements Store {
 
 // ---- column lists & row mappers ----
 const ITEM_COLS =
-  "id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y, storage_location, image_keys, ai_description, tags, notes, ai_status, created_at, updated_at";
+  "id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y, image_keys, ai_description, tags, notes, ai_status, created_at, updated_at";
 const INQ_COLS =
   "id, status, description, category, color, ai_description, tags, reference_no, notes, matched_item_id, created_at, updated_at";
 const MATCH_COLS = "id, item_id, inquiry_id, score, status, direction, created_at";
@@ -389,7 +388,7 @@ const NOTIF_COLS =
 const ITEM_FIELDS = [
   "display_id", "status", "category", "color", "brand", "found_location", "found_at",
   "map_key", "found_x", "found_y",
-  "storage_location", "image_keys", "ai_description", "tags", "notes", "ai_status",
+  "image_keys", "ai_description", "tags", "notes", "ai_status",
 ];
 const INQ_FIELDS = [
   "status", "description", "category", "color", "ai_description", "tags",
@@ -422,7 +421,6 @@ function rowToItem(r: any): Item {
     map_key: r.map_key ?? "",
     found_x: r.found_x != null ? Number(r.found_x) : null,
     found_y: r.found_y != null ? Number(r.found_y) : null,
-    storage_location: r.storage_location,
     image_keys: arr(r.image_keys),
     ai_description: r.ai_description,
     tags: arr(r.tags),

@@ -52,7 +52,7 @@ export default function PrintPage() {
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: 11 }}>
         <thead>
           <tr>
-            {["No", "画像", "管理番号", "状態", "種別", "色", "ブランド", "拾得場所", "地図位置", "拾得日", "保管場所", "特徴"].map((h) => (
+            {["No", "画像", "管理番号", "状態", "種別", "色", "ブランド", "拾得場所", "地図位置", "拾得日", "特徴"].map((h) => (
               <th key={h} style={{ background: "#000", color: "#fff", padding: "5px 6px", textAlign: "left", border: "1px solid #000", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as any}>
                 {h}
               </th>
@@ -87,7 +87,6 @@ export default function PrintPage() {
                   : ""}
               </td>
               <td style={cell}>{it.found_at ? new Date(it.found_at).toLocaleDateString("ja-JP") : ""}</td>
-              <td style={cell}>{it.storage_location}</td>
               <td style={{ ...cell, maxWidth: 220 }}>{it.ai_description.slice(0, 60)}</td>
             </tr>
           ))}

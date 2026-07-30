@@ -73,8 +73,6 @@ export function ItemPreviewModal({
               <br />
               ブランド: {item.brand || "—"}
               <br />
-              保管場所: {item.storage_location || "—"}
-              <br />
               拾得場所: {item.found_location || "—"}
               <br />
               拾得日時: {item.found_at ? new Date(item.found_at).toLocaleString("ja-JP") : "—"}

@@ -7,6 +7,7 @@ import { matchNewItem, matchNewInquiry } from "./lib/matching.ts";
 import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
 import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
+import { getLocationPresets, setLocationPresets, normalizePresets } from "./lib/location-presets.ts";
 import { verifyAccessJwt } from "./lib/access.ts";
 import type { SearchFilters } from "./types.ts";
 
@@ -140,6 +141,22 @@ export function createApp() {
       return { values };
     })
 
+    // ---- 拾得場所プリセット（名前 ⇔ 地図ピン位置） ----
+    .get("/api/location-presets", async () => {
+      const c = await ctx();
+      return { presets: await getLocationPresets(c.store) };
+    })
+    .put("/api/location-presets", async ({ body, set }) => {
+      const raw = (body as any)?.presets;
+      if (!Array.isArray(raw)) {
+        set.status = 400;
+        return { error: "presets は配列で指定してください" };
+      }
+      const c = await ctx();
+      const presets = await setLocationPresets(c.store, normalizePresets(raw));
+      return { presets };
+    })
+
     // ---- 管理番号の採番ルール ----
     .get("/api/id-rule", async () => {
       const c = await ctx();
@@ -268,7 +285,6 @@ export function createApp() {
         map_key: b.map_key ?? "",
         found_x: typeof b.found_x === "number" ? b.found_x : null,
         found_y: typeof b.found_y === "number" ? b.found_y : null,
-        storage_location: b.storage_location ?? "",
         image_keys: keys,
         ai_description: b.ai_description ?? "",
         tags: Array.isArray(b.tags) ? b.tags : [],
@@ -491,7 +507,7 @@ export function createApp() {
       const items = await c.store.listItems(parseFilters(query as any));
       const head = [
         "id", "status", "category", "color", "brand", "found_location",
-        "map_pin", "found_at", "storage_location", "ai_description", "tags", "created_at",
+        "map_pin", "found_at", "ai_description", "tags", "created_at",
       ];
       const esc = (s: any) => `"${String(s ?? "").replace(/"/g, '""')}"`;
       const rows = items.map((i) =>
@@ -500,7 +516,7 @@ export function createApp() {
           i.found_x != null && i.found_y != null
             ? `${(i.found_x * 100).toFixed(1)}%,${(i.found_y * 100).toFixed(1)}%`
             : "",
-          i.found_at ?? "", i.storage_location, i.ai_description, i.tags.join(";"), i.created_at,
+          i.found_at ?? "", i.ai_description, i.tags.join(";"), i.created_at,
         ]
           .map(esc)
           .join(","),

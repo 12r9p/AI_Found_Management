@@ -4,6 +4,7 @@ import { AppShell } from "../../components/AppShell";
 import { Button, Card, Field, Input, Textarea, useToast } from "../../components/ui";
 import { usePersistentState } from "../../components/usePersistentState";
 import { MapPicker, type Pin } from "../../components/MapPicker";
+import { useLocationPresets } from "../../components/useLocationPresets";
 import { ItemEditModal } from "../../components/ItemEditModal";
 import { RegisteredModal } from "../../components/RegisteredModal";
 import { api, imageUrl } from "../../lib/api";
@@ -34,11 +35,15 @@ const EMPTY = {
 export default function RegisterPage() {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const presets = useLocationPresets();
 
   // 画面を離れても入力を保持（現場では登録途中に別画面を見に行くことが多い）
   const [keys, setKeys] = usePersistentState<string[]>("register:keys", []);
   const [form, setForm] = usePersistentState("register:form", { ...EMPTY });
   const [pin, setPin] = usePersistentState<Pin | null>("register:pin", null);
+  // プリセットを選ぶとピンと同時にセットされる。地図を直接タップした場合は
+  // 名前の対応が取れなくなるため空に戻す（プリセットは「名前 ⇔ 位置」の対応が前提）。
+  const [foundLocation, setFoundLocation] = usePersistentState("register:foundLocation", "");
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,19 +69,20 @@ export default function RegisterPage() {
 
   const removeImage = (key: string) => setKeys((ks) => ks.filter((k) => k !== key));
 
-  /** 次の登録へ。同じ場所・同じ頃にまとめて届くことが多いため、拾得日時と
-   * 地図ピンだけ引き継ぎ、画像・メモは空に戻す。 */
+  /** 次の登録へ。同じ場所・同じ頃にまとめて届くことが多いため、拾得日時・
+   * 拾得場所・地図ピンだけ引き継ぎ、画像・メモは空に戻す。 */
   const resetForNextBatch = () => {
     setForm((f) => ({ ...EMPTY, found_at: f.found_at }));
     setKeys([]);
   };
 
-  const hasDraft = keys.length > 0 || !!form.notes || !!form.found_at || pin;
+  const hasDraft = keys.length > 0 || !!form.notes || !!form.found_at || !!foundLocation || pin;
 
   const resetAll = () => {
     setForm({ ...EMPTY });
     setKeys([]);
     setPin(null);
+    setFoundLocation("");
   };
 
   /** 登録直後のトースト。押し直せる猶予として編集導線を残す。 */
@@ -97,7 +103,7 @@ export default function RegisterPage() {
     window.scrollTo({ top: 0 });
   };
 
-  /** 「続けて登録」(主動線) = 保管場所などを引き継いだまま次の登録へ。先頭へ戻す。 */
+  /** 「続けて登録」(主動線) = 拾得場所などを引き継いだまま次の登録へ。先頭へ戻す。 */
   const handleContinue = () => {
     const saved = result;
     setResult(null);
@@ -124,6 +130,7 @@ export default function RegisterPage() {
     try {
       const item = await api.createItem({
         found_at: new Date(form.found_at).toISOString(),
+        found_location: foundLocation,
         found_x: pin?.x ?? null,
         found_y: pin?.y ?? null,
         image_keys: keys,
@@ -199,8 +206,22 @@ export default function RegisterPage() {
       </Card>
 
       <Card variant="bordered" className="mb-16">
-        <div className="rb-label mb-8">拾得場所（地図をタップ）</div>
-        <MapPicker value={pin} onChange={setPin} />
+        <div className="rb-label mb-8">拾得場所</div>
+        {presets.length > 0 && (
+          <div className="rb-quick mb-8">
+            {presets.map((p) => (
+              <Button
+                key={p.name}
+                variant={foundLocation === p.name ? undefined : "outline"}
+                size="sm"
+                onClick={() => { setPin({ x: p.x, y: p.y }); setFoundLocation(p.name); }}
+              >
+                {p.name}
+              </Button>
+            ))}
+          </div>
+        )}
+        <MapPicker value={pin} onChange={(p) => { setPin(p); setFoundLocation(""); }} />
       </Card>
 
       <Card variant="bordered">
@@ -224,7 +245,7 @@ export default function RegisterPage() {
             </>
           )}
         </Field>
-        <Field label="メモ" hint="ブランド・保管場所・拾得場所など">
+        <Field label="メモ" hint="ブランドなど、気づいたことがあれば">
           {(id) => <Textarea id={id} value={form.notes} onChange={(e) => set("notes", e.target.value)} />}
         </Field>
         <Button block onClick={submit} disabled={saving || busy}>

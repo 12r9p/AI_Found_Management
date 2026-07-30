@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { Button, Card, Select, Input, Field } from "../../components/ui";
+import { Button, Card, Select, Field } from "../../components/ui";
 import { useMeta } from "../../components/useMeta";
+import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
 import { ItemsTable } from "../../components/ItemsTable";
 import { InquiriesTab } from "../../components/admin/InquiriesTab";
@@ -19,6 +20,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function AdminPage() {
   const meta = useMeta();
+  const presets = useLocationPresets();
   const [tab, setTab] = usePersistentState<Tab>("admin:tab", "items");
   const [filters, setFilters] = usePersistentState("admin:filters", {
     category: "", status: "", location: "",
@@ -109,7 +111,12 @@ export default function AdminPage() {
                 )}
               </Field>
               <Field label="拾得場所">
-                {(id) => <Input id={id} value={filters.location} onChange={(e) => setFilters((f) => ({ ...f, location: e.target.value }))} />}
+                {(id) => (
+                  <Select id={id} value={filters.location} onChange={(e) => setFilters((f) => ({ ...f, location: e.target.value }))}>
+                    <option value="">すべて</option>
+                    {presets.map((p) => <option key={p.name}>{p.name}</option>)}
+                  </Select>
+                )}
               </Field>
             </div>
             <div className="rb-row">

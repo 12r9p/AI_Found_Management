@@ -19,11 +19,11 @@ const inquiries = [
 ];
 
 const items = [
-  { category: "財布", color: "茶", brand: "", found_location: "正面ゲート付近", storage_location: "棚A-1",
+  { category: "財布", color: "茶", brand: "", found_location: "正面ゲート付近",
     ai_description: "茶色の革製二つ折り財布。表面に擦れあり。小銭入れ付き。", tags: ["茶", "財布", "革"] },
-  { category: "傘", color: "紺", brand: "", found_location: "東駐車場", storage_location: "傘立てB",
+  { category: "傘", color: "紺", brand: "", found_location: "東駐車場",
     ai_description: "紺色の折りたたみ傘。持ち手は黒色のラバー。", tags: ["紺", "傘", "折りたたみ"] },
-  { category: "水筒", color: "銀", brand: "", found_location: "休憩所", storage_location: "棚C-3",
+  { category: "水筒", color: "銀", brand: "", found_location: "休憩所",
     ai_description: "銀色のステンレス水筒。500ml程度。底に小傷。", tags: ["銀", "水筒", "ステンレス"] },
 ];
 
