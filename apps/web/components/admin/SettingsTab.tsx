@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Badge, Button, Card, Field, Input, Select, useToast, useConfirm } from "../ui";
+import { Badge, Button, Card, Field, Input, Modal, Select, useToast, useConfirm } from "../ui";
 import { MapPicker } from "../MapPicker";
 import { api } from "../../lib/api";
 import type { IdRule } from "../../lib/types";
@@ -27,49 +27,60 @@ export function SettingsTab() {
   );
 }
 
-/** 管理番号（display_id）の採番ルール。紙台帳と突き合わせるため現場ごとに形式が違う。 */
+/** 管理番号（display_id）の採番ルール。紙台帳と突き合わせるため現場ごとに形式が違う。
+ * 編集はポップアップ内で行い、設定画面本体のレイアウトは変わらないようにする。 */
 function IdRuleSetting() {
   const toast = useToast();
   const [rule, setRule] = useState<IdRule | null>(null);
   const [preview, setPreview] = useState("");
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<IdRule | null>(null);
 
   useEffect(() => {
     api.getIdRule().then(({ rule, preview }) => {
       setRule(rule);
       setPreview(preview);
-      setDirty(false);
     }).catch(() => {});
   }, []);
 
   if (!rule) return null;
   const set = <K extends keyof IdRule>(k: K, v: IdRule[K]) => {
-    setRule((r) => (r ? { ...r, [k]: v } : r));
-    setDirty(true);
+    setDraft((r) => (r ? { ...r, [k]: v } : r));
   };
 
   // 保存前でも形式が分かるよう、その場でプレビューを組み立てる
-  const localPreview = (() => {
-    const d = new Date();
+  const localPreview = (d: IdRule) => {
+    const now = new Date();
     const p = (n: number) => String(n).padStart(2, "0");
-    const y = d.getFullYear();
+    const y = now.getFullYear();
     const dp =
-      rule.dateFormat === "YYYYMMDD" ? `${y}${p(d.getMonth() + 1)}${p(d.getDate())}`
-      : rule.dateFormat === "YYMMDD" ? `${String(y).slice(2)}${p(d.getMonth() + 1)}${p(d.getDate())}`
-      : rule.dateFormat === "YYYYMM" ? `${y}${p(d.getMonth() + 1)}`
+      d.dateFormat === "YYYYMMDD" ? `${y}${p(now.getMonth() + 1)}${p(now.getDate())}`
+      : d.dateFormat === "YYMMDD" ? `${String(y).slice(2)}${p(now.getMonth() + 1)}${p(now.getDate())}`
+      : d.dateFormat === "YYYYMM" ? `${y}${p(now.getMonth() + 1)}`
       : "";
-    return `${rule.prefix}${dp}${dp ? rule.separator : ""}${String(rule.start).padStart(rule.digits, "0")}`;
-  })();
+    return `${d.prefix}${dp}${dp ? d.separator : ""}${String(d.start).padStart(d.digits, "0")}`;
+  };
+
+  const openEdit = () => {
+    setDraft(rule);
+    setOpen(true);
+  };
+  const cancel = () => {
+    setOpen(false);
+    setDraft(null);
+  };
 
   const save = async () => {
+    if (!draft) return;
     setSaving(true);
     try {
-      const res = await api.updateIdRule(rule);
+      const res = await api.updateIdRule(draft);
       setRule(res.rule);
       setPreview(res.preview);
-      setDirty(false);
       toast("採番ルールを保存しました", "success");
+      setOpen(false);
+      setDraft(null);
     } catch (e) {
       toast(`保存に失敗しました: ${(e as Error).message}`, "error");
     } finally {
@@ -78,64 +89,84 @@ function IdRuleSetting() {
   };
 
   return (
-    <Card variant="bordered">
-      <h3 className="mb-8">管理番号の採番ルール</h3>
-      <p className="rb-small muted-text">
-        登録時に自動で付く管理番号の形式です。紙台帳の記法に合わせて設定してください。
-        既に登録済みの番号は変更されません。
-      </p>
-
-      <Card variant="muted" className="mt-16 mb-16">
-        <div className="rb-eyebrow mb-8">次に発行される番号（プレビュー）</div>
-        <span className="rb-idtag" style={{ fontSize: 16 }}>{dirty ? localPreview : preview}</span>
+    <>
+      <Card variant="bordered">
+        <div className="rb-between mb-8">
+          <h3 style={{ margin: 0 }}>管理番号の採番ルール</h3>
+          <Button variant="outline" size="sm" onClick={openEdit}>編集</Button>
+        </div>
+        <p className="rb-small muted-text">
+          登録時に自動で付く管理番号の形式です。紙台帳の記法に合わせて設定してください。
+        </p>
+        <Card variant="muted" className="mt-16">
+          <div className="rb-eyebrow mb-8">次に発行される番号（プレビュー）</div>
+          <span className="rb-idtag" style={{ fontSize: 16 }}>{preview}</span>
+        </Card>
       </Card>
 
-      <div className="rb-grid rb-grid--3">
-        <Field label="接頭辞" hint="例: FD-">
-          {(id) => <Input id={id} value={rule.prefix} onChange={(e) => set("prefix", e.target.value)} />}
-        </Field>
-        <Field label="日付">
-          {(id) => (
-            <Select id={id} value={rule.dateFormat} onChange={(e) => set("dateFormat", e.target.value as IdRule["dateFormat"])}>
-              <option value="none">なし</option>
-              <option value="YYYYMMDD">年月日 (20260729)</option>
-              <option value="YYMMDD">年月日 (260729)</option>
-              <option value="YYYYMM">年月 (202607)</option>
-            </Select>
-          )}
-        </Field>
-        <Field label="区切り文字" hint="日付と連番の間">
-          {(id) => <Input id={id} value={rule.separator} onChange={(e) => set("separator", e.target.value)} />}
-        </Field>
-        <Field label="連番の桁数">
-          {(id) => (
-            <Input id={id} type="number" min={1} max={10} value={rule.digits}
-              onChange={(e) => set("digits", Number(e.target.value) || 1)} />
-          )}
-        </Field>
-        <Field label="連番の開始値">
-          {(id) => (
-            <Input id={id} type="number" min={0} value={rule.start}
-              onChange={(e) => set("start", Number(e.target.value) || 0)} />
-          )}
-        </Field>
-        <Field label="連番のリセット" hint="この周期で開始値に戻ります">
-          {(id) => (
-            <Select id={id} value={rule.reset} onChange={(e) => set("reset", e.target.value as IdRule["reset"])}>
-              <option value="never">しない（通し番号）</option>
-              <option value="daily">毎日</option>
-              <option value="monthly">毎月</option>
-              <option value="yearly">毎年</option>
-            </Select>
-          )}
-        </Field>
-      </div>
-
-      <div className="rb-row">
-        <Button onClick={save} disabled={!dirty || saving}>{saving ? "保存中…" : "保存"}</Button>
-        {dirty && <span className="rb-tiny" style={{ color: "var(--warning)" }}>未保存の変更があります</span>}
-      </div>
-    </Card>
+      <Modal
+        open={open}
+        title="管理番号の採番ルールを編集"
+        context="管理 › 設定"
+        size="wide"
+        onClose={cancel}
+        footer={
+          <>
+            <Button variant="outline" onClick={cancel} disabled={saving}>キャンセル</Button>
+            <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          </>
+        }
+      >
+        {draft && (
+          <>
+            <Card variant="muted" className="mb-16">
+              <div className="rb-eyebrow mb-8">プレビュー</div>
+              <span className="rb-idtag" style={{ fontSize: 16 }}>{localPreview(draft)}</span>
+            </Card>
+            <div className="rb-grid rb-grid--3">
+              <Field label="接頭辞" hint="例: FD-">
+                {(id) => <Input id={id} value={draft.prefix} onChange={(e) => set("prefix", e.target.value)} />}
+              </Field>
+              <Field label="日付">
+                {(id) => (
+                  <Select id={id} value={draft.dateFormat} onChange={(e) => set("dateFormat", e.target.value as IdRule["dateFormat"])}>
+                    <option value="none">なし</option>
+                    <option value="YYYYMMDD">年月日 (20260729)</option>
+                    <option value="YYMMDD">年月日 (260729)</option>
+                    <option value="YYYYMM">年月 (202607)</option>
+                  </Select>
+                )}
+              </Field>
+              <Field label="区切り文字" hint="日付と連番の間">
+                {(id) => <Input id={id} value={draft.separator} onChange={(e) => set("separator", e.target.value)} />}
+              </Field>
+              <Field label="連番の桁数">
+                {(id) => (
+                  <Input id={id} type="number" min={1} max={10} value={draft.digits}
+                    onChange={(e) => set("digits", Number(e.target.value) || 1)} />
+                )}
+              </Field>
+              <Field label="連番の開始値">
+                {(id) => (
+                  <Input id={id} type="number" min={0} value={draft.start}
+                    onChange={(e) => set("start", Number(e.target.value) || 0)} />
+                )}
+              </Field>
+              <Field label="連番のリセット" hint="この周期で開始値に戻ります">
+                {(id) => (
+                  <Select id={id} value={draft.reset} onChange={(e) => set("reset", e.target.value as IdRule["reset"])}>
+                    <option value="never">しない（通し番号）</option>
+                    <option value="daily">毎日</option>
+                    <option value="monthly">毎月</option>
+                    <option value="yearly">毎年</option>
+                  </Select>
+                )}
+              </Field>
+            </div>
+          </>
+        )}
+      </Modal>
+    </>
   );
 }
 
@@ -194,14 +225,14 @@ function MapSetting() {
       {mapKey && (
         <div className="mt-16">
           <div className="rb-label mb-8">現在の地図</div>
-          <MapPicker value={null} readOnly mapKeyOverride={mapKey} height={360} />
+          <MapPicker value={null} readOnly mapKeyOverride={mapKey} />
         </div>
       )}
     </Card>
   );
 }
 
-/** 種別・色の選択肢を編集する共通コンポーネント。 */
+/** 種別・色の選択肢を編集する共通コンポーネント。編集はポップアップ内で行う。 */
 function ListSetting({
   kind,
   title,
@@ -216,27 +247,36 @@ function ListSetting({
   const toast = useToast();
   const confirm = useConfirm();
   const [values, setValues] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
 
   const load = () =>
     api.meta().then((m) => {
       setValues(kind === "categories" ? m.categories : m.colors);
-      setDirty(false);
     });
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const openEdit = () => {
+    setDraft(values);
+    setInput("");
+    setOpen(true);
+  };
+  const cancel = () => {
+    setOpen(false);
+    setInput("");
+  };
 
   const add = () => {
     const v = input.trim();
     if (!v) return;
-    if (values.includes(v)) {
+    if (draft.includes(v)) {
       toast("すでに登録されています", "error");
       return;
     }
-    setValues((vs) => [...vs, v]);
+    setDraft((vs) => [...vs, v]);
     setInput("");
-    setDirty(true);
   };
 
   const remove = async (v: string) => {
@@ -248,16 +288,16 @@ function ListSetting({
       okLabel: "削除する",
     });
     if (!ok) return;
-    setValues((vs) => vs.filter((x) => x !== v));
-    setDirty(true);
+    setDraft((vs) => vs.filter((x) => x !== v));
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      await api.updateMeta(kind, values);
+      await api.updateMeta(kind, draft);
+      setValues(draft);
       toast(`${title}を保存しました`, "success");
-      setDirty(false);
+      setOpen(false);
     } catch (e) {
       toast(`保存に失敗しました: ${(e as Error).message}`, "error");
     } finally {
@@ -266,49 +306,66 @@ function ListSetting({
   };
 
   return (
-    <Card variant="bordered">
-      <h3 className="mb-8">{title}</h3>
-      <p className="rb-small muted-text">{description}</p>
+    <>
+      <Card variant="bordered">
+        <div className="rb-between mb-8">
+          <h3 style={{ margin: 0 }}>{title}</h3>
+          <Button variant="outline" size="sm" onClick={openEdit}>編集</Button>
+        </div>
+        <p className="rb-small muted-text">{description}</p>
+        <div className="rb-chips mt-16">
+          {values.map((v) => (
+            <span key={v} className="rb-chip">{v}</span>
+          ))}
+          {values.length === 0 && <span className="rb-tiny muted-text">項目がありません</span>}
+        </div>
+      </Card>
 
-      <div className="rb-chips mt-16 mb-16">
-        {values.map((v) => (
-          <span key={v} className="rb-chip">
-            {v}
-            <button type="button" onClick={() => remove(v)} aria-label={`${v} を削除`}>
-              ×
-            </button>
-          </span>
-        ))}
-        {values.length === 0 && <span className="rb-tiny muted-text">項目がありません</span>}
-      </div>
+      <Modal
+        open={open}
+        title={`${title}を編集`}
+        context="管理 › 設定"
+        onClose={cancel}
+        footer={
+          <>
+            <Button variant="outline" onClick={cancel} disabled={saving}>キャンセル</Button>
+            <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          </>
+        }
+      >
+        <div className="rb-chips mb-16">
+          {draft.map((v) => (
+            <span key={v} className="rb-chip">
+              {v}
+              <button type="button" onClick={() => remove(v)} aria-label={`${v} を削除`}>
+                ×
+              </button>
+            </span>
+          ))}
+          {draft.length === 0 && <span className="rb-tiny muted-text">項目がありません</span>}
+        </div>
 
-      <Field label="追加">
-        {(id) => (
-          <div className="rb-row" style={{ flexWrap: "nowrap" }}>
-            <Input
-              id={id}
-              value={input}
-              placeholder={placeholder}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                // IME 変換中の Enter は「確定」なので追加しない（半端な文字列の混入を防ぐ）
-                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  add();
-                }
-              }}
-            />
-            <Button variant="outline" onClick={add}>追加</Button>
-          </div>
-        )}
-      </Field>
-
-      <div className="rb-row">
-        <Button onClick={save} disabled={!dirty || saving}>
-          {saving ? "保存中…" : "保存"}
-        </Button>
-        {dirty && <span className="rb-tiny" style={{ color: "var(--warning)" }}>未保存の変更があります</span>}
-      </div>
-    </Card>
+        <Field label="追加">
+          {(id) => (
+            <div className="rb-row" style={{ flexWrap: "nowrap" }}>
+              <Input
+                id={id}
+                value={input}
+                placeholder={placeholder}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  // IME 変換中の Enter は「確定」なので追加しない（半端な文字列の混入を防ぐ）
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    add();
+                  }
+                }}
+              />
+              <Button variant="outline" onClick={add}>追加</Button>
+            </div>
+          )}
+        </Field>
+      </Modal>
+    </>
   );
 }

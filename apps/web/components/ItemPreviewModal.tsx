@@ -1,5 +1,4 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { Badge, Button, Card, Modal } from "./ui";
 import { MapPicker } from "./MapPicker";
 import { imageUrl } from "../lib/api";
@@ -7,19 +6,20 @@ import { STATUS_LABEL, type Item } from "../lib/types";
 
 /**
  * 物品のクイックプレビュー。
- * 一覧から編集ページへ飛ぶと文脈を失うため、まずポップアップで中身を確認し、
- * 本当に編集する時だけページ遷移する。
+ * 一覧から編集ポップアップへ直接飛ぶと文脈を失うため、まずここで中身を確認し、
+ * 本当に編集する時だけ編集ポップアップ（ItemEditModal）を重ねて開く（ページ遷移はしない）。
  */
 export function ItemPreviewModal({
   item,
   context,
   onClose,
+  onEdit,
 }: {
   item: Item | null;
   context: string;
   onClose: () => void;
+  onEdit: (item: Item) => void;
 }) {
-  const router = useRouter();
   if (!item) return null;
 
   return (
@@ -32,7 +32,7 @@ export function ItemPreviewModal({
       footer={
         <>
           <Button variant="outline" onClick={onClose}>閉じる</Button>
-          <Button onClick={() => router.push(`/items/${item.id}`)}>編集ページを開く →</Button>
+          <Button onClick={() => onEdit(item)}>編集する →</Button>
         </>
       }
     >
@@ -53,7 +53,7 @@ export function ItemPreviewModal({
           {item.found_x != null && item.found_y != null && (
             <div className="mt-16">
               <div className="rb-label mb-8">拾得場所</div>
-              <MapPicker value={{ x: item.found_x, y: item.found_y }} readOnly height={200} />
+              <MapPicker value={{ x: item.found_x, y: item.found_y }} readOnly />
             </div>
           )}
         </div>

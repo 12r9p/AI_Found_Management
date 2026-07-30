@@ -23,7 +23,6 @@ export default function AdminPage() {
   const [filters, setFilters] = usePersistentState("admin:filters", {
     category: "", status: "", location: "",
   });
-  const [bannerHidden, setBannerHidden] = usePersistentState("admin:bannerHidden", false);
   const [items, setItems] = useState<Item[]>([]);
 
   const loadItems = useCallback(() => {
@@ -84,17 +83,6 @@ export default function AdminPage() {
 
       {tab === "items" && (
         <>
-          {!bannerHidden && (
-            <div className="rb-banner rb-banner--warning mb-16 no-print">
-              <span>⚠ 編集モード</span>
-              <span className="rb-spacer">
-                セルを直接編集でき、<strong>フォーカスを外すと自動保存</strong>されます。
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => setBannerHidden(true)}>
-                今後表示しない
-              </Button>
-            </div>
-          )}
           <Card variant="bordered" className="mb-16 no-print">
             <div className="rb-grid rb-grid--3">
               <Field label="種別で絞込">
