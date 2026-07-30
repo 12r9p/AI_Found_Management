@@ -115,6 +115,19 @@ export function ItemEditModal({
         </>
       }
     >
+      {item.ai_status === "pending" && (
+        <div className="rb-banner rb-banner--warning mb-16">
+          <span>⚠ AIが画像を解析中です</span>
+          <span>しばらくすると種別・色・特徴文が自動で入ります。今すぐ手動で解析することもできます。</span>
+        </div>
+      )}
+      {item.ai_status === "error" && (
+        <div className="rb-banner rb-banner--warning mb-16">
+          <span>⚠ AI解析に失敗しました</span>
+          <span>下の「AIで特徴を解析」から手動で再実行できます。</span>
+        </div>
+      )}
+
       <div className="rb-grid rb-grid--2">
         <div>
           <div className="rb-label mb-8">画像（最大2枚）</div>

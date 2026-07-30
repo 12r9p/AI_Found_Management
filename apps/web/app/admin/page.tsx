@@ -35,6 +35,14 @@ export default function AdminPage() {
 
   useEffect(() => { loadItems(); }, [loadItems]);
 
+  // 画像AI解析は登録後にバックグラウンドで進むため、解析待ちの行がある間だけ
+  // 自動で再読込して進捗が見えるようにする（無くなれば止める）。
+  useEffect(() => {
+    if (!items.some((it) => it.ai_status === "pending")) return;
+    const t = setInterval(loadItems, 5000);
+    return () => clearInterval(t);
+  }, [items, loadItems]);
+
   // ハッシュからのタブ遷移（ハンバーガーメニューの「設定」など）
   useEffect(() => {
     const fromHash = () => {

@@ -86,7 +86,11 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
               </td>
               <td className="rb-mono rb-small">{it.display_id || "—"}</td>
               <td>
-                <Badge tone={it.status === "stored" ? "success" : "info"}>{STATUS_LABEL[it.status]}</Badge>
+                <div className="rb-row" style={{ gap: 4 }}>
+                  <Badge tone={it.status === "stored" ? "success" : "info"}>{STATUS_LABEL[it.status]}</Badge>
+                  {it.ai_status === "pending" && <Badge tone="warning">AI解析中</Badge>}
+                  {it.ai_status === "error" && <Badge tone="error">AI解析失敗</Badge>}
+                </div>
               </td>
               {TEXT_COLS.map((c) => (
                 <td key={c.key} className="rb-small" title={(it[c.key] as string) || undefined}>
