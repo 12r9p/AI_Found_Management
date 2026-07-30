@@ -131,7 +131,7 @@ export function ItemEditModal({
           </Button>
 
           <div className="rb-label mb-8">拾得場所（地図をタップ）</div>
-          <MapPicker value={pin} onChange={setPin} height={220} />
+          <MapPicker value={pin} onChange={setPin} />
         </div>
 
         <div>

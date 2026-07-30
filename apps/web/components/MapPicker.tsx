@@ -17,13 +17,11 @@ export function MapPicker({
   onChange,
   readOnly = false,
   mapKeyOverride,
-  height = 320,
 }: {
   value: Pin | null;
   onChange?: (pin: Pin | null) => void;
   readOnly?: boolean;
   mapKeyOverride?: string;
-  height?: number;
 }) {
   const [mapKey, setMapKey] = useState<string>(mapKeyOverride ?? "");
   const [loading, setLoading] = useState(!mapKeyOverride);
@@ -66,7 +64,6 @@ export function MapPicker({
       <div
         ref={boxRef}
         className="map-box"
-        style={{ height }}
         onClick={(e) => place(e.clientX, e.clientY)}
         role={readOnly ? undefined : "button"}
         tabIndex={readOnly ? undefined : 0}

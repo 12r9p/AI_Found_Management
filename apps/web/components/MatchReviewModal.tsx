@@ -117,7 +117,7 @@ export function MatchReviewModal({
           {item && item.found_x != null && item.found_y != null && (
             <div className="mt-8">
               <div className="rb-label mb-8">拾得場所</div>
-              <MapPicker value={{ x: item.found_x, y: item.found_y }} readOnly height={160} />
+              <MapPicker value={{ x: item.found_x, y: item.found_y }} readOnly />
             </div>
           )}
           {item && (
