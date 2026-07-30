@@ -8,6 +8,12 @@ export interface Pin {
   y: number; // 0..1
 }
 
+/** 名前付きの塗りつぶしエリア（多角形）。拾得場所プリセットの実体。 */
+export interface MapRegion {
+  name: string;
+  points: Pin[];
+}
+
 // 会場地図はほぼ変わらないため、タブを開いている間はキーを使い回す。
 // 画面遷移のたびに毎回「読込中」が出て、地図を読み直しているように見えるのを防ぐ。
 let cachedMapKey: string | null = null;
@@ -19,8 +25,39 @@ export function invalidateMapCache() {
   cachedMapKeyPromise = null;
 }
 
+/** タップ位置がどのエリアに含まれるか判定する（レイキャスト法）。重なりは先勝ち。 */
+export function findRegionAt<T extends MapRegion>(regions: T[], pt: Pin): T | null {
+  for (const region of regions) {
+    const poly = region.points;
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y;
+      const xj = poly[j].x, yj = poly[j].y;
+      const intersect =
+        yi > pt.y !== yj > pt.y &&
+        pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    if (inside) return region;
+  }
+  return null;
+}
+
+function centroid(points: Pin[]): Pin {
+  const n = points.length || 1;
+  const s = points.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
+  return { x: s.x / n, y: s.y / n };
+}
+
+function toSvgPoints(points: Pin[]): string {
+  return points.map((p) => `${(p.x * 100).toFixed(2)},${(p.y * 100).toFixed(2)}`).join(" ");
+}
+
 /**
- * 地図画像にピンを刺して拾得場所を指定する。
+ * 地図にピンを刺して拾得場所を指定する。
+ * `regions` を渡すと塗りつぶしエリア（拾得場所プリセット）を名前付きで重ねて表示できる
+ * （実際にどのエリアをタップしたかの判定は呼び出し側で `findRegionAt` を使う）。
+ * `previewPoints` は設定画面でエリアを描いている最中の未確定な多角形を表示するためのもの。
  * 座標は画像サイズに依存しないよう 0..1 に正規化して保存する。
  */
 export function MapPicker({
@@ -28,11 +65,20 @@ export function MapPicker({
   onChange,
   readOnly = false,
   mapKeyOverride,
+  regions,
+  activeRegionName,
+  previewPoints,
 }: {
   value: Pin | null;
   onChange?: (pin: Pin | null) => void;
   readOnly?: boolean;
   mapKeyOverride?: string;
+  /** 塗りつぶし表示するエリア一覧（拾得場所プリセット）。 */
+  regions?: MapRegion[];
+  /** regions のうち、この名前のエリアだけ強調表示する（編集中など）。 */
+  activeRegionName?: string;
+  /** 描画中（未確定）の多角形の頂点。設定画面のエリア作成ツール用。 */
+  previewPoints?: Pin[];
 }) {
   const [mapKey, setMapKey] = useState<string>(mapKeyOverride ?? cachedMapKey ?? "");
   const [loading, setLoading] = useState(!mapKeyOverride && cachedMapKey == null);
@@ -50,11 +96,14 @@ export function MapPicker({
       return;
     }
     if (!cachedMapKeyPromise) {
-      cachedMapKeyPromise = api.getMap()
-        .then((k) => { cachedMapKey = k; return k; })
-        .catch(() => { cachedMapKey = ""; return ""; });
+      // 失敗時はキャッシュに残さない（次のマウントで再取得できるようにする）。
+      // ここで空文字をキャッシュしてしまうと、一時的な通信エラーが
+      // 「地図なし」として固定されてしまい、タブを閉じるまで直らなくなる。
+      cachedMapKeyPromise = api.getMap().then((k) => { cachedMapKey = k; return k; });
     }
-    cachedMapKeyPromise.then((k) => { setMapKey(k); setLoading(false); });
+    cachedMapKeyPromise
+      .then((k) => { setMapKey(k); setLoading(false); })
+      .catch(() => { cachedMapKeyPromise = null; setMapKey(""); setLoading(false); });
   }, [mapKeyOverride]);
 
   const place = (clientX: number, clientY: number) => {
@@ -102,6 +151,39 @@ export function MapPicker({
         }}
       >
         <img src={imageUrl(mapKey)} alt="会場地図" className="map-img" draggable={false} />
+
+        {((regions && regions.length > 0) || (previewPoints && previewPoints.length > 0)) && (
+          <svg className="map-regions" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+            {regions?.map((r) => (
+              <polygon
+                key={r.name}
+                points={toSvgPoints(r.points)}
+                className={r.name === activeRegionName ? "map-region map-region--active" : "map-region"}
+              />
+            ))}
+            {regions?.map((r) => {
+              const c = centroid(r.points);
+              return (
+                <text
+                  key={`${r.name}-label`}
+                  x={c.x * 100}
+                  y={c.y * 100}
+                  className="map-region-label"
+                  textAnchor="middle"
+                >
+                  {r.name}
+                </text>
+              );
+            })}
+            {previewPoints && previewPoints.length > 0 && (
+              <polygon points={toSvgPoints(previewPoints)} className="map-region-preview" />
+            )}
+            {previewPoints?.map((p, i) => (
+              <circle key={i} cx={p.x * 100} cy={p.y * 100} r={1.2} className="map-region-vertex" />
+            ))}
+          </svg>
+        )}
+
         {value && (
           <span
             className="map-pin"

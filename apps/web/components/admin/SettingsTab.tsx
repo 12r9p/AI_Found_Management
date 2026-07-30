@@ -234,14 +234,15 @@ function MapSetting() {
   );
 }
 
-/** 拾得場所プリセット: 名前と地図ピン位置を対応付ける。登録時にタップ1つで両方セットできる。 */
+/** 拾得場所プリセット: 地図上をエリアで塗りつぶして名前を付ける。
+ * 登録・編集画面ではそのエリア内をタップするだけで拾得場所名とピンが同時に決まる。 */
 function LocationPresetSetting() {
   const toast = useToast();
   const confirm = useConfirm();
   const [presets, setPresets] = useState<LocationPreset[]>([]);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<LocationPreset[]>([]);
-  const [pin, setPin] = useState<Pin | null>(null);
+  const [points, setPoints] = useState<Pin[]>([]); // 描画中（未確定）の多角形の頂点
   const [name, setName] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -250,7 +251,7 @@ function LocationPresetSetting() {
   useEffect(() => { load(); }, []);
 
   const resetForm = () => {
-    setPin(null);
+    setPoints([]);
     setName("");
     setEditingIndex(null);
   };
@@ -267,10 +268,12 @@ function LocationPresetSetting() {
 
   const selectForEdit = (i: number) => {
     const p = draft[i];
-    setPin({ x: p.x, y: p.y });
+    setPoints(p.points);
     setName(p.name);
     setEditingIndex(i);
   };
+
+  const undoPoint = () => setPoints((pts) => pts.slice(0, -1));
 
   const addOrUpdate = () => {
     const n = name.trim();
@@ -278,8 +281,8 @@ function LocationPresetSetting() {
       toast("名前を入力してください", "error");
       return;
     }
-    if (!pin) {
-      toast("地図をタップして位置を指定してください", "error");
+    if (points.length < 3) {
+      toast("地図をタップして3点以上でエリアを囲んでください", "error");
       return;
     }
     if (draft.some((p, i) => p.name === n && i !== editingIndex)) {
@@ -288,7 +291,7 @@ function LocationPresetSetting() {
     }
     setDraft((ds) => {
       const next = [...ds];
-      const entry = { name: n, x: pin.x, y: pin.y };
+      const entry = { name: n, points };
       if (editingIndex != null) next[editingIndex] = entry;
       else next.push(entry);
       return next;
@@ -330,14 +333,16 @@ function LocationPresetSetting() {
           <Button variant="outline" size="sm" onClick={openEdit}>編集</Button>
         </div>
         <p className="rb-small muted-text">
-          地図上の位置に名前を付けておくと、登録時にタップ1つで拾得場所と地図ピンを同時に設定できます。
+          地図上のエリアを塗りつぶして名前を付けておくと、登録・編集時にそのエリアをタップするだけで
+          拾得場所と地図ピンが同時に決まります。
         </p>
-        <div className="rb-chips mt-16">
-          {presets.map((p) => (
-            <span key={p.name} className="rb-chip">{p.name}</span>
-          ))}
-          {presets.length === 0 && <span className="rb-tiny muted-text">未設定です</span>}
-        </div>
+        {presets.length > 0 ? (
+          <div className="mt-16">
+            <MapPicker value={null} readOnly regions={presets} />
+          </div>
+        ) : (
+          <span className="rb-tiny muted-text">未設定です</span>
+        )}
       </Card>
 
       <Modal
@@ -374,8 +379,26 @@ function LocationPresetSetting() {
           {draft.length === 0 && <span className="rb-tiny muted-text">プリセットがありません</span>}
         </div>
 
-        <div className="rb-label mb-8">地図をタップして位置を指定</div>
-        <MapPicker value={pin} onChange={setPin} />
+        <div className="rb-between mb-8">
+          <div className="rb-label" style={{ margin: 0 }}>
+            地図をタップしてエリアを囲む（3点以上）
+          </div>
+          <div className="rb-row" style={{ gap: 4 }}>
+            <Button variant="outline" size="sm" onClick={undoPoint} disabled={points.length === 0}>
+              1点戻す
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setPoints([])} disabled={points.length === 0}>
+              やり直す
+            </Button>
+          </div>
+        </div>
+        <MapPicker
+          value={null}
+          regions={draft}
+          activeRegionName={editingIndex != null ? draft[editingIndex]?.name : undefined}
+          previewPoints={points}
+          onChange={(p) => p && setPoints((pts) => [...pts, p])}
+        />
 
         <div className="rb-grid rb-grid--2 mt-16">
           <Field label="名前" hint="例: 正面ゲート">

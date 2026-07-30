@@ -692,6 +692,42 @@ h3,
   border: 2px solid var(--error);
 }
 
+/* ---- Map regions (拾得場所プリセットの塗りつぶしエリア) ---- */
+.map-regions {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.map-region {
+  fill: color-mix(in srgb, var(--foreground) 22%, transparent);
+  stroke: var(--foreground);
+  stroke-width: 0.5;
+}
+.map-region--active {
+  fill: color-mix(in srgb, var(--warning) 35%, transparent);
+  stroke: var(--warning);
+}
+.map-region-preview {
+  fill: color-mix(in srgb, var(--error) 25%, transparent);
+  stroke: var(--error);
+  stroke-width: 0.5;
+  stroke-dasharray: 2 1.5;
+}
+.map-region-vertex {
+  fill: var(--error);
+  stroke: var(--background);
+  stroke-width: 0.4;
+}
+.map-region-label {
+  font: 3px var(--font-mono);
+  fill: var(--foreground);
+  paint-order: stroke;
+  stroke: var(--background);
+  stroke-width: 0.6px;
+}
+
 /* ---- Hamburger menu ---- */
 .rb-menu-wrap {
   position: relative;

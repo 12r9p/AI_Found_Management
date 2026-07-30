@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Button, Card, Field, Input, Modal, Select, Textarea, useToast } from "./ui";
-import { MapPicker, type Pin } from "./MapPicker";
+import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast } from "./ui";
+import { MapPicker, findRegionAt, type Pin } from "./MapPicker";
 import { ImageEditor } from "./ImageEditor";
 import { useMeta } from "./useMeta";
 import { useLocationPresets } from "./useLocationPresets";
@@ -142,22 +142,19 @@ export function ItemEditModal({
             {analyzing ? "AI解析中…" : "AIで特徴を解析"}
           </Button>
 
-          <div className="rb-label mb-8">拾得場所</div>
-          {presets.length > 0 && (
-            <div className="rb-quick mb-8">
-              {presets.map((p) => (
-                <Button
-                  key={p.name}
-                  variant={form.found_location === p.name ? undefined : "outline"}
-                  size="sm"
-                  onClick={() => { setPin({ x: p.x, y: p.y }); set("found_location", p.name); }}
-                >
-                  {p.name}
-                </Button>
-              ))}
-            </div>
-          )}
-          <MapPicker value={pin} onChange={(p) => { setPin(p); set("found_location", ""); }} />
+          <div className="rb-between mb-8">
+            <div className="rb-label" style={{ margin: 0 }}>拾得場所（エリアをタップ）</div>
+            {form.found_location && <Badge tone="success">{form.found_location}</Badge>}
+          </div>
+          <MapPicker
+            value={pin}
+            regions={presets}
+            activeRegionName={form.found_location || undefined}
+            onChange={(p) => {
+              setPin(p);
+              set("found_location", p ? findRegionAt(presets, p)?.name ?? "" : "");
+            }}
+          />
         </div>
 
         <div>

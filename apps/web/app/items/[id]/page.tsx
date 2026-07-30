@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "../../../components/AppShell";
 import { Button, Card, Field, Input, Select, Textarea, Badge, useToast, useConfirm } from "../../../components/ui";
 import { useMeta } from "../../../components/useMeta";
-import { MapPicker, type Pin } from "../../../components/MapPicker";
+import { MapPicker, findRegionAt, type Pin } from "../../../components/MapPicker";
 import { useLocationPresets } from "../../../components/useLocationPresets";
 import { ImageEditor } from "../../../components/ImageEditor";
 import { MatchReviewModal } from "../../../components/MatchReviewModal";
@@ -159,31 +159,22 @@ export default function ItemDetailPage() {
           </Card>
 
           <Card variant="bordered">
-            <div className="rb-label mb-8">拾得場所（地図をタップで修正）</div>
-            {presets.length > 0 && (
-              <div className="rb-quick mb-8">
-                {presets.map((p) => (
-                  <Button
-                    key={p.name}
-                    variant={form.found_location === p.name ? undefined : "outline"}
-                    size="sm"
-                    onClick={() => { set("found_x", p.x); set("found_y", p.y); set("found_location", p.name); }}
-                  >
-                    {p.name}
-                  </Button>
-                ))}
-              </div>
-            )}
+            <div className="rb-between mb-8">
+              <div className="rb-label" style={{ margin: 0 }}>拾得場所（エリアをタップで修正）</div>
+              {form.found_location && <Badge tone="success">{form.found_location}</Badge>}
+            </div>
             <MapPicker
               value={
                 form.found_x != null && form.found_y != null
                   ? { x: form.found_x, y: form.found_y }
                   : null
               }
+              regions={presets}
+              activeRegionName={form.found_location || undefined}
               onChange={(pin: Pin | null) => {
                 set("found_x", pin ? pin.x : null);
                 set("found_y", pin ? pin.y : null);
-                set("found_location", "");
+                set("found_location", pin ? findRegionAt(presets, pin)?.name ?? "" : "");
               }}
             />
           </Card>

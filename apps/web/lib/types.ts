@@ -77,8 +77,7 @@ export interface Notification {
 
 export interface LocationPreset {
   name: string;
-  x: number;
-  y: number;
+  points: { x: number; y: number }[];
 }
 
 export interface Meta {

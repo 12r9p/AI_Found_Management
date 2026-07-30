@@ -1,13 +1,14 @@
 import type { Store } from "../store/index.ts";
 
-/** 拾得場所プリセット。名前と地図上のピン位置(0..1)を対応付ける。 */
+/** 拾得場所プリセット。名前と地図上の塗りつぶしエリア（多角形、0..1正規化座標）を対応付ける。 */
 export interface LocationPreset {
   name: string;
-  x: number;
-  y: number;
+  points: { x: number; y: number }[];
 }
 
 const PRESETS_KEY = "location_presets";
+const MAX_POINTS = 50;
+const MAX_PRESETS = 100;
 
 export function normalizePresets(input: any): LocationPreset[] {
   if (!Array.isArray(input)) return [];
@@ -15,12 +16,16 @@ export function normalizePresets(input: any): LocationPreset[] {
   const out: LocationPreset[] = [];
   for (const raw of input) {
     const name = String(raw?.name ?? "").trim().slice(0, 40);
-    const x = Number(raw?.x);
-    const y = Number(raw?.y);
-    if (!name || seen.has(name) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const rawPoints = Array.isArray(raw?.points) ? raw.points : [];
+    const points = rawPoints
+      .map((p: any) => ({ x: Number(p?.x), y: Number(p?.y) }))
+      .filter((p: any) => Number.isFinite(p.x) && Number.isFinite(p.y))
+      .map((p: any) => ({ x: Math.min(1, Math.max(0, p.x)), y: Math.min(1, Math.max(0, p.y)) }))
+      .slice(0, MAX_POINTS);
+    if (!name || seen.has(name) || points.length < 3) continue;
     seen.add(name);
-    out.push({ name, x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) });
-    if (out.length >= 100) break;
+    out.push({ name, points });
+    if (out.length >= MAX_PRESETS) break;
   }
   return out;
 }

@@ -1,9 +1,9 @@
 "use client";
 import { useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { Button, Card, Field, Input, Textarea, useToast } from "../../components/ui";
+import { Badge, Button, Card, Field, Input, Textarea, useToast } from "../../components/ui";
 import { usePersistentState } from "../../components/usePersistentState";
-import { MapPicker, type Pin } from "../../components/MapPicker";
+import { MapPicker, findRegionAt, type Pin } from "../../components/MapPicker";
 import { useLocationPresets } from "../../components/useLocationPresets";
 import { ItemEditModal } from "../../components/ItemEditModal";
 import { RegisteredModal } from "../../components/RegisteredModal";
@@ -41,8 +41,8 @@ export default function RegisterPage() {
   const [keys, setKeys] = usePersistentState<string[]>("register:keys", []);
   const [form, setForm] = usePersistentState("register:form", { ...EMPTY });
   const [pin, setPin] = usePersistentState<Pin | null>("register:pin", null);
-  // プリセットを選ぶとピンと同時にセットされる。地図を直接タップした場合は
-  // 名前の対応が取れなくなるため空に戻す（プリセットは「名前 ⇔ 位置」の対応が前提）。
+  // タップした位置がプリセットの塗りつぶしエリア内なら自動でセットされる。
+  // エリア外をタップした場合は対応するプリセットが無いので空に戻る。
   const [foundLocation, setFoundLocation] = usePersistentState("register:foundLocation", "");
 
   const [uploading, setUploading] = useState(false);
@@ -206,22 +206,19 @@ export default function RegisterPage() {
       </Card>
 
       <Card variant="bordered" className="mb-16">
-        <div className="rb-label mb-8">拾得場所</div>
-        {presets.length > 0 && (
-          <div className="rb-quick mb-8">
-            {presets.map((p) => (
-              <Button
-                key={p.name}
-                variant={foundLocation === p.name ? undefined : "outline"}
-                size="sm"
-                onClick={() => { setPin({ x: p.x, y: p.y }); setFoundLocation(p.name); }}
-              >
-                {p.name}
-              </Button>
-            ))}
-          </div>
-        )}
-        <MapPicker value={pin} onChange={(p) => { setPin(p); setFoundLocation(""); }} />
+        <div className="rb-between mb-8">
+          <div className="rb-label" style={{ margin: 0 }}>拾得場所（エリアをタップ）</div>
+          {foundLocation && <Badge tone="success">{foundLocation}</Badge>}
+        </div>
+        <MapPicker
+          value={pin}
+          regions={presets}
+          activeRegionName={foundLocation || undefined}
+          onChange={(p) => {
+            setPin(p);
+            setFoundLocation(p ? findRegionAt(presets, p)?.name ?? "" : "");
+          }}
+        />
       </Card>
 
       <Card variant="bordered">
