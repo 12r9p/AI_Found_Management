@@ -14,7 +14,7 @@ export function SettingsTab() {
       <ListSetting
         kind="categories"
         title="種別（カテゴリ）"
-        description="登録・検索・絞り込みで使う種別の選択肢です。現場で扱う物品に合わせて追加・削除できます。"
+        description="登録・検索・絞り込みで使う種別の選択肢です。"
         placeholder="例: 折りたたみ傘"
       />
       <ListSetting

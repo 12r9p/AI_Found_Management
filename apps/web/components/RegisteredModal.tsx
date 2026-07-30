@@ -33,7 +33,7 @@ export function RegisteredModal({
         <>
           <Button variant="outline" onClick={() => onEdit(item)}>編集</Button>
           <Button variant="outline" onClick={onClose}>閉じる</Button>
-          <Button onClick={onContinue}>続けて登録</Button>
+          <Button onClick={onContinue}>同じ属性で続けて登録</Button>
         </>
       }
     >
