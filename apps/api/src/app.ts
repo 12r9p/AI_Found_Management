@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { buildContext, type AppContext } from "./context.ts";
-import { getEnv } from "./env-holder.ts";
+import { getEnv, waitUntil } from "./env-holder.ts";
 import { itemEmbedText, inquiryEmbedText } from "./lib/embed-text.ts";
 import { matchNewItem, matchNewInquiry } from "./lib/matching.ts";
 import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
@@ -176,16 +176,30 @@ export function createApp() {
       }
       return { keys };
     })
-    .get("/api/images/:key", async ({ params, set }) => {
+    .get("/api/images/:key", async ({ params, set, request }) => {
+      // 画像キーは crypto.randomUUID() ベースで不変（同じキーの中身が変わることはない）。
+      // Cloudflare のエッジキャッシュに直接載せることで、R2/Worker を経由せず
+      // colo からそのまま返せるようにする（Bunローカル開発には caches が無いので素通し）。
+      const edgeCache = (globalThis as any).caches?.default as Cache | undefined;
+      const cacheKey = edgeCache ? new Request(new URL(request.url).toString()) : null;
+      if (edgeCache && cacheKey) {
+        const hit = await edgeCache.match(cacheKey);
+        if (hit) return hit;
+      }
       const c = await ctx();
       const obj = await c.images.get(params.key);
       if (!obj) {
         set.status = 404;
         return "not found";
       }
-      set.headers["content-type"] = obj.contentType;
-      set.headers["cache-control"] = "public, max-age=31536000, immutable";
-      return new Uint8Array(obj.body);
+      const res = new Response(new Uint8Array(obj.body), {
+        headers: {
+          "content-type": obj.contentType,
+          "cache-control": "public, max-age=31536000, immutable",
+        },
+      });
+      if (edgeCache && cacheKey) waitUntil(edgeCache.put(cacheKey, res.clone()));
+      return res;
     })
 
     // ---- 地図（拾得場所のピン留め用） ----
