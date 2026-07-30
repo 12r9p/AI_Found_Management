@@ -28,6 +28,7 @@ export class MemoryStore implements Store {
   private matches: Match[] = [];
   private notifications: Notification[] = [];
   private settings: Map<string, string> = new Map();
+  private counters: Map<string, { period: string; next: number }> = new Map();
 
   // --- ローカル開発用の簡易永続化 ---
   // ファイルシステムが使える環境（Bun）では JSON に保存し、
@@ -86,6 +87,14 @@ export class MemoryStore implements Store {
   async setSetting(key: string, value: string): Promise<void> {
     this.settings.set(key, value);
     this.persist();
+  }
+
+  async nextCounter(name: string, period: string, start: number): Promise<number> {
+    // 単一プロセス・await を挟まない同期操作なので競合しない。
+    const cur = this.counters.get(name);
+    const issued = cur && cur.period === period ? cur.next : start;
+    this.counters.set(name, { period, next: issued + 1 });
+    return issued;
   }
 
   // --- items ---
@@ -236,6 +245,7 @@ function blankItem(): Item {
     tags: [],
     embedding: [],
     notes: "",
+    ai_status: "ready",
     created_at: "",
     updated_at: "",
   };

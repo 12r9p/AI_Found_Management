@@ -81,22 +81,15 @@ function periodKey(reset: IdRule["reset"], d: Date): string {
   }
 }
 
-/** ルールに従って次の管理番号を採番する（連番は設定テーブルで管理）。 */
+/**
+ * ルールに従って次の管理番号を採番する。
+ * 連番は Store.nextCounter によりアトミックに払い出す（複数スタッフが
+ * 同時に登録しても重複しないことを保証する。read-modify-write ではない）。
+ */
 export async function nextDisplayId(store: Store, now = new Date()): Promise<string> {
   const rule = await getIdRule(store);
   const period = periodKey(rule.reset, now);
-
-  let next = rule.start;
-  const raw = await store.getSetting(COUNTER_KEY);
-  if (raw) {
-    try {
-      const c = JSON.parse(raw);
-      if (c.period === period && typeof c.next === "number") next = c.next;
-    } catch {
-      /* 壊れていれば start から */
-    }
-  }
-  await store.setSetting(COUNTER_KEY, JSON.stringify({ period, next: next + 1 }));
+  const next = await store.nextCounter(COUNTER_KEY, period, rule.start);
 
   const dp = datePart(rule.dateFormat, now);
   const seq = pad(next, rule.digits);

@@ -58,6 +58,13 @@ export interface Store {
   // --- settings (key-value, 地図キーなどアプリ設定) ---
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+
+  /**
+   * name+period に紐づく連番をアトミックに払い出す（管理番号の採番などに使用）。
+   * period が前回と変わっていたら start から採番し直す。同時に複数箇所から
+   * 呼ばれても重複しないことを保証する（read-modify-write ではなく単一操作）。
+   */
+  nextCounter(name: string, period: string, start: number): Promise<number>;
 }
 
 export function nowIso(): string {

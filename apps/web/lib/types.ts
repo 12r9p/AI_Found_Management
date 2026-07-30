@@ -29,6 +29,7 @@ export interface Item {
   ai_description: string;
   tags: string[];
   notes: string;
+  ai_status: "pending" | "ready" | "error";
   created_at: string;
   updated_at: string;
   score?: number | null;

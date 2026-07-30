@@ -43,8 +43,8 @@ export class D1VectorizeStore implements Store {
       .prepare(
         `INSERT INTO items
           (id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y,
-           storage_location, image_keys, ai_description, tags, notes, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           storage_location, image_keys, ai_description, tags, notes, ai_status, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          RETURNING ${ITEM_COLS}`,
       )
       .bind(
@@ -64,6 +64,7 @@ export class D1VectorizeStore implements Store {
         d.ai_description ?? "",
         JSON.stringify(d.tags ?? []),
         d.notes ?? "",
+        d.ai_status ?? "ready",
         created_at,
         created_at,
       )
@@ -354,11 +355,29 @@ export class D1VectorizeStore implements Store {
       .bind(key, value)
       .run();
   }
+
+  // --- counters ---
+  async nextCounter(name: string, period: string, start: number): Promise<number> {
+    // 単一のUPSERT文でアトミックに払い出す（read-modify-writeの競合を避ける）。
+    // period が前回と同じなら +1、変わっていたら start にリセットして払い出す。
+    // RETURNING は更新後の行を見るので、実際に払い出す値は next-1。
+    const row = await this.db
+      .prepare(
+        `INSERT INTO counters (name, period, next) VALUES (?, ?, ? + 1)
+         ON CONFLICT(name) DO UPDATE SET
+           next = CASE WHEN counters.period = ? THEN counters.next + 1 ELSE ? + 1 END,
+           period = ?
+         RETURNING next - 1 AS issued`,
+      )
+      .bind(name, period, start, period, start, period)
+      .first<{ issued: number }>();
+    return row!.issued;
+  }
 }
 
 // ---- column lists & row mappers ----
 const ITEM_COLS =
-  "id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y, storage_location, image_keys, ai_description, tags, notes, created_at, updated_at";
+  "id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y, storage_location, image_keys, ai_description, tags, notes, ai_status, created_at, updated_at";
 const INQ_COLS =
   "id, status, description, category, color, ai_description, tags, reference_no, notes, matched_item_id, created_at, updated_at";
 const MATCH_COLS = "id, item_id, inquiry_id, score, status, direction, created_at";
@@ -370,7 +389,7 @@ const NOTIF_COLS =
 const ITEM_FIELDS = [
   "display_id", "status", "category", "color", "brand", "found_location", "found_at",
   "map_key", "found_x", "found_y",
-  "storage_location", "image_keys", "ai_description", "tags", "notes",
+  "storage_location", "image_keys", "ai_description", "tags", "notes", "ai_status",
 ];
 const INQ_FIELDS = [
   "status", "description", "category", "color", "ai_description", "tags",
@@ -409,6 +428,7 @@ function rowToItem(r: any): Item {
     tags: arr(r.tags),
     embedding: [],
     notes: r.notes,
+    ai_status: r.ai_status ?? "ready",
     created_at: r.created_at,
     updated_at: r.updated_at,
   };

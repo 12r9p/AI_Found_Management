@@ -37,6 +37,8 @@ export interface Item {
   tags: string[]; // AI 抽出タグ
   embedding: number[]; // 特徴ベクトル
   notes: string; // 自由記述
+  /** 画像からのAI解析（種別・色・特徴文・タグ）の進捗。バックグラウンド解析待ちは "pending"。 */
+  ai_status: "pending" | "ready" | "error";
   created_at: string;
   updated_at: string;
 }
