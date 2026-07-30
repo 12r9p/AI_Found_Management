@@ -1,32 +1,28 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { Badge, Button, Card, Modal } from "./ui";
 import { MapPicker } from "./MapPicker";
 import { imageUrl } from "../lib/api";
-import { STATUS_LABEL, type Item, type Match } from "../lib/types";
+import { STATUS_LABEL, type Item } from "../lib/types";
 
 /**
- * 登録直後の確認ポップアップ。
- * 現場では連続して何件も登録するため、既定の動線は「続けて登録」。
- * 一致候補が出た場合だけ照合への導線を目立たせる。
+ * 登録直後の確認ポップアップ。管理番号を表示して紙タグに記入・貼り付けるための画面。
+ * AI解析はバックグラウンドで動くためこの時点では一致判定は出ない
+ * （一致すれば後で通知ベルに届く）。「閉じる」だけで次の登録に進める。
  */
 export function RegisteredModal({
-  result,
+  item,
   onClose,
-  onContinue,
+  onEdit,
 }: {
-  result: { item: Item; matches: Match[] } | null;
+  item: Item | null;
   onClose: () => void;
-  onContinue: () => void;
+  onEdit: (item: Item) => void;
 }) {
-  const router = useRouter();
-  if (!result) return null;
-  const { item, matches } = result;
-  const top = matches.length ? Math.max(...matches.map((m) => m.score)) : 0;
+  if (!item) return null;
 
   return (
     <Modal
-      open={!!result}
+      open={!!item}
       title="登録完了"
       context="登録"
       size="wide"
@@ -34,13 +30,7 @@ export function RegisteredModal({
       footer={
         <>
           <Button variant="outline" onClick={onClose}>閉じる</Button>
-          {matches.length > 0 && (
-            <Button variant="outline" onClick={() => router.push("/matches")}>
-              照合を確認 →
-            </Button>
-          )}
-          {/* 既定動線: 黒塗り（primary）で最も押しやすく */}
-          <Button onClick={onContinue}>続けて登録</Button>
+          <Button onClick={() => onEdit(item)}>登録内容を編集</Button>
         </>
       }
     >
@@ -48,18 +38,6 @@ export function RegisteredModal({
         <span className="rb-idtag">{item.display_id || item.id.slice(0, 8)}</span>
         <Badge tone="success">{STATUS_LABEL[item.status]}</Badge>
       </div>
-
-      {matches.length > 0 && (
-        <Card variant="elevated" className="mb-16">
-          <div className="rb-eyebrow mb-8" style={{ color: "var(--warning)" }}>
-            ⚠ 未解決の問い合わせと一致する可能性
-          </div>
-          <p className="rb-small" style={{ margin: 0 }}>
-            {matches.length}件の候補が見つかりました（最大 {(top * 100).toFixed(0)}%）。
-            スタッフに通知済みです。照合画面で確認してください。
-          </p>
-        </Card>
-      )}
 
       <div className="rb-grid rb-grid--2">
         <div>
@@ -96,12 +74,20 @@ export function RegisteredModal({
               拾得日時: {item.found_at ? new Date(item.found_at).toLocaleString("ja-JP") : "—"}
             </div>
           </Card>
-          <div className="rb-label mt-16 mb-8">特徴</div>
-          <p className="rb-small" style={{ margin: 0 }}>{item.ai_description || "—"}</p>
-          {item.tags.length > 0 && (
-            <div className="rb-chips mt-16">
-              {item.tags.map((t) => <span key={t} className="rb-chip">{t}</span>)}
-            </div>
+          <div className="rb-label mt-16 mb-8">特徴（AI解析）</div>
+          {item.ai_status === "pending" ? (
+            <p className="rb-small muted-text" style={{ margin: 0 }}>
+              解析中… 種別・色・特徴文は自動で入ります（この画面を閉じても続行されます）
+            </p>
+          ) : (
+            <>
+              <p className="rb-small" style={{ margin: 0 }}>{item.ai_description || "—"}</p>
+              {item.tags.length > 0 && (
+                <div className="rb-chips mt-16">
+                  {item.tags.map((t) => <span key={t} className="rb-chip">{t}</span>)}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

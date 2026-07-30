@@ -1,16 +1,14 @@
 "use client";
-import Link from "next/link";
 import { useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { Button, Card, Field, Input, Select, Textarea, Badge, useToast } from "../../components/ui";
-import { useMeta } from "../../components/useMeta";
+import { Button, Card, Field, Input, Textarea, useToast } from "../../components/ui";
 import { usePersistentState } from "../../components/usePersistentState";
 import { MapPicker, type Pin } from "../../components/MapPicker";
 import { ItemEditModal } from "../../components/ItemEditModal";
 import { RegisteredModal } from "../../components/RegisteredModal";
 import { api, imageUrl } from "../../lib/api";
 import { normalizeImageFiles } from "../../lib/image";
-import type { Item, Match } from "../../lib/types";
+import type { Item } from "../../lib/types";
 
 /** 拾得日時のクイック入力。現場は「今 / さっき」が大半。 */
 const QUICK_TIMES = [
@@ -27,44 +25,29 @@ function minutesAgoLocal(min: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+// 種別・色・特徴文・タグはAIが解析して自動で埋めるため、人間の入力対象から外す。
+// ここで入力するのはAIには分からない項目だけ。
 const EMPTY = {
-  category: "",
-  color: "",
   brand: "",
   found_location: "",
   found_at: "",
   storage_location: "",
-  ai_description: "",
-  tags: "",
   notes: "",
 };
 
 export default function RegisterPage() {
-  const meta = useMeta();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 画面を離れても入力を保持（現場では登録途中に別画面を見に行くことが多い）
-  const [keys, setKeys, clearKeys] = usePersistentState<string[]>("register:keys", []);
-  const [form, setForm, clearForm] = usePersistentState("register:form", { ...EMPTY });
-  const [pin, setPin, clearPin] = usePersistentState<Pin | null>("register:pin", null);
+  const [keys, setKeys] = usePersistentState<string[]>("register:keys", []);
+  const [form, setForm] = usePersistentState("register:form", { ...EMPTY });
+  const [pin, setPin] = usePersistentState<Pin | null>("register:pin", null);
 
   const [uploading, setUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [result, setResult] = useState<{ item: Item; matches: Match[] } | null>(null);
+  const [result, setResult] = useState<Item | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
-
-  /** 確認ポップアップを閉じたら、編集導線をトーストで残す（押し直せる猶予を作る）。 */
-  const closeResult = () => {
-    const saved = result?.item;
-    setResult(null);
-    if (!saved) return;
-    toast(`${saved.display_id || "物品"} を登録しました`, {
-      tone: "success",
-      action: { label: "登録内容を編集", onClick: () => setEditing(saved) },
-    });
-  };
 
   const set = (k: keyof typeof EMPTY, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -76,7 +59,7 @@ export default function RegisterPage() {
       const normalized = await normalizeImageFiles(picked);
       const { keys: newKeys } = await api.upload(normalized);
       setKeys([...keys, ...newKeys].slice(0, 2));
-      // AI解析は自動実行しない（複数枚まとめて追加してから「AIで特徴を解析」で手動起動する運用のため）
+      // AI解析はサーバー側が登録時にバックグラウンドで自動実行するため、ここでは呼ばない
     } catch (e) {
       toast(`アップロード失敗: ${(e as Error).message}`, "error");
     } finally {
@@ -84,48 +67,56 @@ export default function RegisterPage() {
     }
   };
 
-  const analyze = async (useKeys = keys) => {
-    if (useKeys.length === 0) {
-      toast("先に画像を追加してください", "error");
-      return;
-    }
-    setAnalyzing(true);
-    try {
-      const d = await api.analyze({ keys: useKeys, hint: form.notes || undefined });
-      setForm((f) => ({
-        ...f,
-        ai_description: d.description || f.ai_description,
-        tags: d.tags.length ? d.tags.join("、") : f.tags,
-        category: f.category || d.category,
-        color: f.color || d.color,
-        brand: f.brand || d.brand,
-      }));
-      toast("AI解析が完了しました。内容を確認・修正してください", "success");
-    } catch (e) {
-      toast(`AI解析失敗: ${(e as Error).message}`, "error");
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
   const removeImage = (key: string) => setKeys((ks) => ks.filter((k) => k !== key));
 
+  /** 次の登録へ。同じ場所からまとめて届くことが多いため、保管場所・拾得場所・
+   * 拾得日時・地図ピンだけは引き継ぎ、画像やブランド・メモは空に戻す。 */
+  const resetForNextBatch = () => {
+    setForm((f) => ({
+      ...EMPTY,
+      found_location: f.found_location,
+      storage_location: f.storage_location,
+      found_at: f.found_at,
+    }));
+    setKeys([]);
+    // pin はそのまま引き継ぐ（意図的に clearPin しない）
+  };
+
+  const hasDraft = keys.length > 0 || Object.values(form).some(Boolean) || pin;
+
   const resetAll = () => {
-    clearForm();
-    clearKeys();
-    clearPin();
+    setForm({ ...EMPTY });
+    setKeys([]);
+    setPin(null);
+  };
+
+  /** 確認ポップアップを閉じたら、編集導線をトーストで残す（押し直せる猶予を作る）。 */
+  const closeResult = () => {
+    const saved = result;
+    setResult(null);
+    if (!saved) return;
+    toast(`${saved.display_id || "物品"} を登録しました`, {
+      tone: "success",
+      action: { label: "登録内容を編集", onClick: () => setEditing(saved) },
+    });
+    resetForNextBatch();
+  };
+
+  const editFromResult = (item: Item) => {
+    setResult(null);
+    toast(`${item.display_id || "物品"} を登録しました`, {
+      tone: "success",
+      action: { label: "登録内容を編集", onClick: () => setEditing(item) },
+    });
+    resetForNextBatch();
+    setEditing(item);
   };
 
   const submit = async () => {
-    if (!form.category) {
-      toast("種別（カテゴリ）は必須です", "error");
-      return;
-    }
+    if (uploading) return; // 送信中の写真がある場合はアップロード完了を待つ
     setSaving(true);
     try {
-      const res = await api.createItem({
-        category: form.category,
-        color: form.color,
+      const item = await api.createItem({
         brand: form.brand,
         found_location: form.found_location,
         found_at: form.found_at ? new Date(form.found_at).toISOString() : null,
@@ -133,17 +124,9 @@ export default function RegisterPage() {
         found_y: pin?.y ?? null,
         storage_location: form.storage_location,
         image_keys: keys,
-        ai_description: form.ai_description,
-        tags: form.tags.split(/[、,]/).map((t) => t.trim()).filter(Boolean),
         notes: form.notes,
       });
-      setResult(res);
-      if (res.matches.length > 0) {
-        toast(`未解決の問い合わせと${res.matches.length}件一致！ 通知を確認してください`, "success");
-      } else {
-        toast("登録しました", "success");
-      }
-      resetAll();
+      setResult(item.item);
     } catch (e) {
       toast(`登録失敗: ${(e as Error).message}`, "error");
     } finally {
@@ -151,8 +134,7 @@ export default function RegisterPage() {
     }
   };
 
-  const busy = uploading || analyzing;
-  const hasDraft = keys.length > 0 || Object.values(form).some(Boolean) || pin;
+  const busy = uploading;
 
   return (
     <AppShell>
@@ -170,26 +152,21 @@ export default function RegisterPage() {
 
       <Card variant="bordered" className="mb-16">
         <div className="rb-label mb-8">画像（最大2枚）</div>
+        <p className="rb-tiny muted-text mb-8">
+          種別・色・特徴文・タグはAIが自動解析します（登録後にバックグラウンドで進行、待たずに次へ進めます）。
+        </p>
 
-        {busy && (
+        {uploading && (
           <div className="rb-busy mb-16" role="status" aria-live="polite">
             <span className="rb-spinner" aria-hidden />
-            <span>{uploading ? "画像をアップロード中…" : "AIが画像を解析中… 特徴文とタグを生成しています"}</span>
+            <span>画像を送信中…</span>
           </div>
         )}
 
         <div className="rb-grid rb-grid--2 mb-16">
           {keys.map((k) => (
             <div key={k}>
-              <div className="rb-rel">
-                <img src={imageUrl(k)} alt="拾得物" className="thumb" />
-                {analyzing && (
-                  <div className="rb-overlay-busy">
-                    <span className="rb-spinner" aria-hidden />
-                    AI解析中…
-                  </div>
-                )}
-              </div>
+              <img src={imageUrl(k)} alt="拾得物" className="thumb" />
               <Button variant="destructive" size="sm" block className="mt-8" onClick={() => removeImage(k)} disabled={busy}>
                 削除
               </Button>
@@ -220,9 +197,6 @@ export default function RegisterPage() {
             e.target.value = ""; // 同じ画像の再選択を許可
           }}
         />
-        <Button variant="outline" block onClick={() => analyze()} disabled={busy || keys.length === 0}>
-          {analyzing ? "AI解析中…" : "AIで特徴を解析"}
-        </Button>
       </Card>
 
       <Card variant="bordered" className="mb-16">
@@ -231,27 +205,8 @@ export default function RegisterPage() {
       </Card>
 
       <Card variant="bordered">
+        <div className="rb-eyebrow mb-8">AIには分からない情報</div>
         <div className="rb-grid rb-grid--2">
-          <Field label="種別" required>
-            {(id) => (
-              <Select id={id} value={form.category} onChange={(e) => set("category", e.target.value)}>
-                <option value="">選択…</option>
-                {meta.categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </Select>
-            )}
-          </Field>
-          <Field label="色">
-            {(id) => (
-              <Select id={id} value={form.color} onChange={(e) => set("color", e.target.value)}>
-                <option value="">選択…</option>
-                {meta.colors.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </Select>
-            )}
-          </Field>
           <Field label="ブランド/型番">
             {(id) => <Input id={id} value={form.brand} onChange={(e) => set("brand", e.target.value)} />}
           </Field>
@@ -291,27 +246,19 @@ export default function RegisterPage() {
             )}
           </Field>
         </div>
-        <Field label="AI特徴文" hint="AIが生成。誤りは修正可">
-          {(id) => (
-            <Textarea id={id} value={form.ai_description} onChange={(e) => set("ai_description", e.target.value)} />
-          )}
-        </Field>
-        <Field label="タグ" hint="読点/カンマ区切り">
-          {(id) => <Input id={id} value={form.tags} onChange={(e) => set("tags", e.target.value)} />}
-        </Field>
         <Field label="メモ（個人情報は不可）">
           {(id) => <Textarea id={id} value={form.notes} onChange={(e) => set("notes", e.target.value)} />}
         </Field>
         <Button block onClick={submit} disabled={saving || busy}>
-          {saving ? "登録中…" : "この内容で登録する"}
+          {saving ? "登録中…" : uploading ? "画像の送信を待っています…" : "この内容で登録する"}
         </Button>
       </Card>
 
       {/* 登録直後の確認はポップアップ（続けて登録しやすいよう手を止めない） */}
       <RegisteredModal
-        result={result}
+        item={result}
         onClose={closeResult}
-        onContinue={() => setResult(null)}
+        onEdit={editFromResult}
       />
       <ItemEditModal
         item={editing}
