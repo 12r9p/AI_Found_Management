@@ -12,3 +12,4 @@ out/
 # ローカル開発用データ（メモリストアのスナップショット・アップロード画像）
 apps/api/.data/
 coverage/
+*.tsbuildinfo

@@ -3,7 +3,7 @@ import "./globals.css";
 import { UIProvider } from "../components/ui";
 
 export const metadata: Metadata = {
-  title: "遺失物管理 | RawBlock",
+  title: "遺失物管理",
   description: "遺失物（落し物）管理アプリ — AIタグ付け・ベクトル検索・自動照合",
 };
 
