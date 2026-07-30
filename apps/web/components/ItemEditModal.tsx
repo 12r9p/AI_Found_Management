@@ -209,7 +209,7 @@ export function ItemEditModal({
           <Field label="タグ" hint="読点/カンマ区切り。保存時に再ベクトル化されます">
             {(id) => <Input id={id} value={form.tagsText ?? ""} onChange={(e) => set("tagsText", e.target.value)} />}
           </Field>
-          <Field label="メモ（個人情報は不可）">
+          <Field label="メモ" hint="個人情報は入力しないでください">
             {(id) => <Textarea id={id} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />}
           </Field>
         </div>

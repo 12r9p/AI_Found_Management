@@ -12,10 +12,12 @@ import { STATUS_LABEL, type Item } from "../lib/types";
 export function RegisteredModal({
   item,
   onClose,
+  onContinue,
   onEdit,
 }: {
   item: Item | null;
   onClose: () => void;
+  onContinue: () => void;
   onEdit: (item: Item) => void;
 }) {
   if (!item) return null;
@@ -29,8 +31,9 @@ export function RegisteredModal({
       onClose={onClose}
       footer={
         <>
+          <Button variant="outline" onClick={() => onEdit(item)}>編集</Button>
           <Button variant="outline" onClick={onClose}>閉じる</Button>
-          <Button onClick={() => onEdit(item)}>登録内容を編集</Button>
+          <Button onClick={onContinue}>続けて登録</Button>
         </>
       }
     >

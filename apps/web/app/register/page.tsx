@@ -79,24 +79,35 @@ export default function RegisterPage() {
     setPin(null);
   };
 
-  /** 確認ポップアップを閉じたら、編集導線をトーストで残す（押し直せる猶予を作る）。 */
-  const closeResult = () => {
-    const saved = result;
-    setResult(null);
-    if (!saved) return;
+  /** 登録直後のトースト。押し直せる猶予として編集導線を残す。 */
+  const notifyRegistered = (saved: Item) => {
     toast(`${saved.display_id || "物品"} を登録しました`, {
       tone: "success",
       action: { label: "登録内容を編集", onClick: () => setEditing(saved) },
     });
+  };
+
+  /** 「閉じる」= 完全リセットしてまっさらな登録画面へ。 */
+  const handleClose = () => {
+    const saved = result;
+    setResult(null);
+    if (!saved) return;
+    notifyRegistered(saved);
+    resetAll();
+  };
+
+  /** 「続けて登録」(主動線) = 保管場所などを引き継いだまま次の登録へ。 */
+  const handleContinue = () => {
+    const saved = result;
+    setResult(null);
+    if (!saved) return;
+    notifyRegistered(saved);
     resetForNextBatch();
   };
 
-  const editFromResult = (item: Item) => {
+  const handleEditFromResult = (item: Item) => {
     setResult(null);
-    toast(`${item.display_id || "物品"} を登録しました`, {
-      tone: "success",
-      action: { label: "登録内容を編集", onClick: () => setEditing(item) },
-    });
+    notifyRegistered(item);
     resetForNextBatch();
     setEditing(item);
   };
@@ -222,8 +233,9 @@ export default function RegisterPage() {
       {/* 登録直後の確認はポップアップ（続けて登録しやすいよう手を止めない） */}
       <RegisteredModal
         item={result}
-        onClose={closeResult}
-        onEdit={editFromResult}
+        onClose={handleClose}
+        onContinue={handleContinue}
+        onEdit={handleEditFromResult}
       />
       <ItemEditModal
         item={editing}
