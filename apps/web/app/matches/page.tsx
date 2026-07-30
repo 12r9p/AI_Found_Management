@@ -35,16 +35,20 @@ export default function MatchesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // 通知などから ?open=<matchId> で直接ダイアログを開く
+  // 通知などから ?open=<matchId> で直接ダイアログを開く。
+  // 現在の表示フィルタ（status）に一致しない場合でも開けるよう、絞り込みなしで別途取得する。
   useEffect(() => {
     const id = new URLSearchParams(location.search).get("open");
-    if (!id || matches.length === 0) return;
-    const m = matches.find((x) => x.id === id);
-    if (m) {
-      setSelected(m);
-      history.replaceState(null, "", "/matches");
-    }
-  }, [matches]);
+    if (!id) return;
+    api
+      .listMatches()
+      .then((all) => {
+        const m = all.find((x) => x.id === id);
+        if (m) setSelected(m);
+      })
+      .catch(() => {})
+      .finally(() => history.replaceState(null, "", "/matches"));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pendingCount = matches.filter((m) => m.status === "pending").length;
 

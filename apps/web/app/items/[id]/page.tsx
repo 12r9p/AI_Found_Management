@@ -7,7 +7,8 @@ import { Button, Card, Field, Input, Select, Textarea, Badge, useToast, useConfi
 import { useMeta } from "../../../components/useMeta";
 import { MapPicker, type Pin } from "../../../components/MapPicker";
 import { ImageEditor } from "../../../components/ImageEditor";
-import { api } from "../../../lib/api";
+import { MatchReviewModal } from "../../../components/MatchReviewModal";
+import { api, imageUrl } from "../../../lib/api";
 import { STATUS_LABEL, type Item, type Match } from "../../../lib/types";
 
 export default function ItemDetailPage() {
@@ -18,6 +19,7 @@ export default function ItemDetailPage() {
   const confirm = useConfirm();
   const [item, setItem] = useState<Item | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [reviewing, setReviewing] = useState<Match | null>(null);
   const [form, setForm] = useState<Partial<Item> & { tagsText?: string }>({});
   const [imageKeys, setImageKeys] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -25,12 +27,23 @@ export default function ItemDetailPage() {
   const [analyzing, setAnalyzing] = useState(false);
 
   const load = () =>
-    api.getItem(id).then(({ item, matches }) => {
+    api.getItem(id).then(async ({ item, matches }) => {
       setItem(item);
-      setMatches(matches);
       setForm({ ...item, tagsText: item.tags.join("、") });
       setImageKeys(item.image_keys);
       setDirty(false);
+      // 個々の match には inquiry が付いてこないため、突き合わせ確認ポップアップ用に取得しておく
+      const enriched = await Promise.all(
+        matches.map(async (m) => {
+          try {
+            const { inquiry } = await api.getInquiry(m.inquiry_id);
+            return { ...m, item, inquiry };
+          } catch {
+            return { ...m, item };
+          }
+        }),
+      );
+      setMatches(enriched);
     }).catch((e) => toast(`読込失敗: ${e.message}`, "error"));
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
@@ -156,7 +169,6 @@ export default function ItemDetailPage() {
                 set("found_x", pin ? pin.x : null);
                 set("found_y", pin ? pin.y : null);
               }}
-              height={260}
             />
             {item.found_location && (
               <div className="rb-tiny muted-text mt-8">メモ: {item.found_location}</div>
@@ -174,12 +186,41 @@ export default function ItemDetailPage() {
 
           {matches.length > 0 && (
             <Card variant="elevated">
-              <div className="rb-eyebrow mb-8" style={{ color: "var(--warning)" }}>突き合わせ候補</div>
-              {matches.map((m) => (
-                <div key={m.id} className="rb-small mb-8">
-                  問い合わせ {m.inquiry_id.slice(0, 8)} — {(m.score * 100).toFixed(0)}% <Badge>{STATUS_LABEL[m.status]}</Badge>
-                </div>
-              ))}
+              <div className="rb-eyebrow mb-8" style={{ color: "var(--warning)" }}>
+                突き合わせ候補（{matches.length}件）
+              </div>
+              <div className="rb-col">
+                {matches.map((m) => {
+                  const pct = Math.round(m.score * 100);
+                  return (
+                    <button
+                      key={m.id}
+                      className="rb-listrow"
+                      onClick={() => setReviewing(m)}
+                    >
+                      <div className="rb-thumbs">
+                        {m.item?.image_keys?.[0] ? (
+                          <img src={imageUrl(m.item.image_keys[0])} alt="" className="rb-thumb-sm" />
+                        ) : (
+                          <span className="rb-thumb-sm rb-thumb-sm--empty">無</span>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="rb-between mb-8">
+                          <strong className="rb-small">受付No: {m.inquiry?.reference_no || "—"}</strong>
+                          <span className="rb-row" style={{ gap: 6 }}>
+                            <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
+                            <Badge>{STATUS_LABEL[m.status]}</Badge>
+                          </span>
+                        </div>
+                        <div className="rb-tiny muted-text">
+                          {(m.inquiry?.description || "").slice(0, 60) || "—"}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </Card>
           )}
         </div>
@@ -240,6 +281,13 @@ export default function ItemDetailPage() {
           </div>
         </Card>
       </div>
+
+      <MatchReviewModal
+        match={reviewing}
+        context="物品 › 突き合わせ候補"
+        onClose={() => setReviewing(null)}
+        onDecided={load}
+      />
     </AppShell>
   );
 }

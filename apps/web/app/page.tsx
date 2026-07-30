@@ -34,7 +34,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="rb-grid rb-grid--3">
+      <div className="rb-grid rb-grid--2">
         {screens.map((s) => (
           <Link key={s.href} href={s.href} style={{ textDecoration: "none", color: "inherit" }}>
             <Card variant="interactive" style={{ height: "100%" }}>

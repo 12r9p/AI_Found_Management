@@ -18,7 +18,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [apiUnreachable, setApiUnreachable] = useState(false);
+  const [aiMock, setAiMock] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const hasHealthIssue = apiUnreachable || aiMock;
 
   const refreshUnread = useCallback(() => {
     api.unreadCount().then(setUnread).catch(() => {});
@@ -27,8 +30,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let alive = true;
     const load = () => api.unreadCount().then((c) => alive && setUnread(c)).catch(() => {});
+    const loadHealth = () =>
+      api
+        .health()
+        .then((h) => {
+          if (!alive) return;
+          setApiUnreachable(false);
+          setAiMock(h.ai === "mock");
+        })
+        .catch(() => {
+          if (!alive) return;
+          setApiUnreachable(true);
+          setAiMock(false);
+        });
     load();
-    const t = setInterval(load, 15000);
+    loadHealth();
+    const t = setInterval(() => {
+      load();
+      loadHealth();
+    }, 15000);
     return () => {
       alive = false;
       clearInterval(t);
@@ -67,10 +87,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="rb-spacer" />
 
           <Button
-            variant={unread > 0 ? "default" : "outline"}
+            variant={hasHealthIssue ? "destructive" : unread > 0 ? "default" : "outline"}
             size="sm"
             onClick={() => setNotifOpen(true)}
-            aria-label={unread > 0 ? `未読の通知が${unread}件あります` : "通知を見る"}
+            aria-label={
+              hasHealthIssue
+                ? "エラーがあります。通知を確認してください"
+                : unread > 0
+                  ? `未読の通知が${unread}件あります`
+                  : "通知を見る"
+            }
             aria-haspopup="dialog"
             title="通知を開く（今の画面のまま確認できます）"
           >
@@ -113,6 +139,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
         onChanged={refreshUnread}
+        apiUnreachable={apiUnreachable}
+        aiMock={aiMock}
       />
     </div>
   );

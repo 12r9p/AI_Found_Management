@@ -71,7 +71,7 @@ export interface Match {
 
 export interface Notification {
   id: string;
-  type: "match_found" | "system";
+  type: "match_found" | "system" | "error";
   title: string;
   body: string;
   ref_item_id: string | null;
