@@ -87,22 +87,24 @@ export default function RegisterPage() {
     });
   };
 
-  /** 「閉じる」= 完全リセットしてまっさらな登録画面へ。 */
+  /** 「閉じる」= 完全リセットしてまっさらな登録画面へ。次の入力へすぐ移れるよう先頭へ戻す。 */
   const handleClose = () => {
     const saved = result;
     setResult(null);
     if (!saved) return;
     notifyRegistered(saved);
     resetAll();
+    window.scrollTo({ top: 0 });
   };
 
-  /** 「続けて登録」(主動線) = 保管場所などを引き継いだまま次の登録へ。 */
+  /** 「続けて登録」(主動線) = 保管場所などを引き継いだまま次の登録へ。先頭へ戻す。 */
   const handleContinue = () => {
     const saved = result;
     setResult(null);
     if (!saved) return;
     notifyRegistered(saved);
     resetForNextBatch();
+    window.scrollTo({ top: 0 });
   };
 
   const handleEditFromResult = (item: Item) => {
