@@ -138,9 +138,15 @@ export function Modal({
   size?: "wide" | "full";
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
+  // onClose は呼び出し側で毎レンダー新しい関数になりがち（インライン定義）。
+  // 依存配列に入れると、モーダル内で入力するたびに呼び出し元が再レンダーされ
+  // このeffectが再実行されてフォーカスを奪い返してしまう（1文字も打てなくなるバグの原因）。
+  // ref 経由で最新の onClose を参照し、effect 自体は open が変わった時だけ走らせる。
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCloseRef.current();
     window.addEventListener("keydown", onKey);
     // モーダル表示中は背後をスクロールさせない（元画面が動くと階層が曖昧になる）
     const prev = document.body.style.overflow;
@@ -151,7 +157,7 @@ export function Modal({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="rb-overlay" onClick={onClose}>
