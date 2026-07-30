@@ -8,6 +8,17 @@ export interface Pin {
   y: number; // 0..1
 }
 
+// 会場地図はほぼ変わらないため、タブを開いている間はキーを使い回す。
+// 画面遷移のたびに毎回「読込中」が出て、地図を読み直しているように見えるのを防ぐ。
+let cachedMapKey: string | null = null;
+let cachedMapKeyPromise: Promise<string> | null = null;
+
+/** 設定画面で地図を差し替えた直後に呼び、次のマウントで新しい地図を取り直させる。 */
+export function invalidateMapCache() {
+  cachedMapKey = null;
+  cachedMapKeyPromise = null;
+}
+
 /**
  * 地図画像にピンを刺して拾得場所を指定する。
  * 座標は画像サイズに依存しないよう 0..1 に正規化して保存する。
@@ -23,8 +34,8 @@ export function MapPicker({
   readOnly?: boolean;
   mapKeyOverride?: string;
 }) {
-  const [mapKey, setMapKey] = useState<string>(mapKeyOverride ?? "");
-  const [loading, setLoading] = useState(!mapKeyOverride);
+  const [mapKey, setMapKey] = useState<string>(mapKeyOverride ?? cachedMapKey ?? "");
+  const [loading, setLoading] = useState(!mapKeyOverride && cachedMapKey == null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,10 +44,17 @@ export function MapPicker({
       setLoading(false);
       return;
     }
-    api.getMap()
-      .then((k) => setMapKey(k))
-      .catch(() => setMapKey(""))
-      .finally(() => setLoading(false));
+    if (cachedMapKey != null) {
+      setMapKey(cachedMapKey);
+      setLoading(false);
+      return;
+    }
+    if (!cachedMapKeyPromise) {
+      cachedMapKeyPromise = api.getMap()
+        .then((k) => { cachedMapKey = k; return k; })
+        .catch(() => { cachedMapKey = ""; return ""; });
+    }
+    cachedMapKeyPromise.then((k) => { setMapKey(k); setLoading(false); });
   }, [mapKeyOverride]);
 
   const place = (clientX: number, clientY: number) => {

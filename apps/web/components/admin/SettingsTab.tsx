@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, Field, Input, Modal, Select, useToast, useConfirm } from "../ui";
-import { MapPicker } from "../MapPicker";
+import { MapPicker, invalidateMapCache } from "../MapPicker";
 import { api } from "../../lib/api";
 import type { IdRule } from "../../lib/types";
 
@@ -185,6 +185,7 @@ function MapSetting() {
     try {
       const key = await api.uploadMap(f);
       setMapKey(key);
+      invalidateMapCache();
       toast("地図を更新しました。登録画面でピンを刺せます", "success");
     } catch (e) {
       toast(`アップロード失敗: ${(e as Error).message}`, "error");
