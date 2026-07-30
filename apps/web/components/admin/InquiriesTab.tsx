@@ -279,7 +279,7 @@ function InquiryDetailModal({
                 <Textarea id={id} value={form.description ?? ""} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
               )}
             </Field>
-            <Field label="メモ（個人情報は不可）">
+            <Field label="メモ" hint="個人情報は入力しないでください">
               {(id) => (
                 <Textarea id={id} value={form.notes ?? ""} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
               )}
