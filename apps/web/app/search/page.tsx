@@ -223,6 +223,9 @@ export default function SearchPage() {
                           <Badge tone={it.score >= 0.6 ? "success" : "info"}>{(it.score * 100).toFixed(0)}%</Badge>
                         )}
                       </div>
+                      {it.display_id && (
+                        <div className="rb-mono rb-tiny muted-text mb-8">{it.display_id}</div>
+                      )}
                       {it.image_keys[0] ? (
                         <img src={imageUrl(it.image_keys[0])} alt="" className="thumb mb-8" />
                       ) : (
