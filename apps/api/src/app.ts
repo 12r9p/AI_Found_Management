@@ -4,6 +4,7 @@ import { buildContext, type AppContext } from "./context.ts";
 import { getEnv, waitUntil } from "./env-holder.ts";
 import { itemEmbedText, inquiryEmbedText } from "./lib/embed-text.ts";
 import { matchNewItem, matchNewInquiry } from "./lib/matching.ts";
+import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
 import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
 import { verifyAccessJwt } from "./lib/access.ts";
@@ -256,29 +257,12 @@ export function createApp() {
     .post("/api/items", async ({ body }) => {
       const c = await ctx();
       const b = (body as any) ?? {};
-      // 画像はあるが特徴文が無ければ、この場で AI タグ付けする
-      let ai_description = b.ai_description ?? "";
-      let tags: string[] = Array.isArray(b.tags) ? b.tags : [];
-      let category = b.category ?? "";
-      let color = b.color ?? "";
-      let brand = b.brand ?? "";
       const keys: string[] = Array.isArray(b.image_keys) ? b.image_keys : [];
-      if (!ai_description && keys.length > 0) {
-        const dataUrls: string[] = [];
-        for (const key of keys) {
-          const obj = await c.images.get(key);
-          if (obj) dataUrls.push(arrayBufferToDataUrl(obj.body, obj.contentType));
-        }
-        const d = await c.ai.describeImages(dataUrls.map((url) => ({ url })), b.notes);
-        ai_description = d.description;
-        tags = tags.length ? tags : d.tags;
-        category = category || d.category;
-        color = color || d.color;
-        brand = brand || d.brand;
-      }
       const draft = {
         status: b.status ?? "stored",
-        category, color, brand,
+        category: b.category ?? "",
+        color: b.color ?? "",
+        brand: b.brand ?? "",
         found_location: b.found_location ?? "",
         found_at: b.found_at ?? null,
         map_key: b.map_key ?? "",
@@ -286,15 +270,26 @@ export function createApp() {
         found_y: typeof b.found_y === "number" ? b.found_y : null,
         storage_location: b.storage_location ?? "",
         image_keys: keys,
-        ai_description,
-        tags,
+        ai_description: b.ai_description ?? "",
+        tags: Array.isArray(b.tags) ? b.tags : [],
         notes: b.notes ?? "",
       };
-      const embedding = await c.ai.embed(itemEmbedText(draft));
       // 管理番号は設定の採番ルールに従って自動付与（現場・紙台帳での照合用）
       const display_id = b.display_id || (await nextDisplayId(c.store));
-      const item = await c.store.createItem({ ...draft, display_id, embedding });
-      item.embedding = embedding; // pg 実装は embedding を返さないため補完
+
+      // 画像はあるが特徴文が未指定 → AI解析（vision＋埋め込み＋自動照合）は
+      // 現場を待たせないようレスポンスの後ろでバックグラウンド実行する。
+      // 一致が見つかった場合は既存の通知の仕組みで届く（この時点の応答には含まれない）。
+      if (keys.length > 0 && !draft.ai_description) {
+        const item = await c.store.createItem({ ...draft, display_id, ai_status: "pending" });
+        waitUntil(runBackgroundAnalysis(c, item));
+        return { item, matches: [], topScore: 0 };
+      }
+
+      // 画像なし、または呼び出し側が特徴文を渡し済み → 従来通り即時処理
+      const embedding = await c.ai.embed(itemEmbedText(draft));
+      const item = await c.store.createItem({ ...draft, display_id, embedding, ai_status: "ready" });
+      item.embedding = embedding; // pg/D1 実装は embedding を返さないため補完
       const outcome =
         item.status === "stored"
           ? await matchNewItem(c.store, item, c.cfg.matchThreshold)
