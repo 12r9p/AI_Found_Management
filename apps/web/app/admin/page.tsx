@@ -72,7 +72,6 @@ export default function AdminPage() {
     <AppShell>
       <div className="rb-between mb-16">
         <div>
-          <div className="rb-eyebrow muted-text">スタッフ / ADMIN</div>
           <h2>管理コンソール</h2>
         </div>
         <div className="rb-nav">

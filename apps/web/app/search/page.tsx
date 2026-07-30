@@ -97,7 +97,6 @@ export default function SearchPage() {
 
   return (
     <AppShell>
-      <div className="rb-eyebrow muted-text">受付 / SEARCH</div>
       <h2 className="mb-16">遺失物を探す</h2>
 
       {/* 条件は左に固定、結果は右。条件を見ながら結果を絞り込める。 */}
@@ -117,6 +116,7 @@ export default function SearchPage() {
               )}
             </Field>
 
+            <div className="rb-eyebrow mt-16 mb-8">フィルター</div>
             <Field label="種別">
               {(id) => (
                 <Select id={id} value={filters.category} onChange={(e) => setF("category", e.target.value)}>
@@ -196,7 +196,6 @@ export default function SearchPage() {
             <>
               <div className="rb-between mb-8">
                 <div className="rb-eyebrow">結果 {items.length} 件</div>
-                <span className="rb-tiny muted-text">カードをクリックで照会</span>
               </div>
               {items.length === 0 ? (
                 <Card variant="muted">

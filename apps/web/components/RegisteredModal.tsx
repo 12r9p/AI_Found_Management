@@ -61,25 +61,20 @@ export function RegisteredModal({
         <div>
           <Card variant="muted">
             <div className="rb-small rb-mono">
-              種別: <strong>{item.category || "—"}</strong>
-              <br />
-              色: {item.color || "—"}
-              <br />
-              ブランド: {item.brand || "—"}
-              <br />
-              保管場所: <strong>{item.storage_location || "—"}</strong>
-              <br />
-              拾得場所: {item.found_location || "—"}
-              <br />
-              拾得日時: {item.found_at ? new Date(item.found_at).toLocaleString("ja-JP") : "—"}
+              拾得日時: <strong>{item.found_at ? new Date(item.found_at).toLocaleString("ja-JP") : "—"}</strong>
             </div>
           </Card>
-          <div className="rb-label mt-16 mb-8">特徴（AI解析）</div>
-          {item.ai_status === "pending" ? (
-            <p className="rb-small muted-text" style={{ margin: 0 }}>
-              解析中… 種別・色・特徴文は自動で入ります（この画面を閉じても続行されます）
-            </p>
-          ) : (
+          {item.notes && (
+            <>
+              <div className="rb-label mt-16 mb-8">メモ</div>
+              <p className="rb-small" style={{ margin: 0 }}>{item.notes}</p>
+            </>
+          )}
+          <div className="rb-between mt-16 mb-8">
+            <span className="rb-label" style={{ margin: 0 }}>特徴</span>
+            {item.ai_status === "pending" && <Badge tone="warning">解析中</Badge>}
+          </div>
+          {item.ai_status !== "pending" && (
             <>
               <p className="rb-small" style={{ margin: 0 }}>{item.ai_description || "—"}</p>
               {item.tags.length > 0 && (

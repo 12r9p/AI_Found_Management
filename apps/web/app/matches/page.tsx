@@ -56,7 +56,6 @@ export default function MatchesPage() {
     <AppShell>
       <div className="rb-between mb-16">
         <div>
-          <div className="rb-eyebrow muted-text">照合 / MATCHING</div>
           <h2>問い合わせとの突き合わせ</h2>
         </div>
         <Button variant="outline" size="sm" onClick={load}>
@@ -74,9 +73,6 @@ export default function MatchesPage() {
             </Select>
           )}
         </Field>
-        <p className="rb-tiny muted-text" style={{ margin: 0 }}>
-          カードをクリックすると詳細を確認できます。判断は確認画面で行います。
-        </p>
       </Card>
 
       {loading && (

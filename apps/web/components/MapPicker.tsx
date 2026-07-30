@@ -97,7 +97,7 @@ export function MapPicker({
           <span className="rb-hint">
             {value
               ? `ピン位置: ${(value.x * 100).toFixed(0)}% , ${(value.y * 100).toFixed(0)}%（矢印キーで微調整）`
-              : "地図をタップして拾得場所を指定"}
+              : ""}
           </span>
           {value && onChange && (
             <Button variant="outline" size="sm" onClick={() => onChange(null)}>

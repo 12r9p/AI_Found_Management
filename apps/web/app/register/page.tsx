@@ -25,13 +25,9 @@ function minutesAgoLocal(min: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// 種別・色・特徴文・タグはAIが解析して自動で埋めるため、人間の入力対象から外す。
-// ここで入力するのはAIには分からない項目だけ。
+// 種別・色・特徴文・タグはAIが自動で埋める。人間の入力は拾得日時（必須）とメモのみ。
 const EMPTY = {
-  brand: "",
-  found_location: "",
   found_at: "",
-  storage_location: "",
   notes: "",
 };
 
@@ -59,7 +55,6 @@ export default function RegisterPage() {
       const normalized = await normalizeImageFiles(picked);
       const { keys: newKeys } = await api.upload(normalized);
       setKeys([...keys, ...newKeys].slice(0, 2));
-      // AI解析はサーバー側が登録時にバックグラウンドで自動実行するため、ここでは呼ばない
     } catch (e) {
       toast(`アップロード失敗: ${(e as Error).message}`, "error");
     } finally {
@@ -69,20 +64,14 @@ export default function RegisterPage() {
 
   const removeImage = (key: string) => setKeys((ks) => ks.filter((k) => k !== key));
 
-  /** 次の登録へ。同じ場所からまとめて届くことが多いため、保管場所・拾得場所・
-   * 拾得日時・地図ピンだけは引き継ぎ、画像やブランド・メモは空に戻す。 */
+  /** 次の登録へ。同じ場所・同じ頃にまとめて届くことが多いため、拾得日時と
+   * 地図ピンだけ引き継ぎ、画像・メモは空に戻す。 */
   const resetForNextBatch = () => {
-    setForm((f) => ({
-      ...EMPTY,
-      found_location: f.found_location,
-      storage_location: f.storage_location,
-      found_at: f.found_at,
-    }));
+    setForm((f) => ({ ...EMPTY, found_at: f.found_at }));
     setKeys([]);
-    // pin はそのまま引き継ぐ（意図的に clearPin しない）
   };
 
-  const hasDraft = keys.length > 0 || Object.values(form).some(Boolean) || pin;
+  const hasDraft = keys.length > 0 || !!form.notes || !!form.found_at || pin;
 
   const resetAll = () => {
     setForm({ ...EMPTY });
@@ -114,15 +103,16 @@ export default function RegisterPage() {
 
   const submit = async () => {
     if (uploading) return; // 送信中の写真がある場合はアップロード完了を待つ
+    if (!form.found_at) {
+      toast("拾得日時は必須です", "error");
+      return;
+    }
     setSaving(true);
     try {
       const item = await api.createItem({
-        brand: form.brand,
-        found_location: form.found_location,
-        found_at: form.found_at ? new Date(form.found_at).toISOString() : null,
+        found_at: new Date(form.found_at).toISOString(),
         found_x: pin?.x ?? null,
         found_y: pin?.y ?? null,
-        storage_location: form.storage_location,
         image_keys: keys,
         notes: form.notes,
       });
@@ -140,7 +130,6 @@ export default function RegisterPage() {
     <AppShell>
       <div className="rb-between mb-16">
         <div>
-          <div className="rb-eyebrow muted-text">現場登録 / MOBILE</div>
           <h2>拾得物の登録</h2>
         </div>
         {hasDraft && (
@@ -152,9 +141,6 @@ export default function RegisterPage() {
 
       <Card variant="bordered" className="mb-16">
         <div className="rb-label mb-8">画像（最大2枚）</div>
-        <p className="rb-tiny muted-text mb-8">
-          種別・色・特徴文・タグはAIが自動解析します（登録後にバックグラウンドで進行、待たずに次へ進めます）。
-        </p>
 
         {uploading && (
           <div className="rb-busy mb-16" role="status" aria-live="polite">
@@ -205,48 +191,27 @@ export default function RegisterPage() {
       </Card>
 
       <Card variant="bordered">
-        <div className="rb-eyebrow mb-8">AIには分からない情報</div>
-        <div className="rb-grid rb-grid--2">
-          <Field label="ブランド/型番">
-            {(id) => <Input id={id} value={form.brand} onChange={(e) => set("brand", e.target.value)} />}
-          </Field>
-          <Field label="保管場所" hint="棚番号など">
-            {(id) => (
-              <Input id={id} value={form.storage_location} onChange={(e) => set("storage_location", e.target.value)} />
-            )}
-          </Field>
-          <Field label="拾得場所メモ" hint="地図の補足（例: 東ゲート付近）">
-            {(id) => (
-              <Input id={id} value={form.found_location} onChange={(e) => set("found_location", e.target.value)} />
-            )}
-          </Field>
-          <Field label="拾得日時">
-            {(id) => (
-              <>
-                {/* 現場では「さっき拾った」がほとんど。毎回カレンダーを触らせない。 */}
-                <div className="rb-quick">
-                  {QUICK_TIMES.map((qt) => (
-                    <Button
-                      key={qt.label}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => set("found_at", minutesAgoLocal(qt.min))}
-                    >
-                      {qt.label}
-                    </Button>
-                  ))}
-                  {form.found_at && (
-                    <Button variant="ghost" size="sm" onClick={() => set("found_at", "")}>
-                      クリア
-                    </Button>
-                  )}
-                </div>
-                <Input id={id} type="datetime-local" value={form.found_at} onChange={(e) => set("found_at", e.target.value)} />
-              </>
-            )}
-          </Field>
-        </div>
-        <Field label="メモ（個人情報は不可）">
+        <Field label="拾得日時" required>
+          {(id) => (
+            <>
+              {/* 現場では「さっき拾った」がほとんど。毎回カレンダーを触らせない。 */}
+              <div className="rb-quick">
+                {QUICK_TIMES.map((qt) => (
+                  <Button
+                    key={qt.label}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => set("found_at", minutesAgoLocal(qt.min))}
+                  >
+                    {qt.label}
+                  </Button>
+                ))}
+              </div>
+              <Input id={id} type="datetime-local" value={form.found_at} onChange={(e) => set("found_at", e.target.value)} />
+            </>
+          )}
+        </Field>
+        <Field label="メモ" hint="ブランド・保管場所・拾得場所など">
           {(id) => <Textarea id={id} value={form.notes} onChange={(e) => set("notes", e.target.value)} />}
         </Field>
         <Button block onClick={submit} disabled={saving || busy}>
