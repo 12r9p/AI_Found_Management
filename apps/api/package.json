@@ -1,0 +1,28 @@
+{
+  "name": "@found/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "deploy": "wrangler deploy",
+    "cf-dev": "wrangler dev",
+    "seed": "bun run src/scripts/seed.ts",
+    "migrate": "bun run src/scripts/migrate.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.1.1",
+    "@elysiajs/swagger": "^1.1.6",
+    "@neondatabase/serverless": "^0.10.4",
+    "elysia": "^1.1.26"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.90.0"
+  }
+}

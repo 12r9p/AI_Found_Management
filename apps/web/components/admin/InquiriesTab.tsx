@@ -1,0 +1,341 @@
+"use client";
+import { useCallback, useEffect, useState } from "react";
+import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast, useConfirm } from "../ui";
+import { MatchReviewModal } from "../MatchReviewModal";
+import { useMeta } from "../useMeta";
+import { usePersistentState } from "../usePersistentState";
+import { api, imageUrl } from "../../lib/api";
+import { STATUS_LABEL, type Inquiry, type Match } from "../../lib/types";
+
+const STATUS_FILTERS = [
+  { id: "", label: "すべて" },
+  { id: "open", label: "未解決" },
+  { id: "matched", label: "候補あり" },
+  { id: "resolved", label: "解決" },
+  { id: "closed", label: "取下げ" },
+];
+
+/**
+ * 管理 > 問い合わせ。
+ * 一覧行をクリックで詳細ポップアップ（照合候補を画像付きで表示）。
+ * 候補をさらにクリックすると突き合わせ確認ダイアログへ重なる。
+ */
+export function InquiriesTab() {
+  const [status, setStatus] = usePersistentState("admin:inqStatus", "");
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Inquiry | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    api
+      .listInquiries(status || undefined, true)
+      .then(setInquiries)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [status]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // 選択中の問い合わせを最新に保つ（判断後にダイアログの中身も更新）
+  const current = selected ? inquiries.find((i) => i.id === selected.id) ?? selected : null;
+
+  return (
+    <div className="rb-col">
+      <Card variant="bordered" className="no-print">
+        <div className="rb-grid rb-grid--2">
+          <Field label="状態で絞込">
+            {(id) => (
+              <Select id={id} value={status} onChange={(e) => setStatus(e.target.value)}>
+                {STATUS_FILTERS.map((f) => (
+                  <option key={f.id} value={f.id}>{f.label}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <div className="rb-field" style={{ justifyContent: "flex-end" }}>
+            <Button variant="outline" onClick={load}>再読込</Button>
+          </div>
+        </div>
+        <p className="rb-tiny muted-text" style={{ margin: 0 }}>
+          行をクリックすると詳細と照合候補を確認できます。個人情報は紙台帳（受付No）で管理します。
+        </p>
+      </Card>
+
+      {loading && (
+        <div className="rb-busy" role="status" aria-live="polite">
+          <span className="rb-spinner" aria-hidden />
+          <span>読み込み中…</span>
+        </div>
+      )}
+
+      {!loading && inquiries.length === 0 && (
+        <Card variant="muted">
+          <p className="rb-small" style={{ margin: 0 }}>
+            問い合わせはありません。「探す」画面で該当なしのとき「未解決で登録」すると追加されます。
+          </p>
+        </Card>
+      )}
+
+      {!loading && inquiries.length > 0 && (
+        <>
+          <div className="rb-eyebrow">{inquiries.length}件</div>
+          {inquiries.map((inq) => {
+            const cands = inq.matches ?? [];
+            return (
+              <button key={inq.id} className="rb-listrow" onClick={() => setSelected(inq)}>
+                {/* 照合候補の画像を一覧段階で見せる（開かずに当たりを付けられる） */}
+                <div className="rb-thumbs">
+                  {cands.slice(0, 2).map((m) =>
+                    m.item?.image_keys?.[0] ? (
+                      <img key={m.id} src={imageUrl(m.item.image_keys[0])} alt="" className="rb-thumb-sm" />
+                    ) : (
+                      <span key={m.id} className="rb-thumb-sm rb-thumb-sm--empty">無</span>
+                    ),
+                  )}
+                  {cands.length === 0 && <span className="rb-thumb-sm rb-thumb-sm--empty">—</span>}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="rb-between mb-8">
+                    <strong>
+                      受付No: {inq.reference_no || "—"}
+                      <span className="muted-text">　/　</span>
+                      {[inq.color, inq.category].filter(Boolean).join(" ") || "種別未設定"}
+                    </strong>
+                    <span className="rb-row" style={{ gap: 6 }}>
+                      {cands.length > 0 && (
+                        <Badge tone="info">候補 {cands.length}</Badge>
+                      )}
+                      <Badge tone={inq.status === "resolved" ? "success" : inq.status === "open" ? "warning" : undefined}>
+                        {STATUS_LABEL[inq.status]}
+                      </Badge>
+                    </span>
+                  </div>
+                  <div className="rb-small muted-text">{inq.description.slice(0, 100) || "—"}</div>
+                  <div className="rb-tiny muted-text mt-8">
+                    受付: {new Date(inq.created_at).toLocaleString("ja-JP")}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </>
+      )}
+
+      <InquiryDetailModal
+        inquiry={current}
+        onClose={() => setSelected(null)}
+        onChanged={load}
+      />
+    </div>
+  );
+}
+
+/** 問い合わせ詳細＋照合候補（画像付き）。編集もここで行う。 */
+function InquiryDetailModal({
+  inquiry,
+  onClose,
+  onChanged,
+}: {
+  inquiry: Inquiry | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const meta = useMeta();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [edit, setEdit] = useState(false);
+  const [form, setForm] = useState<Partial<Inquiry>>({});
+  const [saving, setSaving] = useState(false);
+  const [reviewing, setReviewing] = useState<Match | null>(null);
+
+  useEffect(() => {
+    if (inquiry) {
+      setForm({ ...inquiry });
+      setEdit(false);
+    }
+  }, [inquiry?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!inquiry) return null;
+  const cands = inquiry.matches ?? [];
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.updateInquiry(inquiry.id, {
+        status: form.status,
+        category: form.category,
+        color: form.color,
+        description: form.description,
+        reference_no: form.reference_no,
+        notes: form.notes,
+      });
+      toast("保存しました", "success");
+      setEdit(false);
+      onChanged();
+    } catch (e) {
+      toast(`保存に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const del = async () => {
+    const ok = await confirm({
+      title: "問い合わせの削除",
+      body: `受付No: ${inquiry.reference_no || "—"} の問い合わせを削除します。元に戻せません。`,
+      danger: true,
+      okLabel: "削除する",
+    });
+    if (!ok) return;
+    await api.deleteInquiry(inquiry.id);
+    toast("削除しました", "success");
+    onChanged();
+    onClose();
+  };
+
+  return (
+    <>
+      <Modal
+        open={!!inquiry && !reviewing}
+        title={`問い合わせ 受付No: ${inquiry.reference_no || "—"}`}
+        context="管理 › 問い合わせ"
+        size="wide"
+        onClose={onClose}
+        footer={
+          edit ? (
+            <>
+              <Button variant="outline" onClick={() => { setForm({ ...inquiry }); setEdit(false); }} disabled={saving}>
+                取消
+              </Button>
+              <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="destructive" onClick={del}>削除</Button>
+              <Button variant="outline" onClick={() => setEdit(true)}>編集</Button>
+              <Button onClick={onClose}>閉じる</Button>
+            </>
+          )
+        }
+      >
+        {!edit ? (
+          <Card variant="muted" className="mb-16">
+            <div className="rb-between mb-8">
+              <strong>{[inquiry.color, inquiry.category].filter(Boolean).join(" ") || "種別未設定"}</strong>
+              <Badge tone={inquiry.status === "resolved" ? "success" : inquiry.status === "open" ? "warning" : undefined}>
+                {STATUS_LABEL[inquiry.status]}
+              </Badge>
+            </div>
+            <div className="rb-label mb-8">聞き取り内容</div>
+            <p className="rb-small" style={{ margin: 0 }}>{inquiry.description || "—"}</p>
+            {inquiry.notes && (
+              <>
+                <div className="rb-label mt-16 mb-8">メモ</div>
+                <p className="rb-small" style={{ margin: 0 }}>{inquiry.notes}</p>
+              </>
+            )}
+            <div className="rb-tiny muted-text mt-16">
+              受付: {new Date(inquiry.created_at).toLocaleString("ja-JP")} / 更新:{" "}
+              {new Date(inquiry.updated_at).toLocaleString("ja-JP")}
+            </div>
+          </Card>
+        ) : (
+          <Card variant="bordered" className="mb-16">
+            <div className="rb-grid rb-grid--2">
+              <Field label="受付番号（紙台帳）">
+                {(id) => (
+                  <Input id={id} value={form.reference_no ?? ""} onChange={(e) => setForm((f) => ({ ...f, reference_no: e.target.value }))} />
+                )}
+              </Field>
+              <Field label="状態">
+                {(id) => (
+                  <Select id={id} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as Inquiry["status"] }))}>
+                    {meta.inquiryStatuses.map((s) => (
+                      <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="種別">
+                {(id) => (
+                  <Select id={id} value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
+                    <option value="">未設定</option>
+                    {meta.categories.map((c) => <option key={c}>{c}</option>)}
+                  </Select>
+                )}
+              </Field>
+              <Field label="色">
+                {(id) => (
+                  <Select id={id} value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}>
+                    <option value="">未設定</option>
+                    {meta.colors.map((c) => <option key={c}>{c}</option>)}
+                  </Select>
+                )}
+              </Field>
+            </div>
+            <Field label="聞き取り内容" hint="保存すると再ベクトル化され、以後の照合に反映されます">
+              {(id) => (
+                <Textarea id={id} value={form.description ?? ""} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+              )}
+            </Field>
+            <Field label="メモ（個人情報は不可）">
+              {(id) => (
+                <Textarea id={id} value={form.notes ?? ""} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+              )}
+            </Field>
+          </Card>
+        )}
+
+        <div className="rb-label mb-8">照合候補（{cands.length}件）</div>
+        {cands.length === 0 ? (
+          <Card variant="muted">
+            <p className="rb-small" style={{ margin: 0 }}>
+              一致する候補はまだありません。新しい遺失物が登録されると自動で照合され、
+              候補が見つかればスタッフに通知されます。
+            </p>
+          </Card>
+        ) : (
+          <div className="rb-grid rb-grid--auto">
+            {cands.map((m) => {
+              const pct = Math.round(m.score * 100);
+              return (
+                <Card
+                  key={m.id}
+                  variant="interactive"
+                  onClick={() => setReviewing({ ...m, inquiry })}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setReviewing({ ...m, inquiry })}
+                >
+                  <div className="rb-between mb-8">
+                    <strong className="rb-small">
+                      {[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}
+                    </strong>
+                    <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
+                  </div>
+                  {m.item?.image_keys?.[0] ? (
+                    <img src={imageUrl(m.item.image_keys[0])} alt="" className="thumb mb-8" />
+                  ) : (
+                    <div className="thumb thumb--empty mb-8">画像なし</div>
+                  )}
+                  <div className="rb-tiny muted-text">
+                    保管: {m.item?.storage_location || "—"} / {STATUS_LABEL[m.status]}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Modal>
+
+      {/* 候補 → 突き合わせ確認（さらに一段深い階層） */}
+      <MatchReviewModal
+        match={reviewing}
+        context="管理 › 問い合わせ › 候補"
+        onClose={() => setReviewing(null)}
+        onDecided={onChanged}
+      />
+    </>
+  );
+}

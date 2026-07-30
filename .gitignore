@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.next/
+out/
+.open-next/
+.wrangler/
+.dev.vars
+.env
+.env.local
+*.log
+.DS_Store
+# ローカル開発用データ（メモリストアのスナップショット・アップロード画像）
+apps/api/.data/
+coverage/

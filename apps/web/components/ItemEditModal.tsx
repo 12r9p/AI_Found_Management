@@ -1,0 +1,215 @@
+"use client";
+import { useEffect, useState } from "react";
+import { Button, Card, Field, Input, Modal, Select, Textarea, useToast } from "./ui";
+import { MapPicker, type Pin } from "./MapPicker";
+import { ImageEditor } from "./ImageEditor";
+import { useMeta } from "./useMeta";
+import { api } from "../lib/api";
+import { STATUS_LABEL, type Item } from "../lib/types";
+
+/**
+ * 物品の編集をポップアップで行う。
+ * 一覧や登録直後の流れを切らずに直せるようにするため、
+ * 専用ページ（/items/[id]）と同等の項目をここでも編集できる。
+ */
+export function ItemEditModal({
+  item,
+  context,
+  onClose,
+  onSaved,
+}: {
+  item: Item | null;
+  context: string;
+  onClose: () => void;
+  onSaved?: (updated: Item) => void;
+}) {
+  const meta = useMeta();
+  const toast = useToast();
+  const [form, setForm] = useState<Partial<Item> & { tagsText?: string }>({});
+  const [pin, setPin] = useState<Pin | null>(null);
+  const [imageKeys, setImageKeys] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  useEffect(() => {
+    if (!item) return;
+    setForm({ ...item, tagsText: item.tags.join("、") });
+    setImageKeys(item.image_keys);
+    setPin(
+      item.found_x != null && item.found_y != null
+        ? { x: item.found_x, y: item.found_y }
+        : null,
+    );
+  }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!item) return null;
+  const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
+  const dt = form.found_at ? toLocalInput(form.found_at) : "";
+
+  /** 追加した写真からAIで特徴を解析し、特徴文・タグを更新する。 */
+  const analyze = async () => {
+    if (imageKeys.length === 0) {
+      toast("先に画像を追加してください", "error");
+      return;
+    }
+    setAnalyzing(true);
+    try {
+      const d = await api.analyze({ keys: imageKeys, hint: form.notes || undefined });
+      setForm((f) => ({
+        ...f,
+        ai_description: d.description || f.ai_description,
+        tags: d.tags,
+        tagsText: d.tags.length ? d.tags.join("、") : f.tagsText,
+        category: f.category || d.category,
+        color: f.color || d.color,
+        brand: f.brand || d.brand,
+      }));
+      toast("AI解析が完了しました。内容を確認・修正してください", "success");
+    } catch (e) {
+      toast(`AI解析失敗: ${(e as Error).message}`, "error");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const { item: updated } = await api.updateItem(item.id, {
+        display_id: form.display_id,
+        status: form.status,
+        category: form.category,
+        color: form.color,
+        brand: form.brand,
+        found_location: form.found_location,
+        found_at: form.found_at || null,
+        found_x: pin?.x ?? null,
+        found_y: pin?.y ?? null,
+        storage_location: form.storage_location,
+        image_keys: imageKeys,
+        ai_description: form.ai_description,
+        tags: (form.tagsText ?? "").split(/[、,]/).map((t) => t.trim()).filter(Boolean),
+        notes: form.notes,
+      });
+      toast("保存しました", "success");
+      onSaved?.(updated);
+      onClose();
+    } catch (e) {
+      toast(`保存に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={!!item}
+      title={`編集: ${item.display_id || [item.color, item.category].filter(Boolean).join(" ") || "物品"}`}
+      context={context}
+      size="wide"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose} disabled={saving}>キャンセル</Button>
+          <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+        </>
+      }
+    >
+      <div className="rb-grid rb-grid--2">
+        <div>
+          <div className="rb-label mb-8">画像（最大2枚）</div>
+          <ImageEditor keys={imageKeys} onChange={setImageKeys} disabled={saving} />
+          <Button
+            variant="outline"
+            size="sm"
+            block
+            className="mt-8 mb-16"
+            onClick={analyze}
+            disabled={analyzing || saving || imageKeys.length === 0}
+          >
+            {analyzing ? "AI解析中…" : "AIで特徴を解析"}
+          </Button>
+
+          <div className="rb-label mb-8">拾得場所（地図をタップ）</div>
+          <MapPicker value={pin} onChange={setPin} height={220} />
+        </div>
+
+        <div>
+          <div className="rb-grid rb-grid--2">
+            <Field label="管理番号">
+              {(id) => (
+                <Input id={id} value={form.display_id ?? ""} onChange={(e) => set("display_id", e.target.value)} />
+              )}
+            </Field>
+            <Field label="状態">
+              {(id) => (
+                <Select id={id} value={form.status} onChange={(e) => set("status", e.target.value)}>
+                  {meta.itemStatuses.map((s) => (
+                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="種別">
+              {(id) => (
+                <Select id={id} value={form.category} onChange={(e) => set("category", e.target.value)}>
+                  <option value="">未設定</option>
+                  {meta.categories.map((c) => <option key={c}>{c}</option>)}
+                </Select>
+              )}
+            </Field>
+            <Field label="色">
+              {(id) => (
+                <Select id={id} value={form.color} onChange={(e) => set("color", e.target.value)}>
+                  <option value="">未設定</option>
+                  {meta.colors.map((c) => <option key={c}>{c}</option>)}
+                </Select>
+              )}
+            </Field>
+            <Field label="ブランド/型番">
+              {(id) => <Input id={id} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />}
+            </Field>
+            <Field label="保管場所">
+              {(id) => (
+                <Input id={id} value={form.storage_location ?? ""} onChange={(e) => set("storage_location", e.target.value)} />
+              )}
+            </Field>
+            <Field label="拾得場所メモ">
+              {(id) => (
+                <Input id={id} value={form.found_location ?? ""} onChange={(e) => set("found_location", e.target.value)} />
+              )}
+            </Field>
+            <Field label="拾得日時">
+              {(id) => (
+                <Input
+                  id={id}
+                  type="datetime-local"
+                  value={dt}
+                  onChange={(e) => set("found_at", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                />
+              )}
+            </Field>
+          </div>
+          <Field label="AI特徴文">
+            {(id) => (
+              <Textarea id={id} value={form.ai_description ?? ""} onChange={(e) => set("ai_description", e.target.value)} />
+            )}
+          </Field>
+          <Field label="タグ" hint="読点/カンマ区切り。保存時に再ベクトル化されます">
+            {(id) => <Input id={id} value={form.tagsText ?? ""} onChange={(e) => set("tagsText", e.target.value)} />}
+          </Field>
+          <Field label="メモ（個人情報は不可）">
+            {(id) => <Textarea id={id} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />}
+          </Field>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** ISO文字列を datetime-local 入力用のローカル時刻文字列に変換。 */
+export function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}

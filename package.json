@@ -1,0 +1,21 @@
+{
+  "name": "ai-found-management",
+  "version": "0.1.0",
+  "private": true,
+  "description": "遺失物（落し物）管理アプリケーション — Elysia API + Next.js on Cloudflare Workers",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"bun run dev:api\" \"bun run dev:web\"",
+    "dev:api": "bun --cwd apps/api run dev",
+    "dev:web": "bun --cwd apps/web run dev",
+    "build": "bun --cwd apps/api run build && bun --cwd apps/web run build",
+    "seed": "bun --cwd apps/api run seed",
+    "test": "bun --cwd apps/api run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "packageManager": "bun@1.3.5"
+}

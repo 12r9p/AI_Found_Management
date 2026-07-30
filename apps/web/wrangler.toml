@@ -1,0 +1,13 @@
+name = "found-web"
+main = ".open-next/worker.js"
+compatibility_date = "2024-11-27"
+compatibility_flags = ["nodejs_compat"]
+
+# OpenNext がビルドする静的アセットの配信
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[vars]
+# 本番の API Worker URL に置き換える
+NEXT_PUBLIC_API_BASE = "http://localhost:8787"

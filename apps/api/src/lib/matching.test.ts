@@ -1,0 +1,112 @@
+import { test, expect } from "bun:test";
+import { MemoryStore } from "../store/memory.ts";
+import { deterministicEmbed } from "../ai/provider.ts";
+import { matchNewItem, matchNewInquiry } from "./matching.ts";
+
+const DIM = 512;
+const embed = (t: string) => deterministicEmbed(t, DIM);
+
+async function seedInquiry(store: MemoryStore, category: string, desc: string, ref: string) {
+  const inq = await store.createInquiry({
+    status: "open",
+    category,
+    description: desc,
+    ai_description: desc,
+    embedding: embed(`${category} ${desc}`),
+    reference_no: ref,
+  });
+  inq.embedding = embed(`${category} ${desc}`);
+  return inq;
+}
+
+test("新規遺失物が未解決問い合わせに一致し、通知が作られる", async () => {
+  const store = new MemoryStore();
+  await seedInquiry(store, "傘", "紺色の折りたたみ傘。持ち手は黒。", "R-1");
+
+  const desc = "紺色の折りたたみ傘。持ち手は黒色のラバー。";
+  const item = await store.createItem({
+    status: "stored",
+    category: "傘",
+    color: "紺",
+    ai_description: desc,
+    embedding: embed(`傘 紺 ${desc}`),
+  });
+  item.embedding = embed(`傘 紺 ${desc}`);
+
+  const out = await matchNewItem(store, item, 0.5);
+  expect(out.matches.length).toBe(1);
+  expect((await store.listNotifications()).length).toBe(1);
+  // 問い合わせは matched に遷移
+  expect((await store.listInquiries("matched")).length).toBe(1);
+});
+
+test("同じ組み合わせでは再通知しない（物品を編集しても通知が増えない）", async () => {
+  const store = new MemoryStore();
+  await seedInquiry(store, "傘", "紺色の折りたたみ傘。持ち手は黒。", "R-1");
+
+  const desc = "紺色の折りたたみ傘。持ち手は黒色のラバー。";
+  const text = `傘 紺 ${desc}`;
+  const item = await store.createItem({
+    status: "stored",
+    category: "傘",
+    color: "紺",
+    ai_description: desc,
+    embedding: embed(text),
+  });
+  item.embedding = embed(text);
+
+  const first = await matchNewItem(store, item, 0.5);
+  expect(first.matches.length).toBe(1);
+  expect((await store.listNotifications()).length).toBe(1);
+
+  // 物品を編集 → 再照合が走っても通知は増えない
+  const second = await matchNewItem(store, item, 0.5);
+  expect(second.matches.length).toBe(0);
+  expect((await store.listNotifications()).length).toBe(1);
+});
+
+test("カテゴリ整合ガード: 種別が違えば一致させない", async () => {
+  const store = new MemoryStore();
+  await seedInquiry(store, "財布", "茶色い革の二つ折り財布。", "R-2");
+
+  const desc = "紺色の折りたたみ傘。";
+  const item = await store.createItem({
+    status: "stored",
+    category: "傘",
+    ai_description: desc,
+    embedding: embed(`傘 ${desc}`),
+  });
+  item.embedding = embed(`傘 ${desc}`);
+
+  const out = await matchNewItem(store, item, 0.3); // 低しきい値でもガードで弾く
+  expect(out.matches.length).toBe(0);
+});
+
+test("該当なしの問い合わせは open のまま保存され、後日の登録で照合される", async () => {
+  const store = new MemoryStore();
+  // まだ物品なし → 問い合わせは open
+  const inq = await store.createInquiry({
+    status: "open",
+    category: "水筒",
+    description: "銀色のステンレス水筒。",
+    ai_description: "銀色のステンレス水筒。",
+    embedding: embed("水筒 銀色のステンレス水筒"),
+    reference_no: "R-3",
+  });
+  inq.embedding = embed("水筒 銀色のステンレス水筒");
+  const first = await matchNewInquiry(store, inq, 0.5);
+  expect(first.matches.length).toBe(0);
+  expect((await store.listInquiries("open")).length).toBe(1);
+
+  // 後日、一致する遺失物を登録 → 自動照合＆通知
+  const item = await store.createItem({
+    status: "stored",
+    category: "水筒",
+    ai_description: "銀色のステンレス水筒。500ml。",
+    embedding: embed("水筒 銀色のステンレス水筒 500ml"),
+  });
+  item.embedding = embed("水筒 銀色のステンレス水筒 500ml");
+  const out = await matchNewItem(store, item, 0.5);
+  expect(out.matches.length).toBe(1);
+  expect((await store.listNotifications(true)).length).toBe(1);
+});

@@ -1,0 +1,1091 @@
+/* =========================================================================
+   RawBlock Design System — 実装コードが「正」（design.md はこれを追従）
+   ブルータリズム: 角丸0 / 影なし / 太枠 / 高コントラスト / 等幅 / 反転
+   ========================================================================= */
+
+/* ---- Tokens: Light (default) ---- */
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --primary: #000000;
+  --primary-foreground: #ffffff;
+  --muted: #f0f0f0;
+  --border: #000000;
+  --input: #f0f0f0;
+  --input-hover: #e6e6e6;
+  --destructive: #ff0000;
+
+  /* System colors（原色・不変） */
+  --success: #008000;
+  --warning: #ffa500;
+  --error: #ff0000;
+  --info: #0000ff;
+
+  /* Border widths（3段階のみ） */
+  --bw-thin: 1px;
+  --bw-thick: 3px;
+  --bw-heavy: 5px;
+
+  /* Fonts */
+  --font-headline: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas",
+    "DejaVu Sans Mono", monospace;
+
+  color-scheme: light;
+}
+
+/* ---- Tokens: Dark ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #000000;
+    --foreground: #ffffff;
+    --primary: #ffffff;
+    --primary-foreground: #000000;
+    --muted: #111111;
+    --border: #ffffff;
+    --input: #111111;
+    --input-hover: #1c1c1c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --background: #000000;
+  --foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #000000;
+  --muted: #111111;
+  --border: #ffffff;
+  --input: #111111;
+  --input-hover: #1c1c1c;
+  color-scheme: dark;
+}
+
+/* ---- Reset-ish ---- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: var(--info);
+  text-decoration: underline;
+}
+:focus-visible {
+  outline: var(--bw-heavy) solid var(--foreground);
+  outline-offset: 0;
+}
+
+/* ---- Typography ---- */
+h1,
+.rb-h1 {
+  font-family: var(--font-headline);
+  font-size: clamp(32px, 6vw, 64px);
+  line-height: 1;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+h2,
+.rb-h2 {
+  font-family: var(--font-headline);
+  font-size: clamp(26px, 4vw, 48px);
+  line-height: 1.05;
+  font-weight: 800;
+  margin: 0;
+}
+h3,
+.rb-h3 {
+  font-family: var(--font-headline);
+  font-size: clamp(20px, 3vw, 32px);
+  line-height: 1.1;
+  font-weight: 800;
+  margin: 0;
+}
+.rb-h4 {
+  font-family: var(--font-body);
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 600;
+  margin: 0;
+}
+.rb-mono {
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+.rb-small {
+  font-size: 14px;
+}
+.rb-tiny {
+  font-size: 12px;
+}
+.rb-eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ---- Border width utilities（色は border / 状態色クラスで） ---- */
+.border-thin {
+  border: var(--bw-thin) solid var(--border);
+}
+.border-thick {
+  border: var(--bw-thick) solid var(--border);
+}
+.border-heavy {
+  border: var(--bw-heavy) solid var(--border);
+}
+.border-b-thin {
+  border-bottom: var(--bw-thin) solid var(--border);
+}
+.border-b-thick {
+  border-bottom: var(--bw-thick) solid var(--border);
+}
+.border-t-thick {
+  border-top: var(--bw-thick) solid var(--border);
+}
+
+/* ---- Button ---- */
+.rb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  min-height: 44px; /* タップ領域確保（現場スマホ運用） */
+  font-family: var(--font-headline);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 14px;
+  cursor: pointer;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border: var(--bw-thick) solid var(--border);
+  transition: none;
+  text-decoration: none;
+  user-select: none;
+}
+.rb-btn:hover {
+  background: var(--background);
+  color: var(--foreground);
+}
+.rb-btn:active {
+  border-width: var(--bw-heavy);
+}
+.rb-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.rb-btn--outline,
+.rb-btn--secondary {
+  background: var(--background);
+  color: var(--foreground);
+}
+.rb-btn--outline:hover,
+.rb-btn--secondary:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.rb-btn--destructive {
+  background: var(--destructive);
+  color: #ffffff;
+  border-color: var(--destructive);
+}
+.rb-btn--destructive:hover {
+  background: var(--background);
+  color: var(--destructive);
+}
+.rb-btn--ghost {
+  background: transparent;
+  color: var(--info);
+  border: none;
+  text-decoration: underline;
+  letter-spacing: 1px;
+  min-height: auto;
+  padding: 4px 6px;
+}
+.rb-btn--sm {
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.rb-btn--block {
+  width: 100%;
+}
+
+/* ---- Inputs ---- */
+.rb-input,
+.rb-select,
+.rb-textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0; /* date 等の固有最小幅で親をはみ出させない */
+  padding: 10px 12px;
+  min-height: 44px;
+  background: var(--input);
+  color: var(--foreground);
+  border: var(--bw-thick) solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  outline: none;
+}
+/* 日付/時刻入力は狭い欄でも収まるよう詰める（ネイティブUIの分だけ余白を削る） */
+.rb-input[type="date"],
+.rb-input[type="datetime-local"] {
+  padding-left: 8px;
+  padding-right: 4px;
+  font-size: 14px;
+}
+.rb-field {
+  min-width: 0;
+}
+.rb-textarea {
+  min-height: 90px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.rb-input:focus,
+.rb-select:focus,
+.rb-textarea:focus {
+  border-width: var(--bw-heavy);
+  outline: none;
+}
+.rb-input--error,
+.rb-select--error,
+.rb-textarea--error {
+  border-color: var(--error);
+}
+.rb-input::placeholder,
+.rb-textarea::placeholder {
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+.rb-checkbox {
+  width: 22px;
+  height: 22px;
+  border: var(--bw-thick) solid var(--border);
+  background: var(--input);
+  accent-color: var(--foreground);
+  cursor: pointer;
+}
+
+/* ---- Form field ---- */
+.rb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.rb-label {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.rb-label .req {
+  color: var(--error);
+  margin-left: 4px;
+}
+.rb-hint {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+.rb-error-text {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--error);
+  font-weight: 700;
+}
+
+/* ---- Card ---- */
+.rb-card {
+  background: var(--background);
+  padding: 16px;
+}
+.rb-card--interactive {
+  border: var(--bw-thick) solid var(--border);
+  cursor: pointer;
+}
+.rb-card--interactive:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.rb-card--interactive:hover a,
+.rb-card--interactive:hover .rb-hint {
+  color: inherit;
+}
+.rb-card--bordered {
+  border: var(--bw-thick) solid var(--border);
+}
+.rb-card--elevated {
+  border: var(--bw-heavy) solid var(--border);
+}
+.rb-card--muted {
+  background: var(--muted);
+}
+
+/* ---- Badge / status ---- */
+.rb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  border: var(--bw-thin) solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  white-space: nowrap;
+}
+.rb-badge--fill {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.rb-badge--success {
+  border-color: var(--success);
+  color: var(--success);
+}
+.rb-badge--warning {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+.rb-badge--error {
+  border-color: var(--error);
+  color: var(--error);
+}
+.rb-badge--info {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+/* ---- Table (editable) ---- */
+.rb-table-wrap {
+  overflow-x: auto;
+  border: var(--bw-thick) solid var(--border);
+}
+.rb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  min-width: 760px;
+}
+.rb-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+  border-right: var(--bw-thin) solid var(--border);
+  position: sticky;
+  top: 0;
+}
+.rb-table td {
+  padding: 0;
+  border-top: var(--bw-thin) solid var(--border);
+  border-right: var(--bw-thin) solid var(--border);
+  vertical-align: middle;
+}
+.rb-table tr:hover td {
+  background: var(--muted);
+}
+.rb-cell-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 8px 10px;
+  min-height: 38px;
+  outline: none;
+}
+.rb-cell-input:focus {
+  outline: var(--bw-thick) solid var(--foreground);
+  outline-offset: -3px;
+  background: var(--input);
+}
+.rb-cell-dirty {
+  background: color-mix(in srgb, var(--warning) 22%, var(--background)) !important;
+}
+
+/* ---- Modal ---- */
+.rb-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+.rb-modal {
+  background: var(--background);
+  border: var(--bw-thick) solid var(--border);
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: auto;
+}
+.rb-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: var(--bw-thick) solid var(--border);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.rb-modal__body {
+  padding: 16px;
+}
+.rb-modal__foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: var(--bw-thick) solid var(--border);
+}
+
+/* ---- Banner / notice ---- */
+.rb-banner {
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: var(--bw-thick) solid var(--border);
+  background: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rb-banner--warning {
+  border-color: var(--warning);
+}
+
+/* ---- Toast ---- */
+.rb-toasts {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 200;
+  max-width: min(92vw, 380px);
+}
+.rb-toast {
+  padding: 10px 14px;
+  border: var(--bw-thick) solid var(--border);
+  background: var(--background);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.rb-toast--success {
+  border-color: var(--success);
+}
+.rb-toast--error {
+  border-color: var(--error);
+}
+
+/* ---- App shell / layout ---- */
+.rb-shell {
+  display: flex;
+  min-height: 100vh;
+}
+.rb-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rb-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: var(--bw-thick) solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--background);
+  z-index: 40;
+  flex-wrap: wrap;
+}
+.rb-brand {
+  font-family: var(--font-headline);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 18px;
+  text-decoration: none;
+  color: var(--foreground);
+}
+.rb-nav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rb-nav a {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--foreground);
+  border: var(--bw-thin) solid var(--border);
+  padding: 6px 10px;
+}
+.rb-nav a.active,
+.rb-nav a:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.rb-main {
+  padding: 20px 16px 64px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+.rb-spacer {
+  flex: 1;
+}
+
+/* ---- Utility layout ---- */
+.rb-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.rb-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rb-grid {
+  display: grid;
+  gap: 16px;
+}
+/* minmax(0,1fr) にしないと、日付入力など固有幅の大きい要素が
+   グリッドの列を押し広げてカードからはみ出す（1fr = minmax(auto,1fr) のため）。 */
+.rb-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.rb-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.rb-grid--auto {
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+}
+/* グリッド/フレックスの子は既定で min-width:auto のため縮まない。明示的に許可する。 */
+.rb-grid > *,
+.rb-split > * {
+  min-width: 0;
+}
+.rb-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mt-0 { margin-top: 0; }
+.mt-8 { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.muted-text {
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+.thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border: var(--bw-thick) solid var(--border);
+  background: var(--muted);
+  display: block;
+}
+.dropzone {
+  border: var(--bw-thick) dashed var(--border);
+  padding: 24px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--muted);
+}
+.dropzone:hover {
+  background: var(--input-hover);
+}
+
+/* ---- Map pin (拾得場所) ---- */
+.map-box {
+  position: relative;
+  border: var(--bw-thick) solid var(--border);
+  background: var(--muted);
+  overflow: hidden;
+  cursor: crosshair;
+  width: 100%;
+}
+.map-box[role="button"]:focus-visible {
+  border-width: var(--bw-heavy);
+}
+.map-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+/* ピンは白黒基調に反転リングを重ね、地図の明暗どちらでも視認できるようにする */
+.map-pin {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  background: var(--error);
+  border: 3px solid var(--background);
+  outline: 2px solid var(--foreground);
+  pointer-events: none;
+}
+.map-pin::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--error);
+}
+
+/* ---- Hamburger menu ---- */
+.rb-menu-wrap {
+  position: relative;
+}
+.rb-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 220px;
+  background: var(--background);
+  border: var(--bw-thick) solid var(--border);
+  z-index: 60;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rb-menu__label {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 2px;
+}
+.rb-menu a {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--foreground);
+  border: var(--bw-thin) solid var(--border);
+  padding: 8px 10px;
+  display: block;
+}
+.rb-menu a:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* ---- Busy / AI analyzing indicator ---- */
+.rb-busy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: var(--bw-thick) solid var(--border);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+.rb-spinner {
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--foreground);
+  border-right-color: transparent;
+  animation: rb-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes rb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 解析中のオーバーレイ（画像の上に重ねて進行を明示） */
+.rb-overlay-busy {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--background) 78%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  padding: 8px;
+}
+.rb-rel {
+  position: relative;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rb-spinner {
+    animation-duration: 2s;
+  }
+}
+
+@media (max-width: 900px) {
+  .rb-grid--2,
+  .rb-grid--3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Print (PDF出力) ---- */
+@media print {
+  .rb-topbar,
+  .rb-nav,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .rb-table th {
+    background: #000 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .rb-main {
+    padding: 0;
+    max-width: none;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
+
+/* ---- Modal: 幅バリアントと階層表示 ---- */
+.rb-modal--wide {
+  max-width: 900px;
+}
+.rb-modal--full {
+  max-width: 1200px;
+}
+.rb-modal__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+/* 「どこから開いたか」を示すパンくず。元画面を意識させる。 */
+.rb-modal__ctx {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  white-space: nowrap;
+}
+.rb-modal__body:focus {
+  outline: none;
+}
+
+/* ---- 突き合わせ: 左右比較 ---- */
+.rb-compare {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+.rb-compare__vs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1px;
+  writing-mode: vertical-rl;
+  border-left: var(--bw-thin) solid var(--border);
+  border-right: var(--bw-thin) solid var(--border);
+  padding: 0 6px;
+}
+@media (max-width: 720px) {
+  .rb-compare {
+    grid-template-columns: 1fr;
+  }
+  .rb-compare__vs {
+    writing-mode: horizontal-tb;
+    border: none;
+    border-top: var(--bw-thin) solid var(--border);
+    border-bottom: var(--bw-thin) solid var(--border);
+    padding: 6px 0;
+  }
+}
+
+/* スコアの視覚化（数値だけだと判断しづらいため） */
+.rb-score {
+  height: 10px;
+  background: var(--muted);
+  border: var(--bw-thin) solid var(--border);
+  overflow: hidden;
+}
+.rb-score__bar {
+  height: 100%;
+  background: var(--foreground);
+}
+
+/* ---- タグ編集（設定の種別・色） ---- */
+.rb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: var(--bw-thin) solid var(--border);
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--background);
+}
+.rb-chip button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 0 2px;
+  line-height: 1;
+}
+.rb-chip button:hover {
+  color: var(--error);
+}
+
+/* 一覧行（問い合わせ等）: クリックで詳細ポップアップ */
+.rb-listrow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  background: var(--background);
+  color: var(--foreground);
+  border: var(--bw-thick) solid var(--border);
+  padding: 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.rb-listrow:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.rb-listrow:hover .muted-text {
+  color: inherit;
+}
+.rb-thumbs {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.rb-thumb-sm {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border: var(--bw-thin) solid var(--border);
+  background: var(--muted);
+}
+
+/* モーダルの閉じるボタン: 枠線＝押せる の原則に従う（リンク表示にしない） */
+.rb-modal__close {
+  border: var(--bw-thick) solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rb-modal__close:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.rb-modal__close:active {
+  border-width: var(--bw-heavy);
+}
+
+/* 画像が無いときのプレースホルダ（黒い空箱に見えないよう明示する） */
+.thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  background: var(--muted);
+  border: var(--bw-thin) dashed var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+}
+.rb-thumb-sm--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--muted);
+  border: var(--bw-thin) dashed var(--border);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+}
+
+/* ---- Toast: アクション付き（取り消す・編集する） ---- */
+.rb-toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rb-toast__msg {
+  flex: 1;
+  min-width: 0;
+}
+.rb-toast__action {
+  flex-shrink: 0;
+  border: var(--bw-thick) solid var(--border);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-family: var(--font-headline);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 12px;
+  padding: 6px 10px;
+  min-height: 34px;
+  cursor: pointer;
+}
+.rb-toast__action:hover {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* ---- 探す: 条件(左) / 結果(右) の2カラム ---- */
+.rb-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.rb-split__side {
+  position: sticky;
+  top: 76px; /* topbar の下に留める */
+}
+@media (max-width: 900px) {
+  .rb-split {
+    grid-template-columns: 1fr;
+  }
+  .rb-split__side {
+    position: static;
+  }
+}
+
+/* ---- 一覧の画像サムネイル（管理テーブル） ---- */
+.rb-table td .rb-cell-thumbs {
+  display: flex;
+  gap: 3px;
+  padding: 4px 6px;
+  align-items: center;
+}
+.rb-cell-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border: var(--bw-thin) solid var(--border);
+  background: var(--muted);
+  cursor: pointer;
+}
+.rb-cell-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+  border-style: dashed;
+}
+
+/* ---- 時刻クイック入力ボタン ---- */
+.rb-quick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+/* 管理番号の表示 */
+.rb-idtag {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  border: var(--bw-thin) solid var(--border);
+  padding: 2px 6px;
+  white-space: nowrap;
+}
