@@ -27,8 +27,7 @@ export async function matchNewItem(
   if (!item.embedding?.length) {
     // pg 実装では list からベクトルが返らないので取得元の embedding を使う
   }
-  const openInquiries = await store.listOpenInquiries();
-  const scored = await scoreInquiries(store, item, openInquiries);
+  const scored = await scoreInquiries(store, item);
   const hits = scored.filter(
     (s) => s.score >= threshold && categoryConsistent(item.category, s.inquiry.category),
   );
@@ -109,21 +108,27 @@ export async function matchNewInquiry(
 }
 
 /**
- * item の embedding で各 inquiry を採点。pg 実装では inquiry.embedding が
- * 返らないため searchInquiries（SQL 側計算）を使い、open 集合と突き合わせる。
+ * item の embedding で問い合わせを採点。searchInquiries は上位50件だけを返すため、
+ * 未解決件数がどれだけ増えても全件をメモリに載せることはない
+ * （以前は listOpenInquiries() で全未解決問い合わせを読み込んでから絞り込んでおり、
+ * 件数が数万件規模になるとメモリを圧迫していた）。
+ * 上位候補の現在の状態は searchInquiries の結果に対して個別に取得して確認する。
  */
 async function scoreInquiries(
   store: Store,
   item: Item,
-  openInquiries: Inquiry[],
 ): Promise<{ inquiry: Inquiry; score: number }[]> {
-  if (openInquiries.length === 0) return [];
-  const openIds = new Set(openInquiries.map((i) => i.id));
   const ranked = await store.searchInquiries(item.embedding, 50);
-  const byId = new Map(openInquiries.map((i) => [i.id, i]));
-  return ranked
-    .filter((r) => openIds.has(r.id))
-    .map((r) => ({ inquiry: byId.get(r.id)!, score: r.score }));
+  if (ranked.length === 0) return [];
+  const inquiries = await Promise.all(ranked.map((r) => store.getInquiry(r.id)));
+  const out: { inquiry: Inquiry; score: number }[] = [];
+  for (let i = 0; i < ranked.length; i++) {
+    const inq = inquiries[i];
+    if (inq && (inq.status === "open" || inq.status === "matched")) {
+      out.push({ inquiry: inq, score: ranked[i].score });
+    }
+  }
+  return out;
 }
 
 function label(x: Item): string {

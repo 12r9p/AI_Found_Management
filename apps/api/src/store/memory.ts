@@ -163,9 +163,6 @@ export class MemoryStore implements Store {
     this.persist();
     return this.inquiries.length < n;
   }
-  async listOpenInquiries(): Promise<Inquiry[]> {
-    return this.inquiries.filter((i) => i.status === "open" || i.status === "matched");
-  }
   async searchInquiries(embedding: number[], limit: number): Promise<ScoredInquiry[]> {
     const scored = this.inquiries.map((inq) => ({
       ...inq,

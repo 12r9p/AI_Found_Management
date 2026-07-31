@@ -37,7 +37,6 @@ export interface Store {
   listInquiries(status?: string): Promise<Inquiry[]>;
   updateInquiry(id: string, patch: Partial<Inquiry>): Promise<Inquiry | null>;
   deleteInquiry(id: string): Promise<boolean>;
-  listOpenInquiries(): Promise<Inquiry[]>;
   searchInquiries(embedding: number[], limit: number): Promise<ScoredInquiry[]>;
 
   // --- matches ---

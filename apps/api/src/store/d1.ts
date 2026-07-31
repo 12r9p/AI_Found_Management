@@ -216,14 +216,6 @@ export class D1VectorizeStore implements Store {
     await this.vectorizeInquiries.deleteByIds([id]);
     return true;
   }
-  async listOpenInquiries(): Promise<Inquiry[]> {
-    const { results } = await this.db
-      .prepare(
-        `SELECT ${INQ_COLS} FROM inquiries WHERE status IN ('open','matched') ORDER BY created_at DESC`,
-      )
-      .all();
-    return (results as any[]).map(rowToInquiry);
-  }
   async searchInquiries(embedding: number[], lim: number): Promise<ScoredInquiry[]> {
     const topK = Math.max(1, Math.min(50, lim * 4));
     const res = await this.vectorizeInquiries.query(embedding, { topK, returnValues: true });
