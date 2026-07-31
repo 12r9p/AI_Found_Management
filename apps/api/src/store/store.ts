@@ -34,8 +34,6 @@ export interface Store {
   // --- items ---
   createItem(data: NewItem): Promise<Item>;
   getItem(id: string): Promise<Item | null>;
-  /** 既存物品のベクトルをそのまま取得する（「類似検索」用。AI呼び出し無しで再利用するため）。 */
-  getItemEmbedding(id: string): Promise<number[] | null>;
   listItems(filters: SearchFilters): Promise<Item[]>;
   updateItem(id: string, patch: Partial<Item>): Promise<Item | null>;
   deleteItem(id: string): Promise<boolean>;

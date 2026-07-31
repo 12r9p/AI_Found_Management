@@ -53,7 +53,6 @@ export class MemoryStore implements Store {
         this.matches = d.matches ?? [];
         this.notifications = d.notifications ?? [];
         this.settings = new Map(Object.entries(d.settings ?? {}));
-        this.counters = new Map(Object.entries(d.counters ?? {}));
       }
     } catch {
       this.file = null; // 使えなければメモリのみで動作（機能は落とさない）
@@ -75,7 +74,6 @@ export class MemoryStore implements Store {
             matches: this.matches,
             notifications: this.notifications,
             settings: Object.fromEntries(this.settings),
-            counters: Object.fromEntries(this.counters),
           }),
         );
       } catch {
@@ -97,7 +95,6 @@ export class MemoryStore implements Store {
     const cur = this.counters.get(name);
     const issued = cur && cur.period === period ? cur.next : start;
     this.counters.set(name, { period, next: issued + 1 });
-    this.persist();
     return issued;
   }
 
@@ -112,10 +109,6 @@ export class MemoryStore implements Store {
   }
   async getItem(id: string): Promise<Item | null> {
     return this.items.find((i) => i.id === id) ?? null;
-  }
-  async getItemEmbedding(id: string): Promise<number[] | null> {
-    const it = this.items.find((i) => i.id === id);
-    return it?.embedding?.length ? it.embedding : null;
   }
   async listItems(filters: SearchFilters): Promise<Item[]> {
     return applyItemFilters(this.items, filters).slice(0, filters.limit ?? 500);
@@ -307,7 +300,6 @@ export function applyItemFilters(items: Item[], f: SearchFilters): Item[] {
     if (f.location && !it.found_location.includes(f.location)) return false;
     if (f.from && it.found_at && it.found_at < f.from) return false;
     if (f.to && it.found_at && it.found_at > f.to) return false;
-    if (f.display_id && it.display_id !== f.display_id) return false;
     return true;
   });
 }
