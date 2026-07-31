@@ -50,3 +50,7 @@ MATCH_THRESHOLD = "0.5"
 # Cloudflare Access 検証（設定すると API も JWT を検証する）
 # ACCESS_TEAM_DOMAIN = "<team>.cloudflareaccess.com"
 # ACCESS_AUD = "<application audience tag>"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
