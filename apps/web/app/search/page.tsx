@@ -48,6 +48,10 @@ export default function SearchPage() {
   const patchLocal = (updated: Item) =>
     setItems((list) => (list ? list.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) : list));
 
+  /** 編集画面から削除された物品を結果一覧からも消す。 */
+  const removeLocal = (id: string) =>
+    setItems((list) => (list ? list.filter((x) => x.id !== id) : list));
+
   /** 返却済みにした直後。誤操作をすぐ戻せるようトーストに取り消しを出す。 */
   const handleReturned = (item: Item, prevStatus: Item["status"]) => {
     patchLocal({ ...item, status: "returned" });
@@ -267,6 +271,7 @@ export default function SearchPage() {
         context="探す › 照会"
         onClose={() => setEditing(null)}
         onSaved={patchLocal}
+        onDeleted={removeLocal}
       />
 
       <Modal

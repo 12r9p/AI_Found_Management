@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, imageUrl } from "../lib/api";
+import { imageUrl } from "../lib/api";
 import { STATUS_LABEL, type Item, type Meta } from "../lib/types";
-import { Badge, Button, useToast, useConfirm } from "./ui";
+import { Badge, Button } from "./ui";
 import { ItemPreviewModal } from "./ItemPreviewModal";
 import { ItemEditModal } from "./ItemEditModal";
 
@@ -15,8 +15,6 @@ const TEXT_COLS: { key: "category" | "color" | "brand" | "found_location" | "not
 ];
 
 export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Meta; onChanged: () => void }) {
-  const toast = useToast();
-  const confirm = useConfirm();
   const [rows, setRows] = useState<Item[]>(items);
 
   useEffect(() => {
@@ -31,21 +29,9 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
     onChanged();
   };
 
-  const remove = async (it: Item) => {
-    const ok = await confirm({
-      title: "削除の確認",
-      body: `「${[it.color, it.category].filter(Boolean).join(" ")}」を削除します。元に戻せません。よろしいですか？`,
-      danger: true,
-      okLabel: "削除する",
-    });
-    if (!ok) return;
-    try {
-      await api.deleteItem(it.id);
-      toast("削除しました", "success");
-      onChanged();
-    } catch (e) {
-      toast(`削除失敗: ${(e as Error).message}`, "error");
-    }
+  const onDeleted = (id: string) => {
+    setRows((rs) => rs.filter((r) => r.id !== id));
+    onChanged();
   };
 
   return (
@@ -98,10 +84,10 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
               ))}
               <td>
                 <div className="rb-row" style={{ gap: 4, padding: "0 6px", flexWrap: "nowrap" }}>
-                  {/* 一覧では確認・編集ともポップアップで完結させ、行の高さや画面を崩さない */}
+                  {/* 一覧では確認・編集ともポップアップで完結させ、行の高さや画面を崩さない。
+                      削除は誤操作を避けるため一覧からは無くし、編集画面の中に置く。 */}
                   <Button variant="outline" size="sm" onClick={() => setPreview(it)}>詳細</Button>
                   <Button size="sm" onClick={() => setEditing(it)}>編集</Button>
-                  <Button variant="destructive" size="sm" onClick={() => remove(it)}>削除</Button>
                 </div>
               </td>
             </tr>
@@ -126,6 +112,7 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
         context="管理 › 物品一覧"
         onClose={() => setEditing(null)}
         onSaved={onSaved}
+        onDeleted={onDeleted}
       />
     </div>
   );

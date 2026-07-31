@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast } from "./ui";
+import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast, useConfirm } from "./ui";
 import { MapPicker, findRegionAt, type Pin } from "./MapPicker";
 import { ImageEditor } from "./ImageEditor";
 import { useMeta } from "./useMeta";
@@ -18,20 +18,25 @@ export function ItemEditModal({
   context,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   item: Item | null;
   context: string;
   onClose: () => void;
   onSaved?: (updated: Item) => void;
+  /** 削除完了時に呼ばれる（一覧側で行を消す・再読込するなどに使う）。 */
+  onDeleted?: (id: string) => void;
 }) {
   const meta = useMeta();
   const presets = useLocationPresets();
   const toast = useToast();
+  const confirm = useConfirm();
   const [form, setForm] = useState<Partial<Item> & { tagsText?: string }>({});
   const [pin, setPin] = useState<Pin | null>(null);
   const [imageKeys, setImageKeys] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!item) return;
@@ -102,6 +107,27 @@ export function ItemEditModal({
     }
   };
 
+  const del = async () => {
+    const ok = await confirm({
+      title: "削除の確認",
+      body: `「${[item.color, item.category].filter(Boolean).join(" ") || item.display_id || "物品"}」を削除します。元に戻せません。`,
+      danger: true,
+      okLabel: "削除する",
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await api.deleteItem(item.id);
+      toast("削除しました", "success");
+      onDeleted?.(item.id);
+      onClose();
+    } catch (e) {
+      toast(`削除失敗: ${(e as Error).message}`, "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Modal
       open={!!item}
@@ -111,8 +137,11 @@ export function ItemEditModal({
       onClose={onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={saving}>キャンセル</Button>
-          <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+          <Button variant="destructive" onClick={del} disabled={saving || deleting}>
+            {deleting ? "削除中…" : "削除"}
+          </Button>
+          <Button variant="outline" onClick={onClose} disabled={saving || deleting}>キャンセル</Button>
+          <Button onClick={save} disabled={saving || deleting}>{saving ? "保存中…" : "保存"}</Button>
         </>
       }
     >
