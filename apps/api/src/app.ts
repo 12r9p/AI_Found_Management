@@ -348,18 +348,18 @@ export function createApp() {
         "category", "color", "brand", "ai_description", "tags", "found_location", "notes",
       ].some((k) => k in patch);
       let embedding: number[] | undefined;
-      let embedFailed = false;
+      let ai_status: typeof existing.ai_status | undefined;
       if (touchesFeatures) {
         embedding = await safeEmbed(c.ai, itemEmbedText({ ...existing, ...patch }));
-        if (!embedding.length) {
-          embedding = undefined;
-          embedFailed = true;
-        }
+        // 再埋め込みが成功したら「AI解析失敗」表示を解除する（以前は失敗時しか
+        // ai_status を書き換えず、再解析→保存が成功しても error のまま残っていた）。
+        ai_status = embedding.length ? "ready" : "error";
+        if (!embedding.length) embedding = undefined;
       }
       const updated = await c.store.updateItem(params.id, {
         ...patch,
         ...(embedding ? { embedding } : {}),
-        ...(embedFailed ? { ai_status: "error" } : {}),
+        ...(ai_status ? { ai_status } : {}),
       });
       if (updated && embedding) {
         updated.embedding = embedding;
