@@ -21,10 +21,12 @@ const STATUS_FILTERS = [
  * 候補をさらにクリックすると突き合わせ確認ダイアログへ重なる。
  */
 export function InquiriesTab() {
+  const toast = useToast();
   const [status, setStatus] = usePersistentState("admin:inqStatus", "");
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Inquiry | null>(null);
+  const [rematching, setRematching] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -36,6 +38,26 @@ export function InquiriesTab() {
   }, [status]);
 
   useEffect(() => { load(); }, [load]);
+
+  /** しきい値変更や表記修正など、既存データには自動反映されない変更を
+   * 保管中の全物品について一括で追いつかせる（新しい一致は通知ベルに届く）。 */
+  const rematchAll = async () => {
+    setRematching(true);
+    try {
+      const { itemsChecked, matchesFound } = await api.rematchAll();
+      toast(
+        matchesFound > 0
+          ? `${itemsChecked}件を再照合し、新たに${matchesFound}件の一致候補が見つかりました`
+          : `${itemsChecked}件を再照合しましたが、新たな一致はありませんでした`,
+        "success",
+      );
+      load();
+    } catch (e) {
+      toast(`再照合に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setRematching(false);
+    }
+  };
 
   // 選択中の問い合わせを最新に保つ（判断後にダイアログの中身も更新）
   const current = selected ? inquiries.find((i) => i.id === selected.id) ?? selected : null;
@@ -54,7 +76,12 @@ export function InquiriesTab() {
             )}
           </Field>
           <div className="rb-field" style={{ justifyContent: "flex-end" }}>
-            <Button variant="outline" onClick={load}>再読込</Button>
+            <div className="rb-row" style={{ gap: 8 }}>
+              <Button variant="outline" onClick={load}>再読込</Button>
+              <Button variant="outline" onClick={rematchAll} disabled={rematching}>
+                {rematching ? "再照合中…" : "全件再照合"}
+              </Button>
+            </div>
           </div>
         </div>
         <p className="rb-tiny muted-text" style={{ margin: 0 }}>
