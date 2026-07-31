@@ -22,6 +22,13 @@ export default function SearchPage() {
   const [items, setItems] = usePersistentState<Item[] | null>("search:results", null);
   const [loading, setLoading] = useState(false);
 
+  // 「意味検索(AI)」= 自然文をAIで埋め込んで探す（従来通り）。
+  // 「似た物品を探す」= 既存物品のベクトルをそのまま流用（AI呼び出し無し）。
+  const [mode, setMode] = usePersistentState<"ai" | "similar">("search:mode", "ai");
+  const [refDisplayId, setRefDisplayId] = usePersistentState("search:refDisplayId", "");
+  const [refItem, setRefItem] = useState<Item | null>(null);
+  const [refLoading, setRefLoading] = useState(false);
+
   const [inqOpen, setInqOpen] = useState(false);
   const [inqRef, setInqRef] = useState("");
   const [inqBusy, setInqBusy] = useState(false);
@@ -31,10 +38,32 @@ export default function SearchPage() {
 
   const setF = (k: keyof typeof filters, v: string) => setFilters((f) => ({ ...f, [k]: v }));
 
+  /** 管理番号から対象物品を確認する（似た物品を探すモード用）。 */
+  const lookupRef = async () => {
+    if (!refDisplayId.trim()) return;
+    setRefLoading(true);
+    try {
+      const found = await api.findItemByDisplayId(refDisplayId.trim());
+      if (!found) toast("該当する管理番号の物品が見つかりません", "error");
+      setRefItem(found);
+    } catch (e) {
+      toast(`確認に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setRefLoading(false);
+    }
+  };
+
   const doSearch = async () => {
+    if (mode === "similar" && !refItem) {
+      toast("管理番号を入力して対象の物品を確認してください", "error");
+      return;
+    }
     setLoading(true);
     try {
-      const res = await api.search({ q: q || undefined, ...filters, limit: 50 });
+      const res =
+        mode === "similar"
+          ? await api.search({ likeItemId: refItem!.id, ...filters, limit: 50 })
+          : await api.search({ q: q || undefined, ...filters, limit: 50 });
       setItems(res);
       if (res.length === 0) toast("該当なし。特徴を『未解決』として登録できます", "error");
     } catch (e) {
@@ -99,7 +128,7 @@ export default function SearchPage() {
     }
   };
 
-  const hasConditions = !!q || Object.values(filters).some(Boolean) || !!items;
+  const hasConditions = !!q || !!refDisplayId || Object.values(filters).some(Boolean) || !!items;
 
   return (
     <AppShell>
@@ -109,18 +138,65 @@ export default function SearchPage() {
       <div className="rb-split">
         <div className="rb-split__side">
           <Card variant="bordered">
-            <Field label="特徴で検索" hint="自然文でOK（例: 黒い革の長財布）">
-              {(id) => (
-                <Input
-                  id={id}
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  // IME 変換確定の Enter で検索が走らないようにする
-                  onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && doSearch()}
-                  placeholder="紺色の折りたたみ傘 …"
-                />
-              )}
-            </Field>
+            <div className="rb-row mb-16" style={{ gap: 4 }}>
+              <Button variant={mode === "ai" ? undefined : "outline"} size="sm" onClick={() => setMode("ai")}>
+                意味検索(AI)
+              </Button>
+              <Button variant={mode === "similar" ? undefined : "outline"} size="sm" onClick={() => setMode("similar")}>
+                似た物品を探す
+              </Button>
+            </div>
+
+            {mode === "ai" ? (
+              <Field label="特徴で検索" hint="自然文でOK（例: 黒い革の長財布）">
+                {(id) => (
+                  <Input
+                    id={id}
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    // IME 変換確定の Enter で検索が走らないようにする
+                    onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && doSearch()}
+                    placeholder="紺色の折りたたみ傘 …"
+                  />
+                )}
+              </Field>
+            ) : (
+              <>
+                <Field label="管理番号で対象物品を指定" hint="AIを呼ばず、その物品のベクトルをそのまま使って探します">
+                  {(id) => (
+                    <div className="rb-row" style={{ flexWrap: "nowrap" }}>
+                      <Input
+                        id={id}
+                        value={refDisplayId}
+                        onChange={(e) => { setRefDisplayId(e.target.value); setRefItem(null); }}
+                        onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && lookupRef()}
+                        placeholder="FD-20260731-0001"
+                      />
+                      <Button variant="outline" onClick={lookupRef} disabled={refLoading}>
+                        {refLoading ? "確認中…" : "確認"}
+                      </Button>
+                    </div>
+                  )}
+                </Field>
+                {refItem && (
+                  <Card variant="muted" className="mb-16">
+                    <div className="rb-row" style={{ gap: 8, alignItems: "center" }}>
+                      {refItem.image_keys[0] ? (
+                        <img src={imageUrl(refItem.image_keys[0])} alt="" className="rb-thumb-sm" />
+                      ) : (
+                        <span className="rb-thumb-sm rb-thumb-sm--empty">無</span>
+                      )}
+                      <div>
+                        <div className="rb-small">
+                          <strong>{[refItem.color, refItem.category].filter(Boolean).join(" ") || "物品"}</strong>
+                        </div>
+                        <div className="rb-tiny muted-text">{refItem.display_id}</div>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </>
+            )}
 
             <div className="rb-eyebrow mt-16 mb-8">フィルター</div>
             <Field label="種別">
@@ -163,7 +239,7 @@ export default function SearchPage() {
               {(id) => <Input id={id} type="date" value={filters.to} onChange={(e) => setF("to", e.target.value)} />}
             </Field>
 
-            <Button block onClick={doSearch} disabled={loading}>
+            <Button block onClick={doSearch} disabled={loading || (mode === "similar" && !refItem)}>
               {loading ? "検索中…" : "検索"}
             </Button>
             <div className="rb-row mt-8">
@@ -178,6 +254,8 @@ export default function SearchPage() {
                     setQ("");
                     setFilters(EMPTY_FILTERS);
                     setItems(null);
+                    setRefDisplayId("");
+                    setRefItem(null);
                   }}
                 >
                   条件をクリア
@@ -191,14 +269,16 @@ export default function SearchPage() {
           {loading && (
             <div className="rb-busy mb-16" role="status" aria-live="polite">
               <span className="rb-spinner" aria-hidden />
-              <span>AIが特徴を照合中…</span>
+              <span>{mode === "similar" ? "似た物品を探しています…" : "AIが特徴を照合中…"}</span>
             </div>
           )}
 
           {!items && !loading && (
             <Card variant="muted">
               <p className="rb-small" style={{ margin: 0 }}>
-                左の条件を入力して検索してください。特徴を文章で入れるとAIが近いものを探します。
+                {mode === "similar"
+                  ? "管理番号で対象の物品を指定して検索してください。"
+                  : "左の条件を入力して検索してください。特徴を文章で入れるとAIが近いものを探します。"}
               </p>
             </Card>
           )}

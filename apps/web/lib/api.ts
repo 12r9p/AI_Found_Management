@@ -48,6 +48,9 @@ export const api = {
   // items
   listItems: (q: Record<string, string> = {}) =>
     req<{ items: Item[] }>(`/api/items?${new URLSearchParams(q)}`).then((r) => r.items),
+  /** 管理番号の完全一致で1件だけ探す（類似検索の対象物品を選ぶ用）。 */
+  findItemByDisplayId: (displayId: string) =>
+    api.listItems({ display_id: displayId }).then((items) => items[0] ?? null),
   getItem: (id: string) => req<{ item: Item; matches: Match[] }>(`/api/items/${id}`),
   createItem: (body: Partial<Item>) =>
     req<{ item: Item; matches: Match[]; topScore: number }>("/api/items", {

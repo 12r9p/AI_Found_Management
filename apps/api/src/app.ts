@@ -32,6 +32,7 @@ function parseFilters(q: Record<string, any>): SearchFilters {
     location: q.location || undefined,
     from: q.from || undefined,
     to: q.to || undefined,
+    display_id: q.display_id || undefined,
     limit: q.limit ? parseInt(q.limit, 10) : undefined,
   };
 }
@@ -240,9 +241,14 @@ export function createApp() {
         set.status = 400;
         return { error: "地図画像がありません（multipart/form-data）" };
       }
-      if (file.size > MAX_UPLOAD_BYTES) {
-        set.status = 413;
-        return { error: `地図画像は ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです` };
+      if (file.size > 10 * 1024 * 1024) {
+        set.status = 400;
+        return { error: "地図画像は10MB以内にしてください" };
+      }
+      // 古い地図があればR2から削除（ゴミ画像の蓄積防止）
+      const oldKey = await c.store.getSetting(ACTIVE_MAP_KEY);
+      if (oldKey) {
+        await c.images.delete(oldKey).catch(() => {});
       }
       const ct = file.type || "image/png";
       const key = `map_${crypto.randomUUID()}.${extFromContentType(ct)}`;
@@ -375,10 +381,23 @@ export function createApp() {
     })
 
     // ---- search (vector + filters) ----
-    .post("/api/search", async ({ body }) => {
+    .post("/api/search", async ({ body, set }) => {
       const c = await ctx();
       const b = (body as any) ?? {};
       const filters: SearchFilters = { ...parseFilters(b), limit: b.limit ?? 50 };
+
+      // 「ベクトル検索のみ」モード: 自然文をAIに埋め込ませず、既存物品のベクトルを
+      // そのまま流用して似たものを探す（AI呼び出し無し）。
+      if (b.likeItemId) {
+        const embedding = await c.store.getItemEmbedding(b.likeItemId);
+        if (!embedding) {
+          set.status = 400;
+          return { error: "この物品にはまだベクトルがありません（AI解析待ち、または解析失敗）" };
+        }
+        const items = (await c.store.searchItems(embedding, filters)).filter((i) => i.id !== b.likeItemId);
+        return { items };
+      }
+
       if (!filters.q) {
         // クエリ無しならフィルタのみの一覧
         return { items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })) };

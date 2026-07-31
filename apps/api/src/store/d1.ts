@@ -91,6 +91,11 @@ export class D1VectorizeStore implements Store {
       .first();
     return row ? rowToItem(row) : null;
   }
+  async getItemEmbedding(id: string): Promise<number[] | null> {
+    // 「類似検索」用に既存物品のベクトルをそのまま取得する（AI呼び出し無し）。
+    const [vec] = await this.vectorizeItems.getByIds([id]);
+    return vec?.values ? Array.from(vec.values) : null;
+  }
   async listItems(f: SearchFilters): Promise<Item[]> {
     const { where, params } = buildItemWhere(f);
     const { results } = await this.db
@@ -605,6 +610,10 @@ function buildItemWhere(f: SearchFilters): { where: string; params: any[] } {
   if (f.to) {
     clauses.push("found_at <= ?");
     params.push(f.to);
+  }
+  if (f.display_id) {
+    clauses.push("display_id = ?");
+    params.push(f.display_id);
   }
   return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
 }

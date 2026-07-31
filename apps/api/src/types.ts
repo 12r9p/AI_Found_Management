@@ -100,5 +100,6 @@ export interface SearchFilters {
   location?: string; // 拾得場所の部分一致
   from?: string; // 拾得日 下限
   to?: string; // 拾得日 上限
+  display_id?: string; // 管理番号の完全一致（類似検索の対象物品を探す用）
   limit?: number;
 }
