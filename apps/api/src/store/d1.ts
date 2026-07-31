@@ -69,7 +69,15 @@ export class D1VectorizeStore implements Store {
       )
       .first();
     if (d.embedding && d.embedding.length) {
-      await this.vectorizeItems.upsert([{ id, values: d.embedding }]);
+      try {
+        await this.vectorizeItems.upsert([{ id, values: d.embedding }]);
+      } catch (e) {
+        // Vectorize への反映が失敗した状態でD1側だけ行が残ると、検索に絶対ヒットしない
+        // 「幽霊データ」になる（クライアントにはエラーが返るのに実は登録済み、という不整合）。
+        // 呼び出し元には作成失敗として伝え、D1側も削除して整合を保つ。
+        await this.db.prepare(`DELETE FROM items WHERE id=?`).bind(id).run().catch(() => {});
+        throw e;
+      }
     }
     return rowToItem(row);
   }
@@ -165,7 +173,13 @@ export class D1VectorizeStore implements Store {
       )
       .first();
     if (d.embedding && d.embedding.length) {
-      await this.vectorizeInquiries.upsert([{ id, values: d.embedding }]);
+      try {
+        await this.vectorizeInquiries.upsert([{ id, values: d.embedding }]);
+      } catch (e) {
+        // createItem と同様、ベクトル未反映の幽霊データを残さないようD1側もロールバックする。
+        await this.db.prepare(`DELETE FROM inquiries WHERE id=?`).bind(id).run().catch(() => {});
+        throw e;
+      }
     }
     return rowToInquiry(row);
   }
