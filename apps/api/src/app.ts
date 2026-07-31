@@ -3,7 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { buildContext, type AppContext } from "./context.ts";
 import { getEnv, waitUntil } from "./env-holder.ts";
 import { itemEmbedText, inquiryEmbedText } from "./lib/embed-text.ts";
-import { matchNewItem, matchNewInquiry } from "./lib/matching.ts";
+import { matchNewItem, matchNewInquiry, rematchAll } from "./lib/matching.ts";
 import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
 import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
@@ -357,6 +357,14 @@ export function createApp() {
       const embedding = await c.ai.embed(filters.q);
       const items = await c.store.searchItems(embedding, filters);
       return { items };
+    })
+
+    // ---- 全件再照合（管理画面の手動トリガー） ----
+    // しきい値変更・表記修正など、既存データには自動反映されない変更を
+    // スタッフの操作で一括で追いつかせるためのメンテナンス用エンドポイント。
+    .post("/api/rematch", async () => {
+      const c = await ctx();
+      return rematchAll(c.store, c.ai, c.cfg.matchThreshold);
     })
 
     // ---- inquiries ----

@@ -1,7 +1,8 @@
 import { test, expect } from "bun:test";
 import { MemoryStore } from "../store/memory.ts";
 import { deterministicEmbed } from "../ai/provider.ts";
-import { matchNewItem, matchNewInquiry } from "./matching.ts";
+import { matchNewItem, matchNewInquiry, rematchAll } from "./matching.ts";
+import type { AIProvider } from "../ai/provider.ts";
 
 const DIM = 512;
 const embed = (t: string) => deterministicEmbed(t, DIM);
@@ -109,4 +110,56 @@ test("該当なしの問い合わせは open のまま保存され、後日の�
   const out = await matchNewItem(store, item, 0.5);
   expect(out.matches.length).toBe(1);
   expect((await store.listNotifications(true)).length).toBe(1);
+});
+
+/** rematchAll は embedding を再取得するだけなので、embed だけ実装したスタブで足りる。 */
+function embedOnlyProvider(): AIProvider {
+  return {
+    name: "test-embed-only",
+    async describeImages() {
+      throw new Error("not used by rematchAll");
+    },
+    async embed(text: string) {
+      return embed(text);
+    },
+    async chat() {
+      return "";
+    },
+  };
+}
+
+test("rematchAll: 保管中の物品を再埋め込みし、当時見つからなかった一致も拾い直す", async () => {
+  const store = new MemoryStore();
+  const ai = embedOnlyProvider();
+
+  const desc = "紺色の折りたたみ傘。持ち手は黒。";
+  const item = await store.createItem({
+    status: "stored",
+    category: "傘",
+    color: "紺",
+    ai_description: desc,
+    embedding: embed(`傘 紺 ${desc}`),
+  });
+  await store.createInquiry({
+    status: "open",
+    category: "傘",
+    description: desc,
+    ai_description: desc,
+    reference_no: "R-9",
+    embedding: embed(`傘 ${desc}`),
+  });
+  // ここでは matchNewItem/matchNewInquiry を一切呼んでいないため、
+  // 一致は存在しない状態（＝しきい値変更などで見逃されたケースを模している）。
+
+  const outcome = await rematchAll(store, ai, 0.5);
+  expect(outcome.itemsChecked).toBe(1);
+  expect(outcome.matchesFound).toBe(1);
+  expect((await store.listNotifications()).length).toBe(1);
+
+  // 保管中でない物品は対象外
+  const returned = await store.createItem({ status: "returned", category: "鍵", embedding: embed("鍵") });
+  const outcome2 = await rematchAll(store, ai, 0.5);
+  expect(outcome2.itemsChecked).toBe(1); // returned は数えない
+  expect(outcome2.matchesFound).toBe(0); // 既知の組み合わせなので再通知しない
+  void returned;
 });

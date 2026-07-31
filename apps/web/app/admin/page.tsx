@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { Button, Card, Select, Field } from "../../components/ui";
+import { Button, Card, Select, Field, useToast } from "../../components/ui";
 import { useMeta } from "../../components/useMeta";
 import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
@@ -21,11 +21,13 @@ const TABS: { id: Tab; label: string }[] = [
 export default function AdminPage() {
   const meta = useMeta();
   const presets = useLocationPresets();
+  const toast = useToast();
   const [tab, setTab] = usePersistentState<Tab>("admin:tab", "items");
   const [filters, setFilters] = usePersistentState("admin:filters", {
     category: "", status: "", location: "",
   });
   const [items, setItems] = useState<Item[]>([]);
+  const [rematching, setRematching] = useState(false);
 
   const loadItems = useCallback(() => {
     const q: Record<string, string> = {};
@@ -63,6 +65,26 @@ export default function AdminPage() {
   const printPdf = () => {
     const params = new URLSearchParams(Object.entries(filters).filter(([, v]) => v));
     window.open(`/print?${params}`, "_blank");
+  };
+
+  /** しきい値変更や表記修正など、既存データには自動反映されない変更を
+   * 保管中の全物品について一括で追いつかせる（新しい一致は通知ベルに届く）。 */
+  const rematchAll = async () => {
+    setRematching(true);
+    try {
+      const { itemsChecked, matchesFound } = await api.rematchAll();
+      toast(
+        matchesFound > 0
+          ? `${itemsChecked}件を再照合し、新たに${matchesFound}件の一致候補が見つかりました`
+          : `${itemsChecked}件を再照合しましたが、新たな一致はありませんでした`,
+        "success",
+      );
+      loadItems();
+    } catch (e) {
+      toast(`再照合に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setRematching(false);
+    }
   };
 
   const selectTab = (t: Tab) => {
@@ -123,6 +145,9 @@ export default function AdminPage() {
               <Button variant="outline" onClick={loadItems}>再読込</Button>
               <Button onClick={printPdf}>PDF出力</Button>
               <a className="rb-btn rb-btn--outline" href={csvHref} target="_blank" rel="noreferrer">CSV出力</a>
+              <Button variant="outline" onClick={rematchAll} disabled={rematching}>
+                {rematching ? "再照合中…" : "全件再照合"}
+              </Button>
               <span className="rb-tiny muted-text">{items.length}件</span>
             </div>
           </Card>

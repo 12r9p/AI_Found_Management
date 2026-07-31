@@ -62,6 +62,9 @@ export const api = {
   search: (body: Record<string, unknown>) =>
     req<{ items: Item[] }>("/api/search", { method: "POST", body: JSON.stringify(body) }).then((r) => r.items),
 
+  // 保管中の全物品を未解決の問い合わせと一括で再照合する（管理画面の手動トリガー）
+  rematchAll: () => req<{ itemsChecked: number; matchesFound: number }>("/api/rematch", { method: "POST" }),
+
   // uploads / analyze
   upload: (files: File[]) => {
     const fd = new FormData();

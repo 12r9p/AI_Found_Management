@@ -1,5 +1,7 @@
 import type { Store, MatchBulkEntry } from "../store/index.ts";
 import type { Item, Inquiry, Match } from "../types.ts";
+import type { AIProvider } from "../ai/provider.ts";
+import { itemEmbedText } from "./embed-text.ts";
 
 export interface MatchOutcome {
   matches: Match[];
@@ -137,4 +139,34 @@ async function scoreInquiries(
 
 function label(x: Item): string {
   return [x.color, x.brand, x.category].filter(Boolean).join(" ") || x.ai_description.slice(0, 20) || "物品";
+}
+
+export interface RematchOutcome {
+  itemsChecked: number;
+  matchesFound: number;
+}
+
+/**
+ * 保管中の全物品を対象に、埋め込みを再計算した上で未解決の問い合わせと再照合する。
+ * しきい値の変更や、種別・色の表記を後から直した場合など、既存データには
+ * 自動反映されない変更を一括で追いつかせるためのスタッフ手動トリガー
+ * （管理画面の「全件再照合」ボタンから呼ばれる）。
+ * embedding を都度取り直す（＝Vectorizeのメタデータも同時に更新される）ため、
+ * 過去に登録された物品でもプレフィルタ用メタデータの取りこぼしを拾い直せる。
+ */
+export async function rematchAll(
+  store: Store,
+  ai: AIProvider,
+  threshold: number,
+): Promise<RematchOutcome> {
+  const items = await store.listItems({ status: "stored", limit: 1000 });
+  let matchesFound = 0;
+  for (const item of items) {
+    const embedding = await ai.embed(itemEmbedText(item));
+    const updated = await store.updateItem(item.id, { embedding });
+    if (!updated) continue;
+    const outcome = await matchNewItem(store, { ...updated, embedding }, threshold);
+    matchesFound += outcome.matches.length;
+  }
+  return { itemsChecked: items.length, matchesFound };
 }
