@@ -191,14 +191,14 @@ export default function SearchPage() {
           {loading && (
             <div className="rb-busy mb-16" role="status" aria-live="polite">
               <span className="rb-spinner" aria-hidden />
-              <span>AIが特徴を照合中…</span>
+              <span>ベクトル検索中…</span>
             </div>
           )}
 
           {!items && !loading && (
             <Card variant="muted">
               <p className="rb-small" style={{ margin: 0 }}>
-                左の条件を入力して検索してください。特徴を文章で入れるとAIが近いものを探します。
+                左の条件を入力して検索してください。特徴を文章で入れると、埋め込みベクトルの類似度で近いものを探します。
               </p>
             </Card>
           )}
