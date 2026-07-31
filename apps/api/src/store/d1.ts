@@ -11,6 +11,7 @@ import {
   type Store,
   type ScoredItem,
   type ScoredInquiry,
+  type MatchBulkEntry,
   nowIso,
   newId,
 } from "./store.ts";
@@ -301,6 +302,52 @@ export class D1VectorizeStore implements Store {
       .bind(itemId, inquiryId)
       .first();
     return row ? rowToMatch(row) : null;
+  }
+  async createMatchesBulk(entries: MatchBulkEntry[]): Promise<Match[]> {
+    if (entries.length === 0) return [];
+    const created_at = nowIso();
+    const stmts: D1PreparedStatement[] = [];
+    const matches: Match[] = [];
+    for (const e of entries) {
+      const id = newId();
+      stmts.push(
+        this.db
+          .prepare(
+            `INSERT INTO matches (id, item_id, inquiry_id, score, status, direction, created_at)
+             VALUES (?,?,?,?,?,?,?)
+             ON CONFLICT (item_id, inquiry_id) DO UPDATE SET score=excluded.score`,
+          )
+          .bind(id, e.match.item_id, e.match.inquiry_id, e.match.score, e.match.status, e.match.direction, created_at),
+      );
+      matches.push({ id, ...e.match, created_at });
+      if (e.inquiryStatusUpdate) {
+        stmts.push(
+          this.db
+            .prepare(`UPDATE inquiries SET status=?, updated_at=? WHERE id=?`)
+            .bind(e.inquiryStatusUpdate.status, created_at, e.inquiryStatusUpdate.id),
+        );
+      }
+      stmts.push(
+        this.db
+          .prepare(
+            `INSERT INTO notifications (id, type, title, body, ref_item_id, ref_inquiry_id, ref_match_id, read, created_at)
+             VALUES (?,?,?,?,?,?,?,0,?)`,
+          )
+          .bind(
+            newId(),
+            e.notification.type,
+            e.notification.title,
+            e.notification.body,
+            e.notification.ref_item_id,
+            e.notification.ref_inquiry_id,
+            id,
+            created_at,
+          ),
+      );
+    }
+    // 件数分の直列ラウンドトリップを避け、1回の db.batch() にまとめる。
+    await this.db.batch(stmts);
+    return matches;
   }
 
   // --- notifications ---

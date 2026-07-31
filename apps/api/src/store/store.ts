@@ -15,6 +15,14 @@ export interface ScoredInquiry extends Inquiry {
   score: number;
 }
 
+/** 突き合わせヒット1件分。match作成・関連通知・（あれば）問い合わせの状態更新をまとめて渡す。
+ * ref_match_id は作成される match の id を実装側が自動で埋めるため呼び出し側は指定しない。 */
+export interface MatchBulkEntry {
+  match: Omit<Match, "id" | "created_at">;
+  notification: Omit<Notification, "id" | "created_at" | "read" | "ref_match_id">;
+  inquiryStatusUpdate?: { id: string; status: Inquiry["status"] };
+}
+
 /**
  * データアクセス抽象。現場で「DB をほぼ直接触る」編集要件に応えるため、
  * update は任意フィールドの部分更新を許す。
@@ -45,6 +53,11 @@ export interface Store {
   getMatch(id: string): Promise<Match | null>;
   updateMatch(id: string, patch: Partial<Match>): Promise<Match | null>;
   findMatch(itemId: string, inquiryId: string): Promise<Match | null>;
+  /**
+   * 複数の突き合わせヒットを一括で確定させる（match作成＋通知作成＋問い合わせ状態更新）。
+   * D1実装は db.batch() で1往復にまとめ、ヒット件数分の直列ラウンドトリップを避ける。
+   */
+  createMatchesBulk(entries: MatchBulkEntry[]): Promise<Match[]>;
 
   // --- notifications ---
   createNotification(

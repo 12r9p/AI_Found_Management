@@ -1,4 +1,4 @@
-import type { Store } from "../store/index.ts";
+import type { Store, MatchBulkEntry } from "../store/index.ts";
 import type { Item, Inquiry, Match } from "../types.ts";
 
 export interface MatchOutcome {
@@ -31,23 +31,25 @@ export async function matchNewItem(
   const hits = scored.filter(
     (s) => s.score >= threshold && categoryConsistent(item.category, s.inquiry.category),
   );
-  const matches: Match[] = [];
-  for (const { inquiry, score } of hits) {
-    const existing = await store.findMatch(item.id, inquiry.id);
-    // 既知の組み合わせは再通知しない。
-    // 否定済み(rejected)はもちろん、確認待ち(pending)や確定済みも対象。
-    // 物品を編集するたびに同じ通知が積み上がるとスタッフが通知を無視するようになるため。
-    if (existing) continue;
-    const m = await store.createMatch({
+  if (hits.length === 0) return { matches: [], topScore: scored[0]?.score ?? 0 };
+
+  // 既知の組み合わせは再通知しない（否定済み・確認待ち・確定済みいずれも対象）。
+  // 物品を編集するたびに同じ通知が積み上がるとスタッフが通知を無視するようになるため。
+  // 存在チェックは互いに独立した読み取りなので並行に行い、直列ラウンドトリップを避ける。
+  const existing = await Promise.all(hits.map((h) => store.findMatch(item.id, h.inquiry.id)));
+  const fresh = hits.filter((_, i) => !existing[i]);
+  if (fresh.length === 0) return { matches: [], topScore: scored[0]?.score ?? 0 };
+
+  const entries: MatchBulkEntry[] = fresh.map(({ inquiry, score }) => ({
+    match: {
       item_id: item.id,
       inquiry_id: inquiry.id,
       score,
       status: "pending",
       direction: "item_to_inquiry",
-    });
-    matches.push(m);
-    await store.updateInquiry(inquiry.id, { status: "matched" });
-    await store.createNotification({
+    },
+    inquiryStatusUpdate: { id: inquiry.id, status: "matched" },
+    notification: {
       type: "match_found",
       title: "遺失物と問い合わせが一致した可能性",
       body:
@@ -55,9 +57,9 @@ export async function matchNewItem(
         `と ${(score * 100).toFixed(0)}% 一致しました。確認してください。`,
       ref_item_id: item.id,
       ref_inquiry_id: inquiry.id,
-      ref_match_id: m.id,
-    });
-  }
+    },
+  }));
+  const matches = await store.createMatchesBulk(entries);
   return { matches, topScore: scored[0]?.score ?? 0 };
 }
 
@@ -78,19 +80,21 @@ export async function matchNewInquiry(
   const hits = scored.filter(
     (s) => s.score >= threshold && categoryConsistent(inquiry.category, s.category),
   );
-  const matches: Match[] = [];
-  for (const it of hits) {
-    const existing = await store.findMatch(it.id, inquiry.id);
-    if (existing) continue; // 既知の組み合わせは再通知しない
-    const m = await store.createMatch({
+  if (hits.length === 0) return { matches: [], topScore: scored[0]?.score ?? 0 };
+
+  const existing = await Promise.all(hits.map((it) => store.findMatch(it.id, inquiry.id)));
+  const fresh = hits.filter((_, i) => !existing[i]); // 既知の組み合わせは再通知しない
+  if (fresh.length === 0) return { matches: [], topScore: scored[0]?.score ?? 0 };
+
+  const entries: MatchBulkEntry[] = fresh.map((it) => ({
+    match: {
       item_id: it.id,
       inquiry_id: inquiry.id,
       score: it.score,
       status: "pending",
       direction: "inquiry_to_item",
-    });
-    matches.push(m);
-    await store.createNotification({
+    },
+    notification: {
       type: "match_found",
       title: "問い合わせに一致する遺失物候補",
       body:
@@ -98,12 +102,10 @@ export async function matchNewInquiry(
         `「${label(it)}」が ${(it.score * 100).toFixed(0)}% 一致しました。`,
       ref_item_id: it.id,
       ref_inquiry_id: inquiry.id,
-      ref_match_id: m.id,
-    });
-  }
-  if (matches.length > 0) {
-    await store.updateInquiry(inquiry.id, { status: "matched" });
-  }
+    },
+  }));
+  const matches = await store.createMatchesBulk(entries);
+  await store.updateInquiry(inquiry.id, { status: "matched" });
   return { matches, topScore: scored[0]?.score ?? 0 };
 }
 
