@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Badge, Button, Card, Field, Input, Modal, Select, useToast, useConfirm } from "../ui";
+import { Badge, Button, Card, Field, Input, Modal, Select, useToast, useConfirm, ColorSwatch } from "../ui";
 import { MapPicker, invalidateMapCache, type Pin } from "../MapPicker";
 import { api } from "../../lib/api";
-import type { IdRule, LocationPreset } from "../../lib/types";
+import type { IdRule, LocationPreset, MetaOption } from "../../lib/types";
+import { normalizeImageFile } from "../../lib/image";
 
 /** 設定タブ: 会場地図と、種別・色の選択肢を編集する。 */
 export function SettingsTab() {
@@ -100,7 +101,7 @@ function IdRuleSetting() {
           登録時に自動で付く管理番号の形式です。紙台帳の記法に合わせて設定してください。
         </p>
         <Card variant="muted" className="mt-16">
-          <div className="rb-eyebrow mb-8">次に発行される番号（プレビュー）</div>
+          <div className="rb-eyebrow mb-8">採番フォーマットの例（プレビュー）</div>
           <span className="rb-idtag" style={{ fontSize: 16 }}>{preview}</span>
         </Card>
       </Card>
@@ -121,7 +122,7 @@ function IdRuleSetting() {
         {draft && (
           <>
             <Card variant="muted" className="mb-16">
-              <div className="rb-eyebrow mb-8">プレビュー</div>
+              <div className="rb-eyebrow mb-8">採番フォーマットの例（プレビュー）</div>
               <span className="rb-idtag" style={{ fontSize: 16 }}>{localPreview(draft)}</span>
             </Card>
             <div className="rb-grid rb-grid--3">
@@ -184,7 +185,11 @@ function MapSetting() {
     if (!f) return;
     setUploading(true);
     try {
-      const key = await api.uploadMap(f);
+      const normalized = await normalizeImageFile(f);
+      if (normalized.size > 10 * 1024 * 1024) {
+        throw new Error("地図画像が大きすぎます。10MB以内の画像を選択してください。");
+      }
+      const key = await api.uploadMap(normalized);
       setMapKey(key);
       invalidateMapCache();
       toast("地図を更新しました。登録画面でピンを刺せます", "success");
@@ -415,7 +420,8 @@ function LocationPresetSetting() {
   );
 }
 
-/** 種別・色の選択肢を編集する共通コンポーネント。編集はポップアップ内で行う。 */
+/** 種別・色の選択肢を編集する共通コンポーネント。編集はポップアップ内で行う。
+ * 並び替え（↑↓）・グループ見出し・（色リストのみ）色タグを設定できる。 */
 function ListSetting({
   kind,
   title,
@@ -429,11 +435,15 @@ function ListSetting({
 }) {
   const toast = useToast();
   const confirm = useConfirm();
-  const [values, setValues] = useState<string[]>([]);
+  const [values, setValues] = useState<MetaOption[]>([]);
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<string[]>([]);
-  const [input, setInput] = useState("");
+  const [draft, setDraft] = useState<MetaOption[]>([]);
+  const [name, setName] = useState("");
+  const [group, setGroup] = useState("");
+  const [color, setColor] = useState("");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const supportsColor = kind === "colors";
 
   const load = () =>
     api.meta().then((m) => {
@@ -441,44 +451,84 @@ function ListSetting({
     });
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
+  const resetForm = () => {
+    setName("");
+    setGroup("");
+    setColor("");
+    setEditingIndex(null);
+  };
+
   const openEdit = () => {
     setDraft(values);
-    setInput("");
+    resetForm();
     setOpen(true);
   };
   const cancel = () => {
     setOpen(false);
-    setInput("");
+    resetForm();
   };
 
-  const add = () => {
-    const v = input.trim();
-    if (!v) return;
-    if (draft.includes(v)) {
+  const selectForEdit = (i: number) => {
+    const o = draft[i];
+    setName(o.name);
+    setGroup(o.group ?? "");
+    setColor(o.color ?? "");
+    setEditingIndex(i);
+  };
+
+  const addOrUpdate = () => {
+    const n = name.trim();
+    if (!n) {
+      toast("名前を入力してください", "error");
+      return;
+    }
+    if (draft.some((o, i) => o.name === n && i !== editingIndex)) {
       toast("すでに登録されています", "error");
       return;
     }
-    setDraft((vs) => [...vs, v]);
-    setInput("");
+    const entry: MetaOption = {
+      name: n,
+      ...(group.trim() ? { group: group.trim() } : {}),
+      ...(supportsColor && color ? { color } : {}),
+    };
+    setDraft((os) => {
+      const next = [...os];
+      if (editingIndex != null) next[editingIndex] = entry;
+      else next.push(entry);
+      return next;
+    });
+    resetForm();
   };
 
-  const remove = async (v: string) => {
+  const remove = async (i: number) => {
     // 既存データがその値を使っている可能性があるため、消す前に確認する
+    const o = draft[i];
     const ok = await confirm({
       title: `${title}から削除`,
-      body: `「${v}」を選択肢から削除します。\n既に登録済みの物品のデータは変更されませんが、選択肢には出なくなります。`,
+      body: `「${o.name}」を選択肢から削除します。\n既に登録済みの物品のデータは変更されませんが、選択肢には出なくなります。`,
       danger: true,
       okLabel: "削除する",
     });
     if (!ok) return;
-    setDraft((vs) => vs.filter((x) => x !== v));
+    setDraft((os) => os.filter((_, idx) => idx !== i));
+    if (editingIndex === i) resetForm();
+  };
+
+  const move = (i: number, dir: -1 | 1) => {
+    setDraft((os) => {
+      const j = i + dir;
+      if (j < 0 || j >= os.length) return os;
+      const next = [...os];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      await api.updateMeta(kind, draft);
-      setValues(draft);
+      const saved = await api.updateMeta(kind, draft);
+      setValues(saved);
       toast(`${title}を保存しました`, "success");
       setOpen(false);
     } catch (e) {
@@ -487,6 +537,8 @@ function ListSetting({
       setSaving(false);
     }
   };
+
+  const groupOptions = Array.from(new Set(draft.map((o) => o.group).filter(Boolean))) as string[];
 
   return (
     <>
@@ -497,8 +549,12 @@ function ListSetting({
         </div>
         <p className="rb-small muted-text">{description}</p>
         <div className="rb-chips mt-16">
-          {values.map((v) => (
-            <span key={v} className="rb-chip">{v}</span>
+          {values.map((o) => (
+            <span key={o.name} className="rb-chip" style={{ gap: 6 }}>
+              <ColorSwatch color={o.color} />
+              {o.name}
+              {o.group && <span className="rb-tiny muted-text">({o.group})</span>}
+            </span>
           ))}
           {values.length === 0 && <span className="rb-tiny muted-text">項目がありません</span>}
         </div>
@@ -508,6 +564,7 @@ function ListSetting({
         open={open}
         title={`${title}を編集`}
         context="管理 › 設定"
+        size="wide"
         onClose={cancel}
         footer={
           <>
@@ -516,38 +573,95 @@ function ListSetting({
           </>
         }
       >
-        <div className="rb-chips mb-16">
-          {draft.map((v) => (
-            <span key={v} className="rb-chip">
-              {v}
-              <button type="button" onClick={() => remove(v)} aria-label={`${v} を削除`}>
-                ×
-              </button>
-            </span>
+        <div className="rb-col mb-16" style={{ gap: 4 }}>
+          {draft.map((o, i) => (
+            <div
+              key={`${o.name}-${i}`}
+              className="rb-between"
+              style={{ cursor: "pointer", padding: "6px 8px", border: "var(--bw-thin, 1px) solid var(--border)" }}
+              onClick={() => selectForEdit(i)}
+            >
+              <span className="rb-row" style={{ gap: 8 }}>
+                <ColorSwatch color={o.color} />
+                <strong className="rb-small">{o.name}</strong>
+                {o.group && <span className="rb-tiny muted-text">{o.group}</span>}
+              </span>
+              <span className="rb-row" style={{ gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                <Button variant="outline" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`${o.name} を上へ`}>
+                  ↑
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => move(i, 1)} disabled={i === draft.length - 1} aria-label={`${o.name} を下へ`}>
+                  ↓
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => remove(i)} aria-label={`${o.name} を削除`}>
+                  ×
+                </Button>
+              </span>
+            </div>
           ))}
           {draft.length === 0 && <span className="rb-tiny muted-text">項目がありません</span>}
         </div>
 
-        <Field label="追加">
-          {(id) => (
-            <div className="rb-row" style={{ flexWrap: "nowrap" }}>
+        <div className="rb-grid rb-grid--3">
+          <Field label="名前">
+            {(id) => (
               <Input
                 id={id}
-                value={input}
+                value={name}
                 placeholder={placeholder}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
                   // IME 変換中の Enter は「確定」なので追加しない（半端な文字列の混入を防ぐ）
                   if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                     e.preventDefault();
-                    add();
+                    addOrUpdate();
                   }
                 }}
               />
-              <Button variant="outline" onClick={add}>追加</Button>
+            )}
+          </Field>
+          <Field label="グループ見出し" hint="任意。ドロップダウンで見出し付きにまとまる">
+            {(id) => (
+              <>
+                <Input id={id} list={`${kind}-groups`} value={group} onChange={(e) => setGroup(e.target.value)} />
+                <datalist id={`${kind}-groups`}>
+                  {groupOptions.map((g) => <option key={g} value={g} />)}
+                </datalist>
+              </>
+            )}
+          </Field>
+          {supportsColor ? (
+            <Field label="色タグ" hint="任意。一覧・検索でスウォッチ表示に使う">
+              {(id) => (
+                <div className="rb-row" style={{ flexWrap: "nowrap" }}>
+                  <input
+                    id={id}
+                    type="color"
+                    value={color || "#888888"}
+                    onChange={(e) => setColor(e.target.value)}
+                    style={{ width: 40, height: 34, padding: 0, border: "var(--bw-thin, 1px) solid var(--border)" }}
+                  />
+                  {color && (
+                    <Button variant="outline" size="sm" onClick={() => setColor("")}>クリア</Button>
+                  )}
+                </div>
+              )}
+            </Field>
+          ) : (
+            <div className="rb-field" style={{ justifyContent: "flex-end" }}>
+              <Button variant="outline" onClick={addOrUpdate}>
+                {editingIndex != null ? "更新" : "追加"}
+              </Button>
             </div>
           )}
-        </Field>
+        </div>
+        {supportsColor && (
+          <div className="rb-row mt-16">
+            <Button variant="outline" onClick={addOrUpdate}>
+              {editingIndex != null ? "更新" : "追加"}
+            </Button>
+          </div>
+        )}
       </Modal>
     </>
   );

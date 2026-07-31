@@ -9,7 +9,7 @@ import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
 import { getLocationPresets, setLocationPresets, normalizePresets } from "./lib/location-presets.ts";
 import { verifyAccessJwt } from "./lib/access.ts";
-import { CATEGORIES, COLORS, ITEM_STATUSES, INQUIRY_STATUSES, readList, getMetaLists } from "./lib/meta.ts";
+import { ITEM_STATUSES, INQUIRY_STATUSES, getMetaLists, getMetaOptions, normalizeMetaOptions } from "./lib/meta.ts";
 import type { SearchFilters } from "./types.ts";
 
 /** 現在有効な地図画像のキーを保持する設定キー。 */
@@ -101,12 +101,13 @@ export function createApp() {
       };
     })
     // 種別・色はスタッフが設定画面から編集できる（現場ごとに扱う物品が違うため）。
-    // 未設定なら既定リストを返す。
+    // 未設定なら既定リストを返す。並び順・グループ見出し・色タグ込みで返す。
     .get("/api/meta", async () => {
       const c = await ctx();
+      const { categories, colors } = await getMetaOptions(c.store);
       return {
-        categories: await readList(c.store, "categories", CATEGORIES),
-        colors: await readList(c.store, "colors", COLORS),
+        categories,
+        colors,
         itemStatuses: ITEM_STATUSES,
         inquiryStatuses: INQUIRY_STATUSES,
       };
@@ -123,9 +124,7 @@ export function createApp() {
         set.status = 400;
         return { error: "values は配列で指定してください" };
       }
-      const values = Array.from(
-        new Set(raw.map((v: any) => String(v).trim()).filter(Boolean)),
-      ).slice(0, 200);
+      const values = normalizeMetaOptions(raw);
       if (values.length === 0) {
         set.status = 400;
         return { error: "1件以上必要です" };

@@ -1,4 +1,4 @@
-import type { Item, Inquiry, Match, Notification, Meta, IdRule, LocationPreset } from "./types";
+import type { Item, Inquiry, Match, Notification, Meta, MetaOption, IdRule, LocationPreset } from "./types";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
@@ -39,8 +39,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ rule }),
     }),
-  updateMeta: (kind: "categories" | "colors", values: string[]) =>
-    req<{ values: string[] }>(`/api/meta/${kind}`, {
+  updateMeta: (kind: "categories" | "colors", values: MetaOption[]) =>
+    req<{ values: MetaOption[] }>(`/api/meta/${kind}`, {
       method: "PUT",
       body: JSON.stringify({ values }),
     }).then((r) => r.values),

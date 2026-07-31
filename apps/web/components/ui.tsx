@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import type { MetaOption } from "../lib/types";
 
 const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(" ");
 
@@ -91,6 +92,52 @@ export function Select({
     <select className={cx("rb-select", className)} {...props}>
       {children}
     </select>
+  );
+}
+
+/** 種別・色などの選択肢を <option> として並べる。group が付いたものは <optgroup> でまとめる
+ * （無所属のものは見出し無しでそのまま先頭に並べる）。color があれば option の背景に軽く反映する。 */
+export function MetaOptionList({ options }: { options: MetaOption[] }) {
+  const ungrouped = options.filter((o) => !o.group);
+  const groups = new Map<string, MetaOption[]>();
+  for (const o of options) {
+    if (!o.group) continue;
+    if (!groups.has(o.group)) groups.set(o.group, []);
+    groups.get(o.group)!.push(o);
+  }
+  const optionEl = (o: MetaOption) => (
+    <option key={o.name} value={o.name} style={o.color ? { backgroundColor: o.color } : undefined}>
+      {o.name}
+    </option>
+  );
+  return (
+    <>
+      {ungrouped.map(optionEl)}
+      {Array.from(groups.entries()).map(([group, opts]) => (
+        <optgroup key={group} label={group}>
+          {opts.map(optionEl)}
+        </optgroup>
+      ))}
+    </>
+  );
+}
+
+/** 色の丸スウォッチ。color 未設定なら何も描かない。 */
+export function ColorSwatch({ color, size = 12 }: { color?: string; size?: number }) {
+  if (!color) return null;
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: "inline-block",
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: color,
+        border: "1px solid var(--border)",
+        flexShrink: 0,
+      }}
+    />
   );
 }
 

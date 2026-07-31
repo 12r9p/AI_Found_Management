@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast, useConfirm } from "./ui";
+import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast, useConfirm, MetaOptionList } from "./ui";
 import { MapPicker, findRegionAt, type Pin } from "./MapPicker";
 import { ImageEditor } from "./ImageEditor";
 import { useMeta } from "./useMeta";
@@ -206,7 +206,7 @@ export function ItemEditModal({
               {(id) => (
                 <Select id={id} value={form.category} onChange={(e) => set("category", e.target.value)}>
                   <option value="">未設定</option>
-                  {meta.categories.map((c) => <option key={c}>{c}</option>)}
+                  <MetaOptionList options={meta.categories} />
                 </Select>
               )}
             </Field>
@@ -214,7 +214,7 @@ export function ItemEditModal({
               {(id) => (
                 <Select id={id} value={form.color} onChange={(e) => set("color", e.target.value)}>
                   <option value="">未設定</option>
-                  {meta.colors.map((c) => <option key={c}>{c}</option>)}
+                  <MetaOptionList options={meta.colors} />
                 </Select>
               )}
             </Field>

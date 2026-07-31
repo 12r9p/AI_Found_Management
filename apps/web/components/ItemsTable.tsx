@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { imageUrl } from "../lib/api";
 import { STATUS_LABEL, type Item, type Meta } from "../lib/types";
-import { Badge, Button } from "./ui";
+import { Badge, Button, ColorSwatch } from "./ui";
 import { ItemPreviewModal } from "./ItemPreviewModal";
 import { ItemEditModal } from "./ItemEditModal";
 
@@ -79,7 +79,14 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
               </td>
               {TEXT_COLS.map((c) => (
                 <td key={c.key} className="rb-small" title={(it[c.key] as string) || undefined}>
-                  {(it[c.key] as string) || "—"}
+                  {c.key === "color" && it.color ? (
+                    <span className="rb-row" style={{ gap: 6 }}>
+                      <ColorSwatch color={meta.colors.find((m) => m.name === it.color)?.color} />
+                      {it.color}
+                    </span>
+                  ) : (
+                    (it[c.key] as string) || "—"
+                  )}
                 </td>
               ))}
               <td>

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "../../../components/AppShell";
-import { Button, Card, Field, Input, Select, Textarea, Badge, useToast, useConfirm } from "../../../components/ui";
+import { Button, Card, Field, Input, Select, Textarea, Badge, useToast, useConfirm, MetaOptionList } from "../../../components/ui";
 import { useMeta } from "../../../components/useMeta";
 import { MapPicker, findRegionAt, type Pin } from "../../../components/MapPicker";
 import { useLocationPresets } from "../../../components/useLocationPresets";
@@ -245,7 +245,7 @@ export default function ItemDetailPage() {
             <Field label="種別">
               {(id) => (
                 <Select id={id} value={form.category} onChange={(e) => set("category", e.target.value)}>
-                  {meta.categories.map((c) => <option key={c}>{c}</option>)}
+                  <MetaOptionList options={meta.categories} />
                 </Select>
               )}
             </Field>
@@ -253,7 +253,7 @@ export default function ItemDetailPage() {
               {(id) => (
                 <Select id={id} value={form.color} onChange={(e) => set("color", e.target.value)}>
                   <option value="">—</option>
-                  {meta.colors.map((c) => <option key={c}>{c}</option>)}
+                  <MetaOptionList options={meta.colors} />
                 </Select>
               )}
             </Field>

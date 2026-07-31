@@ -80,9 +80,16 @@ export interface LocationPreset {
   points: { x: number; y: number }[];
 }
 
+/** 種別・色の選択肢1件。並び順は配列順、グループ分け・色タグは任意。 */
+export interface MetaOption {
+  name: string;
+  group?: string;
+  color?: string;
+}
+
 export interface Meta {
-  categories: string[];
-  colors: string[];
+  categories: MetaOption[];
+  colors: MetaOption[];
   itemStatuses: ItemStatus[];
   inquiryStatuses: InquiryStatus[];
 }

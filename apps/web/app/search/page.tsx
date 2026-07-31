@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { Button, Card, Field, Input, Select, Badge, Modal, Textarea, useToast } from "../../components/ui";
+import { Button, Card, Field, Input, Select, Badge, Modal, Textarea, useToast, MetaOptionList, ColorSwatch } from "../../components/ui";
 import { useMeta } from "../../components/useMeta";
 import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
@@ -133,7 +133,7 @@ export default function SearchPage() {
               {(id) => (
                 <Select id={id} value={filters.category} onChange={(e) => setF("category", e.target.value)}>
                   <option value="">すべて</option>
-                  {meta.categories.map((c) => <option key={c}>{c}</option>)}
+                  <MetaOptionList options={meta.categories} />
                 </Select>
               )}
             </Field>
@@ -141,7 +141,7 @@ export default function SearchPage() {
               {(id) => (
                 <Select id={id} value={filters.color} onChange={(e) => setF("color", e.target.value)}>
                   <option value="">すべて</option>
-                  {meta.colors.map((c) => <option key={c}>{c}</option>)}
+                  <MetaOptionList options={meta.colors} />
                 </Select>
               )}
             </Field>
@@ -241,7 +241,10 @@ export default function SearchPage() {
                       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setLookup(it)}
                     >
                       <div className="rb-between mb-8">
-                        <strong>{[it.color, it.category].filter(Boolean).join(" ") || "物品"}</strong>
+                        <strong className="rb-row" style={{ gap: 6 }}>
+                          <ColorSwatch color={meta.colors.find((c) => c.name === it.color)?.color} />
+                          {[it.color, it.category].filter(Boolean).join(" ") || "物品"}
+                        </strong>
                         {typeof it.score === "number" && it.score != null && (
                           <Badge tone={it.score >= 0.6 ? "success" : "info"}>{(it.score * 100).toFixed(0)}%</Badge>
                         )}

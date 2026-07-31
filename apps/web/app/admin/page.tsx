@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { Button, Card, Select, Field } from "../../components/ui";
+import { Button, Card, Select, Field, MetaOptionList } from "../../components/ui";
 import { useMeta } from "../../components/useMeta";
 import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
@@ -98,7 +98,7 @@ export default function AdminPage() {
                 {(id) => (
                   <Select id={id} value={filters.category} onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}>
                     <option value="">すべて</option>
-                    {meta.categories.map((c) => <option key={c}>{c}</option>)}
+                    <MetaOptionList options={meta.categories} />
                   </Select>
                 )}
               </Field>

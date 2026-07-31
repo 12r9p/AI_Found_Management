@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast, useConfirm } from "../ui";
+import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast, useConfirm, MetaOptionList } from "../ui";
 import { MatchReviewModal } from "../MatchReviewModal";
 import { useMeta } from "../useMeta";
 import { usePersistentState } from "../usePersistentState";
@@ -289,7 +289,7 @@ function InquiryDetailModal({
                 {(id) => (
                   <Select id={id} value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
                     <option value="">未設定</option>
-                    {meta.categories.map((c) => <option key={c}>{c}</option>)}
+                    <MetaOptionList options={meta.categories} />
                   </Select>
                 )}
               </Field>
@@ -297,7 +297,7 @@ function InquiryDetailModal({
                 {(id) => (
                   <Select id={id} value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}>
                     <option value="">未設定</option>
-                    {meta.colors.map((c) => <option key={c}>{c}</option>)}
+                    <MetaOptionList options={meta.colors} />
                   </Select>
                 )}
               </Field>
