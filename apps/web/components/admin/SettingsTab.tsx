@@ -620,7 +620,7 @@ function ListSetting({
               />
             )}
           </Field>
-          <Field label="グループ見出し" hint="任意。ドロップダウンで見出し付きにまとまる">
+          <Field label="グループ見出し">
             {(id) => (
               <>
                 <Input id={id} list={`${kind}-groups`} value={group} onChange={(e) => setGroup(e.target.value)} />
