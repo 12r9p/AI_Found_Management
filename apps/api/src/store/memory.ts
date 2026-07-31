@@ -164,8 +164,15 @@ export class MemoryStore implements Store {
     this.persist();
     return this.inquiries.length < n;
   }
-  async searchInquiries(embedding: number[], limit: number): Promise<ScoredInquiry[]> {
-    const scored = this.inquiries.map((inq) => ({
+  async searchInquiries(
+    embedding: number[],
+    limit: number,
+    filters?: { status?: string[] },
+  ): Promise<ScoredInquiry[]> {
+    const pool = filters?.status?.length
+      ? this.inquiries.filter((i) => filters.status!.includes(i.status))
+      : this.inquiries;
+    const scored = pool.map((inq) => ({
       ...inq,
       score: inq.embedding?.length ? cosineSimilarity(embedding, inq.embedding) : 0,
     }));

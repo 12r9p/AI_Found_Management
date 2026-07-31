@@ -45,7 +45,13 @@ export interface Store {
   listInquiries(status?: string): Promise<Inquiry[]>;
   updateInquiry(id: string, patch: Partial<Inquiry>): Promise<Inquiry | null>;
   deleteInquiry(id: string): Promise<boolean>;
-  searchInquiries(embedding: number[], limit: number): Promise<ScoredInquiry[]>;
+  /** filters.status を渡すと（Vectorizeのメタデータインデックス作成済みなら）その状態の
+   * 問い合わせだけをクエリ時点で絞り込む。未対応環境では黙って全件から絞り込む。 */
+  searchInquiries(
+    embedding: number[],
+    limit: number,
+    filters?: { status?: string[] },
+  ): Promise<ScoredInquiry[]>;
 
   // --- matches ---
   createMatch(m: Omit<Match, "id" | "created_at">): Promise<Match>;

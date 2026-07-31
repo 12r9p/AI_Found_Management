@@ -120,7 +120,9 @@ async function scoreInquiries(
   store: Store,
   item: Item,
 ): Promise<{ inquiry: Inquiry; score: number }[]> {
-  const ranked = await store.searchInquiries(item.embedding, 50);
+  // 対応環境（Vectorizeのメタデータインデックス作成済み）ならクエリ時点で
+  // open/matched のみに絞られる。未対応でも下の個別チェックで正しさは保たれる。
+  const ranked = await store.searchInquiries(item.embedding, 50, { status: ["open", "matched"] });
   if (ranked.length === 0) return [];
   const inquiries = await Promise.all(ranked.map((r) => store.getInquiry(r.id)));
   const out: { inquiry: Inquiry; score: number }[] = [];

@@ -71,7 +71,9 @@ export class D1VectorizeStore implements Store {
       .first();
     if (d.embedding && d.embedding.length) {
       try {
-        await this.vectorizeItems.upsert([{ id, values: d.embedding }]);
+        await this.vectorizeItems.upsert([
+          { id, values: d.embedding, metadata: { category: d.category ?? "", status: d.status ?? "stored" } },
+        ]);
       } catch (e) {
         // Vectorize への反映が失敗した状態でD1側だけ行が残ると、検索に絶対ヒットしない
         // 「幽霊データ」になる（クライアントにはエラーが返るのに実は登録済み、という不整合）。
@@ -112,7 +114,12 @@ export class D1VectorizeStore implements Store {
     }
     if (!row) return null;
     if (patch.embedding && patch.embedding.length) {
-      await this.vectorizeItems.upsert([{ id, values: patch.embedding }]);
+      // metadata は upsert のたびに丸ごと差し替わるため、patch の断片ではなく
+      // 更新後の行全体(row)から現在値を組み立てる(そうしないと今回patchに
+      // 含まれなかった方のフィールドのメタデータが消えてしまう)。
+      await this.vectorizeItems.upsert([
+        { id, values: patch.embedding, metadata: { category: String(row.category ?? ""), status: String(row.status ?? "") } },
+      ]);
     }
     return rowToItem(row);
   }
@@ -129,7 +136,10 @@ export class D1VectorizeStore implements Store {
     // Vectorize のスコアは近似(quantization 由来の誤差があり閾値ぎりぎりの判定がぶれうる)。
     // returnValues で候補ベクトルを取得し、JS 側で厳密なコサイン類似度に置き換える。
     const topK = Math.max(1, Math.min(50, (f.limit ?? 50) * 4));
-    const res = await this.vectorizeItems.query(embedding, { topK, returnValues: true });
+    const metaFilter: Record<string, string> = {};
+    if (f.category) metaFilter.category = f.category;
+    if (f.status) metaFilter.status = f.status;
+    const res = await this.queryItemsWithFallback(embedding, topK, metaFilter);
     if (res.matches.length === 0) return [];
     const scoreById = new Map(
       res.matches.map((m) => [m.id, cosineSimilarity(embedding, Array.from(m.values ?? []))]),
@@ -144,6 +154,27 @@ export class D1VectorizeStore implements Store {
       .map((it) => ({ ...it, score: scoreById.get(it.id) ?? 0 }))
       .sort((a, b) => b.score - a.score);
     return scored.slice(0, f.limit ?? 50);
+  }
+  /**
+   * カテゴリ/状態が指定されていれば Vectorize のメタデータフィルタで先に絞り込む。
+   * 件数が増えると、類似はしているが種別違いの物品（例: スマホケースがスマホ本体の
+   * 検索結果を埋める）が上位K件を占有し、本来ヒットすべき対象が漏れる「プレフィルタ問題」
+   * が起きるため、クエリ時点で絞ることが重要。
+   * ただし絞り込み対象のメタデータフィールドは Cloudflare 側で
+   * `wrangler vectorize create-metadata-index` により事前にインデックス化されている必要があり、
+   * 未作成だと filter 付きクエリ自体がエラーになる。その場合はフィルタ無しクエリにフォールバックし、
+   * 呼び出し元の post-filter（applyItemFilters）に絞り込みを委ねる（結果は出るが上位K件問題は残る）。
+   */
+  private async queryItemsWithFallback(embedding: number[], topK: number, metaFilter: Record<string, string>) {
+    if (Object.keys(metaFilter).length === 0) {
+      return this.vectorizeItems.query(embedding, { topK, returnValues: true });
+    }
+    try {
+      return await this.vectorizeItems.query(embedding, { topK, returnValues: true, filter: metaFilter });
+    } catch (e) {
+      console.warn("[vectorize] items metadata filter failed, falling back to unfiltered query", e);
+      return this.vectorizeItems.query(embedding, { topK, returnValues: true });
+    }
   }
 
   // --- inquiries ---
@@ -175,7 +206,9 @@ export class D1VectorizeStore implements Store {
       .first();
     if (d.embedding && d.embedding.length) {
       try {
-        await this.vectorizeInquiries.upsert([{ id, values: d.embedding }]);
+        await this.vectorizeInquiries.upsert([
+          { id, values: d.embedding, metadata: { category: d.category ?? "", status: d.status ?? "open" } },
+        ]);
       } catch (e) {
         // createItem と同様、ベクトル未反映の幽霊データを残さないようD1側もロールバックする。
         await this.db.prepare(`DELETE FROM inquiries WHERE id=?`).bind(id).run().catch(() => {});
@@ -218,7 +251,9 @@ export class D1VectorizeStore implements Store {
     }
     if (!row) return null;
     if (patch.embedding && patch.embedding.length) {
-      await this.vectorizeInquiries.upsert([{ id, values: patch.embedding }]);
+      await this.vectorizeInquiries.upsert([
+        { id, values: patch.embedding, metadata: { category: String(row.category ?? ""), status: String(row.status ?? "") } },
+      ]);
     }
     return rowToInquiry(row);
   }
@@ -231,9 +266,22 @@ export class D1VectorizeStore implements Store {
     await this.vectorizeInquiries.deleteByIds([id]);
     return true;
   }
-  async searchInquiries(embedding: number[], lim: number): Promise<ScoredInquiry[]> {
+  async searchInquiries(
+    embedding: number[],
+    lim: number,
+    filters?: { status?: string[] },
+  ): Promise<ScoredInquiry[]> {
     const topK = Math.max(1, Math.min(50, lim * 4));
-    const res = await this.vectorizeInquiries.query(embedding, { topK, returnValues: true });
+    const metaFilter = filters?.status?.length ? { status: { $in: filters.status } } : undefined;
+    let res;
+    try {
+      res = metaFilter
+        ? await this.vectorizeInquiries.query(embedding, { topK, returnValues: true, filter: metaFilter })
+        : await this.vectorizeInquiries.query(embedding, { topK, returnValues: true });
+    } catch (e) {
+      console.warn("[vectorize] inquiries metadata filter failed, falling back to unfiltered query", e);
+      res = await this.vectorizeInquiries.query(embedding, { topK, returnValues: true });
+    }
     if (res.matches.length === 0) return [];
     const scoreById = new Map(
       res.matches.map((m) => [m.id, cosineSimilarity(embedding, Array.from(m.values ?? []))]),
