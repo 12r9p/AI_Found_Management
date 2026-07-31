@@ -16,10 +16,17 @@ export interface DescribeResult {
   brand: string;
 }
 
+/** 種別・色は設定で編集できる選択肢の中から選ばせる（表記ゆれ防止）。 */
+export interface DescribeOptions {
+  hint?: string;
+  categories?: string[];
+  colors?: string[];
+}
+
 export interface AIProvider {
   readonly name: string;
   /** 画像（1〜2枚）＋任意メモから特徴文とタグを生成。 */
-  describeImages(images: ImageInput[], hint?: string): Promise<DescribeResult>;
+  describeImages(images: ImageInput[], opts?: DescribeOptions): Promise<DescribeResult>;
   /** テキストを埋め込みベクトルへ。 */
   embed(text: string): Promise<number[]>;
   /** スタッフ補助チャット（RAG 済みコンテキストを与えて回答）。 */
@@ -56,14 +63,24 @@ class OpenAICompatProvider implements AIProvider {
     return res.json();
   }
 
-  async describeImages(images: ImageInput[], hint?: string): Promise<DescribeResult> {
+  async describeImages(images: ImageInput[], opts?: DescribeOptions): Promise<DescribeResult> {
+    // 種別・色は現場ごとにスタッフが設定画面で編集する選択肢に合わせて選ばせる。
+    // これを渡さないとAIが「スマホ」「携帯電話」のように表記ゆれを起こし、
+    // 一覧のカテゴリ絞り込みからその物品が漏れてしまう（一致しないため）。
+    const categoryLine = opts?.categories?.length
+      ? `category は次の選択肢の中から最も近いものを1つだけ選ぶこと（無ければ空文字）: ${opts.categories.join("、")}。`
+      : "";
+    const colorLine = opts?.colors?.length
+      ? `color は次の選択肢の中から最も近いものを1つだけ選ぶこと（無ければ空文字）: ${opts.colors.join("、")}。`
+      : "";
     const sys =
       "あなたは遺失物管理システムの特徴抽出器です。画像から遺失物の客観的特徴のみを抽出します。" +
       "人物・顔・氏名・連絡先など個人を特定しうる情報は一切記述しないこと。" +
       "出力は必ず次のJSON: {\"description\":string,\"tags\":string[],\"category\":string,\"color\":string,\"brand\":string}。" +
-      "description は検索照合用の日本語の特徴文（80〜160字）。tags は色・種別・素材・形状・特徴を短い日本語語で。";
+      "description は検索照合用の日本語の特徴文（80〜160字）。tags は色・種別・素材・形状・特徴を短い日本語語で。" +
+      categoryLine + colorLine;
     const content: any[] = [
-      { type: "text", text: hint ? `補足メモ: ${hint}` : "画像から特徴を抽出してください。" },
+      { type: "text", text: opts?.hint ? `補足メモ: ${opts.hint}` : "画像から特徴を抽出してください。" },
       ...images.map((im) => ({ type: "image_url", image_url: { url: im.url } })),
     ];
     const data = await this.post("/chat/completions", {
@@ -76,7 +93,7 @@ class OpenAICompatProvider implements AIProvider {
       ],
     });
     const raw = data.choices?.[0]?.message?.content ?? "{}";
-    return normalizeDescribe(safeParse(raw));
+    return normalizeDescribe(safeParse(raw), opts);
   }
 
   async embed(text: string): Promise<number[]> {
@@ -104,11 +121,13 @@ class MockProvider implements AIProvider {
   readonly name = "mock";
   constructor(private cfg: Config) {}
 
-  async describeImages(images: ImageInput[], hint?: string): Promise<DescribeResult> {
+  async describeImages(images: ImageInput[], opts?: DescribeOptions): Promise<DescribeResult> {
     // 画像バイト列とヒントからそれっぽいタグを疑似生成（デモ用）。
+    // 設定の選択肢が渡されていれば、本番同様そこから選ぶ（表記ゆれ確認用）。
+    const hint = opts?.hint;
     const seed = (hint ?? "") + images.map((i) => i.url.slice(-64)).join("");
-    const palette = ["黒", "白", "紺", "赤", "茶", "灰", "青", "緑"];
-    const kinds = ["財布", "傘", "スマートフォン", "鍵", "水筒", "眼鏡", "帽子", "イヤホン"];
+    const palette = opts?.colors?.length ? opts.colors : ["黒", "白", "紺", "赤", "茶", "灰", "青", "緑"];
+    const kinds = opts?.categories?.length ? opts.categories : ["財布", "傘", "スマートフォン", "鍵", "水筒", "眼鏡", "帽子", "イヤホン"];
     const materials = ["革", "布", "金属", "プラスチック", "ナイロン"];
     const h = hash(seed);
     // `>>` は符号付きシフトのため h>=2^31 だと負数化し、配列アクセスが undefined になる。
@@ -121,7 +140,7 @@ class MockProvider implements AIProvider {
     const description =
       `${color}色の${category}。素材は${material}とみられる。` +
       `${hint ? `補足: ${hint}。` : ""}目立った装飾や汚れの有無を確認のこと。`;
-    return normalizeDescribe({ description, tags, category, color, brand: "" });
+    return normalizeDescribe({ description, tags, category, color, brand: "" }, opts);
   }
 
   async embed(text: string): Promise<number[]> {
@@ -200,15 +219,23 @@ function safeParse(s: string): any {
   }
 }
 
-function normalizeDescribe(o: any): DescribeResult {
+/** 選択肢と表記ゆれ（前後空白・大文字小文字）だけ違う値を選択肢の表記に合わせる。
+ * プロンプトで選択肢を指定していても、モデルが完全一致しない表記を返すことがあるため。 */
+function snapToList(value: string, list?: string[]): string {
+  if (!value || !list?.length) return value;
+  const hit = list.find((c) => c.trim().toLowerCase() === value.trim().toLowerCase());
+  return hit ?? value;
+}
+
+function normalizeDescribe(o: any, opts?: DescribeOptions): DescribeResult {
   const tags = Array.isArray(o.tags)
     ? o.tags.map((t: any) => String(t).trim()).filter(Boolean).slice(0, 12)
     : [];
   return {
     description: String(o.description ?? "").trim(),
     tags: Array.from(new Set(tags)),
-    category: String(o.category ?? "").trim(),
-    color: String(o.color ?? "").trim(),
+    category: snapToList(String(o.category ?? "").trim(), opts?.categories),
+    color: snapToList(String(o.color ?? "").trim(), opts?.colors),
     brand: String(o.brand ?? "").trim(),
   };
 }

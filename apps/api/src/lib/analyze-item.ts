@@ -3,6 +3,7 @@ import type { Item } from "../types.ts";
 import { itemEmbedText } from "./embed-text.ts";
 import { arrayBufferToDataUrl } from "./img.ts";
 import { matchNewItem } from "./matching.ts";
+import { getMetaLists } from "./meta.ts";
 
 /**
  * 画像のAI解析（種別・色・特徴文・タグ）とベクトル埋め込み・自動照合を
@@ -17,7 +18,8 @@ export async function runBackgroundAnalysis(c: AppContext, item: Item): Promise<
       const obj = await c.images.get(key);
       if (obj) dataUrls.push(arrayBufferToDataUrl(obj.body, obj.contentType));
     }
-    const d = await c.ai.describeImages(dataUrls.map((url) => ({ url })), item.notes);
+    const { categories, colors } = await getMetaLists(c.store);
+    const d = await c.ai.describeImages(dataUrls.map((url) => ({ url })), { hint: item.notes, categories, colors });
     const patch = {
       ai_description: d.description,
       tags: d.tags,

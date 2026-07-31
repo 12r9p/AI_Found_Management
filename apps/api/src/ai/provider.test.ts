@@ -14,7 +14,7 @@ test("describeImages は 'undefined' を出力に混入させない", async () =
   for (let i = 0; i < 200; i++) {
     const url = `data:image/png;base64,seed-${i}-${"x".repeat(i)}`;
     const hint = i % 3 === 0 ? `メモ${i}` : undefined;
-    const d = await provider.describeImages([{ url }], hint);
+    const d = await provider.describeImages([{ url }], { hint });
     expect(d.description).not.toMatch(/undefined/);
     expect(d.category).not.toBe("undefined");
     expect(d.color).not.toBe("undefined");
@@ -26,7 +26,18 @@ test("describeImages は 'undefined' を出力に混入させない", async () =
 
 test("describeImages は同じ入力に対して決定論的", async () => {
   const url = "data:image/png;base64,stable-seed-value";
-  const a = await provider.describeImages([{ url }], "テスト");
-  const b = await provider.describeImages([{ url }], "テスト");
+  const a = await provider.describeImages([{ url }], { hint: "テスト" });
+  const b = await provider.describeImages([{ url }], { hint: "テスト" });
   expect(a).toEqual(b);
+});
+
+test("describeImages は categories/colors を渡すとその中から選ぶ（表記ゆれ防止）", async () => {
+  const categories = ["スマートフォン", "財布"];
+  const colors = ["漆黒", "純白"];
+  for (let i = 0; i < 20; i++) {
+    const url = `data:image/png;base64,list-seed-${i}`;
+    const d = await provider.describeImages([{ url }], { categories, colors });
+    expect(categories).toContain(d.category);
+    expect(colors).toContain(d.color);
+  }
 });

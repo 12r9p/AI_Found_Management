@@ -9,22 +9,11 @@ import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
 import { getLocationPresets, setLocationPresets, normalizePresets } from "./lib/location-presets.ts";
 import { verifyAccessJwt } from "./lib/access.ts";
+import { CATEGORIES, COLORS, ITEM_STATUSES, INQUIRY_STATUSES, readList, getMetaLists } from "./lib/meta.ts";
 import type { SearchFilters } from "./types.ts";
 
 /** 現在有効な地図画像のキーを保持する設定キー。 */
 const ACTIVE_MAP_KEY = "active_map_key";
-
-export const CATEGORIES = [
-  "財布", "かばん", "傘", "スマートフォン", "携帯電話", "鍵", "水筒",
-  "眼鏡", "帽子", "衣類", "イヤホン", "時計", "アクセサリー", "書類",
-  "カード類", "現金", "おもちゃ", "その他",
-];
-export const COLORS = [
-  "黒", "白", "灰", "紺", "青", "水色", "赤", "ピンク", "橙", "黄",
-  "緑", "茶", "ベージュ", "紫", "金", "銀", "透明", "その他",
-];
-export const ITEM_STATUSES = ["stored", "returned", "disposed", "transferred"];
-export const INQUIRY_STATUSES = ["open", "matched", "resolved", "closed"];
 
 function parseFilters(q: Record<string, any>): SearchFilters {
   return {
@@ -41,22 +30,6 @@ function parseFilters(q: Record<string, any>): SearchFilters {
 
 async function ctx(): Promise<AppContext> {
   return buildContext(getEnv());
-}
-
-/** 設定に保存されたリスト（種別・色）を読む。未設定・壊れていれば既定値。 */
-async function readList(
-  store: AppContext["store"],
-  key: string,
-  fallback: string[],
-): Promise<string[]> {
-  const raw = await store.getSetting(key);
-  if (!raw) return fallback;
-  try {
-    const v = JSON.parse(raw);
-    return Array.isArray(v) && v.length ? v.map(String) : fallback;
-  } catch {
-    return fallback;
-  }
 }
 
 export function createApp() {
@@ -259,9 +232,10 @@ export function createApp() {
         const obj = await c.images.get(key);
         if (obj) dataUrls.push(arrayBufferToDataUrl(obj.body, obj.contentType));
       }
+      const { categories, colors } = await getMetaLists(c.store);
       const result = await c.ai.describeImages(
         dataUrls.map((url) => ({ url })),
-        b.hint,
+        { hint: b.hint, categories, colors },
       );
       return result;
     })
