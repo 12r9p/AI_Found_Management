@@ -205,3 +205,4 @@ API の CORS は資格情報付きリクエストを許可済み（同一 Access
 | 認証: アカウントなし + Zero Trust | ログイン機構なし。Web/API 双方を Access で保護＋API 側で JWT 検証（上記） |
 
 デザインの正は [`design.md`](design.md)（＝ `app/globals.css`）。
+
