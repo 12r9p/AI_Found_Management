@@ -386,8 +386,13 @@ export function createApp() {
       const embedding = await safeEmbed(c.ai, filters.q);
       if (!embedding.length) {
         // AI障害時は特徴文検索を諦め、フィルタだけの一覧にフォールバック
-        // （検索自体を丸ごとエラーにしない）。
-        return { items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })) };
+        // （検索自体を丸ごとエラーにしない）。degraded を立てて呼び出し側に
+        // 「ベクトル検索はできていない」ことを伝える（何も伝えないと検索してるのに
+        // スコアが出ず、壊れているようにしか見えない）。
+        return {
+          items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })),
+          degraded: true,
+        };
       }
       const items = await c.store.searchItems(embedding, filters);
       return { items };

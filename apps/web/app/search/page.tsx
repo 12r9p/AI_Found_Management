@@ -21,6 +21,7 @@ export default function SearchPage() {
   const [filters, setFilters] = usePersistentState("search:filters", EMPTY_FILTERS);
   const [items, setItems] = usePersistentState<Item[] | null>("search:results", null);
   const [loading, setLoading] = useState(false);
+  const [degraded, setDegraded] = useState(false);
 
   const [inqOpen, setInqOpen] = useState(false);
   const [inqRef, setInqRef] = useState("");
@@ -34,9 +35,14 @@ export default function SearchPage() {
   const doSearch = async () => {
     setLoading(true);
     try {
-      const res = await api.search({ q: q || undefined, ...filters, limit: 50 });
+      const { items: res, degraded: isDegraded } = await api.search({ q: q || undefined, ...filters, limit: 50 });
       setItems(res);
-      if (res.length === 0) toast("該当なし。特徴を『未解決』として登録できます", "error");
+      setDegraded(!!isDegraded);
+      if (isDegraded) {
+        toast("AI検索が利用できないため、絞り込み条件だけの結果を表示しています", "error");
+      } else if (res.length === 0) {
+        toast("該当なし。特徴を『未解決』として登録できます", "error");
+      }
     } catch (e) {
       toast(`検索失敗: ${(e as Error).message}`, "error");
     } finally {
@@ -178,6 +184,7 @@ export default function SearchPage() {
                     setQ("");
                     setFilters(EMPTY_FILTERS);
                     setItems(null);
+                    setDegraded(false);
                   }}
                 >
                   条件をクリア
@@ -188,6 +195,12 @@ export default function SearchPage() {
         </div>
 
         <div>
+          {degraded && !loading && (
+            <div className="rb-banner rb-banner--warning mb-16">
+              <span>⚠ AI検索が利用できません。絞り込み条件だけの結果です</span>
+            </div>
+          )}
+
           {loading && (
             <div className="rb-busy mb-16" role="status" aria-live="polite">
               <span className="rb-spinner" aria-hidden />

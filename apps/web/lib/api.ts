@@ -59,8 +59,9 @@ export const api = {
   deleteItem: (id: string) => req<{ deleted: boolean }>(`/api/items/${id}`, { method: "DELETE" }),
 
   // search
+  // degraded: true は埋め込み(AI)に失敗し、フィルタのみの結果にフォールバックしたことを示す。
   search: (body: Record<string, unknown>) =>
-    req<{ items: Item[] }>("/api/search", { method: "POST", body: JSON.stringify(body) }).then((r) => r.items),
+    req<{ items: Item[]; degraded?: boolean }>("/api/search", { method: "POST", body: JSON.stringify(body) }),
 
   // 保管中の全物品を未解決の問い合わせと一括で再照合する（管理画面の手動トリガー）
   rematchAll: () => req<{ itemsChecked: number; matchesFound: number }>("/api/rematch", { method: "POST" }),
