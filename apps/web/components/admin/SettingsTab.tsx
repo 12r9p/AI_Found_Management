@@ -401,7 +401,7 @@ function LocationPresetSetting() {
         />
 
         <div className="rb-grid rb-grid--2 mt-16">
-          <Field label="名前" hint="例: 正面ゲート">
+          <Field label="名前">
             {(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}
           </Field>
           <div className="rb-field" style={{ justifyContent: "flex-end" }}>
