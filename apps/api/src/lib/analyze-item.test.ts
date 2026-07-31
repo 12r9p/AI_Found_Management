@@ -36,11 +36,41 @@ test("runBackgroundAnalysis は一時的な失敗をリトライして最終的�
   expect(updated?.category).toBe("財布");
 });
 
-test("runBackgroundAnalysis はリトライを使い切ると ai_status を error にする", async () => {
+test("runBackgroundAnalysis は Vision解析に失敗しても埋め込みだけは作り、検索不能にしない", async () => {
   const store = new MemoryStore();
-  const item = await store.createItem({ status: "stored", image_keys: [], ai_status: "pending" });
+  const item = await store.createItem({
+    status: "stored",
+    image_keys: [],
+    notes: "紺色の折りたたみ傘",
+    ai_status: "pending",
+  });
   const c: AppContext = { cfg: resolveConfig({}), store, ai: flakyProvider(99), images: fakeImages };
   await runBackgroundAnalysis(c, item);
   const updated = await store.getItem(item.id);
   expect(updated?.ai_status).toBe("error");
+  // Vision(describeImages)は失敗し続けるが、embed自体は生きているので
+  // メモ等の人間入力だけで埋め込みが作られ、ベクトル検索の対象になる。
+  expect(updated?.embedding.length).toBeGreaterThan(0);
+});
+
+test("runBackgroundAnalysis は embed まで失敗すると埋め込み無しで ai_status:error にする", async () => {
+  const store = new MemoryStore();
+  const item = await store.createItem({ status: "stored", image_keys: [], ai_status: "pending" });
+  const totallyBrokenAi: AIProvider = {
+    name: "broken",
+    async describeImages(): Promise<DescribeResult> {
+      throw new Error("vision down");
+    },
+    async embed(): Promise<number[]> {
+      throw new Error("embeddings down too");
+    },
+    async chat() {
+      return "";
+    },
+  };
+  const c: AppContext = { cfg: resolveConfig({}), store, ai: totallyBrokenAi, images: fakeImages };
+  await runBackgroundAnalysis(c, item);
+  const updated = await store.getItem(item.id);
+  expect(updated?.ai_status).toBe("error");
+  expect(updated?.embedding.length).toBe(0);
 });

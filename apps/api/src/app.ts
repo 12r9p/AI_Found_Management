@@ -40,6 +40,18 @@ async function ctx(): Promise<AppContext> {
   return buildContext(getEnv());
 }
 
+/** 埋め込み失敗時に呼び出し元の保存処理まで止めないためのラッパー。
+ * AI障害時でも「保存はできるがベクトル検索には載らない」状態に留め、
+ * 「何もできなくなる」のを避ける。 */
+async function safeEmbed(ai: AppContext["ai"], text: string): Promise<number[]> {
+  try {
+    return await ai.embed(text);
+  } catch (e) {
+    console.error("[embed] failed, saving without a vector", e);
+    return [];
+  }
+}
+
 export function createApp() {
   // aot(実行時コード生成)は Cloudflare Workers のサンドボックスで禁止されているため無効化。
   const app = new Elysia({ aot: false })
@@ -293,12 +305,18 @@ export function createApp() {
         return { item, matches: [], topScore: 0 };
       }
 
-      // 画像なし、または呼び出し側が特徴文を渡し済み → 従来通り即時処理
-      const embedding = await c.ai.embed(itemEmbedText(draft));
-      const item = await c.store.createItem({ ...draft, display_id, embedding, ai_status: "ready" });
+      // 画像なし、または呼び出し側が特徴文を渡し済み → 従来通り即時処理。
+      // 埋め込みが失敗しても登録自体は必ず成立させる（AI障害で登録がブロックされないように）。
+      const embedding = await safeEmbed(c.ai, itemEmbedText(draft));
+      const item = await c.store.createItem({
+        ...draft,
+        display_id,
+        embedding,
+        ai_status: embedding.length ? "ready" : "error",
+      });
       item.embedding = embedding; // pg/D1 実装は embedding を返さないため補完
       const outcome =
-        item.status === "stored"
+        item.status === "stored" && embedding.length
           ? await matchNewItem(c.store, item, c.cfg.matchThreshold)
           : { matches: [], topScore: 0 };
       return { item, matches: outcome.matches, topScore: outcome.topScore };
@@ -323,15 +341,26 @@ export function createApp() {
       const patch = { ...(body as any) };
       delete patch.id;
       delete patch.embedding; // 埋め込みは派生値。手編集させない
-      // 特徴に関わる項目が変わったら再埋め込み
+      // 特徴に関わる項目が変わったら再埋め込み。
+      // 埋め込みが失敗しても、他のフィールドの編集（状態変更など）まで巻き込んで
+      // 失敗にしない — 埋め込みだけ古いまま保持し、ai_status で要再解析を示す。
       const touchesFeatures = [
         "category", "color", "brand", "ai_description", "tags", "found_location", "notes",
       ].some((k) => k in patch);
       let embedding: number[] | undefined;
+      let embedFailed = false;
       if (touchesFeatures) {
-        embedding = await c.ai.embed(itemEmbedText({ ...existing, ...patch }));
+        embedding = await safeEmbed(c.ai, itemEmbedText({ ...existing, ...patch }));
+        if (!embedding.length) {
+          embedding = undefined;
+          embedFailed = true;
+        }
       }
-      const updated = await c.store.updateItem(params.id, { ...patch, ...(embedding ? { embedding } : {}) });
+      const updated = await c.store.updateItem(params.id, {
+        ...patch,
+        ...(embedding ? { embedding } : {}),
+        ...(embedFailed ? { ai_status: "error" } : {}),
+      });
       if (updated && embedding) {
         updated.embedding = embedding;
         if (updated.status === "stored") await matchNewItem(c.store, updated, c.cfg.matchThreshold);
@@ -354,7 +383,12 @@ export function createApp() {
         // クエリ無しならフィルタのみの一覧
         return { items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })) };
       }
-      const embedding = await c.ai.embed(filters.q);
+      const embedding = await safeEmbed(c.ai, filters.q);
+      if (!embedding.length) {
+        // AI障害時は特徴文検索を諦め、フィルタだけの一覧にフォールバック
+        // （検索自体を丸ごとエラーにしない）。
+        return { items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })) };
+      }
       const items = await c.store.searchItems(embedding, filters);
       return { items };
     })
@@ -408,10 +442,13 @@ export function createApp() {
         reference_no: b.reference_no ?? "",
         notes: b.notes ?? "",
       };
-      const embedding = await c.ai.embed(inquiryEmbedText(draft));
+      // 埋め込みが失敗しても、問い合わせの記録自体は必ず保存する。
+      const embedding = await safeEmbed(c.ai, inquiryEmbedText(draft));
       const inquiry = await c.store.createInquiry({ ...draft, embedding });
       inquiry.embedding = embedding;
-      const outcome = await matchNewInquiry(c.store, inquiry, c.cfg.matchThreshold);
+      const outcome = embedding.length
+        ? await matchNewInquiry(c.store, inquiry, c.cfg.matchThreshold)
+        : { matches: [], topScore: 0 };
       return { inquiry, matches: outcome.matches, topScore: outcome.topScore };
     })
     .get("/api/inquiries/:id", async ({ params, set }) => {
@@ -436,7 +473,11 @@ export function createApp() {
       delete patch.embedding;
       const touches = ["category", "color", "description", "tags", "notes"].some((k) => k in patch);
       let embedding: number[] | undefined;
-      if (touches) embedding = await c.ai.embed(inquiryEmbedText({ ...existing, ...patch }));
+      if (touches) {
+        // 失敗しても他フィールドの編集は保存する（埋め込みだけ古いまま据え置く）。
+        const e = await safeEmbed(c.ai, inquiryEmbedText({ ...existing, ...patch }));
+        if (e.length) embedding = e;
+      }
       const updated = await c.store.updateInquiry(params.id, {
         ...patch,
         ...(embedding ? { embedding } : {}),

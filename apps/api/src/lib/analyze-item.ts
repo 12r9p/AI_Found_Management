@@ -52,6 +52,21 @@ async function analyzeOnce(c: AppContext, item: Item): Promise<void> {
 }
 
 /**
+ * Vision解析（describeImages）に失敗しても、人間が入力済みの項目（メモ・拾得場所など）
+ * だけで埋め込みを作り、検索・自動照合の対象にする。
+ * embedding が空のまま放置すると、探す画面のベクトル検索に一生ヒットしなくなり、
+ * 「AI解析に失敗した物品は何もできない」状態になってしまうため。
+ * ai_status は "error" のままにして、Vision解析自体は失敗したことが分かるようにする。
+ */
+async function fallbackEmbedOnly(c: AppContext, item: Item): Promise<void> {
+  const embedding = await c.ai.embed(itemEmbedText(item));
+  const updated = await c.store.updateItem(item.id, { embedding, ai_status: "error" });
+  if (updated && updated.status === "stored") {
+    await matchNewItem(c.store, { ...updated, embedding }, c.cfg.matchThreshold);
+  }
+}
+
+/**
  * 画像のAI解析（種別・色・特徴文・タグ）とベクトル埋め込み・自動照合を
  * 登録レスポンスの後ろでバックグラウンド実行する（waitUntil経由）。
  * 現場では手が空くまで待てないため、登録自体はこの完了を待たない。
@@ -62,6 +77,13 @@ export async function runBackgroundAnalysis(c: AppContext, item: Item): Promise<
     await withRetry(() => analyzeOnce(c, item));
   } catch (e) {
     console.error("[background analysis]", e);
-    await c.store.updateItem(item.id, { ai_status: "error" }).catch(() => {});
+    try {
+      // Vision解析（画像→特徴）自体が失敗しても、埋め込み（テキスト→ベクトル）は別のAPI呼び出しで
+      // 独立して動くことが多いため、こちらだけでも成功させて検索不能状態を避ける。
+      await fallbackEmbedOnly(c, item);
+    } catch (e2) {
+      console.error("[background analysis fallback embed]", e2);
+      await c.store.updateItem(item.id, { ai_status: "error" }).catch(() => {});
+    }
   }
 }
