@@ -44,12 +44,13 @@ export function InquiriesTab() {
   const rematchAll = async () => {
     setRematching(true);
     try {
-      const { itemsChecked, matchesFound } = await api.rematchAll();
+      const { itemsChecked, matchesFound, failed } = await api.rematchAll();
+      const failedNote = failed > 0 ? `(${failed}件は失敗)` : "";
       toast(
         matchesFound > 0
-          ? `${itemsChecked}件を再照合し、新たに${matchesFound}件の一致候補が見つかりました`
-          : `${itemsChecked}件を再照合しましたが、新たな一致はありませんでした`,
-        "success",
+          ? `${itemsChecked}件を再照合し、新たに${matchesFound}件の一致候補が見つかりました${failedNote}`
+          : `${itemsChecked}件を再照合しましたが、新たな一致はありませんでした${failedNote}`,
+        failed > 0 && failed === itemsChecked ? "error" : "success",
       );
       load();
     } catch (e) {

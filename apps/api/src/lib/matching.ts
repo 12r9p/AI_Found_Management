@@ -144,6 +144,7 @@ function label(x: Item): string {
 export interface RematchOutcome {
   itemsChecked: number;
   matchesFound: number;
+  failed: number;
 }
 
 /**
@@ -153,6 +154,8 @@ export interface RematchOutcome {
  * （管理画面の「全件再照合」ボタンから呼ばれる）。
  * embedding を都度取り直す（＝Vectorizeのメタデータも同時に更新される）ため、
  * 過去に登録された物品でもプレフィルタ用メタデータの取りこぼしを拾い直せる。
+ * 1件の失敗（AI障害・モデルアクセス不可等）で残り全件を巻き込んで中断しないよう、
+ * 物品ごとに独立してエラーを捕捉し、失敗件数を集計して返す。
  */
 export async function rematchAll(
   store: Store,
@@ -161,12 +164,19 @@ export async function rematchAll(
 ): Promise<RematchOutcome> {
   const items = await store.listItems({ status: "stored", limit: 1000 });
   let matchesFound = 0;
+  let failed = 0;
   for (const item of items) {
-    const embedding = await ai.embed(itemEmbedText(item));
-    const updated = await store.updateItem(item.id, { embedding });
-    if (!updated) continue;
-    const outcome = await matchNewItem(store, { ...updated, embedding }, threshold);
-    matchesFound += outcome.matches.length;
+    try {
+      const embedding = await ai.embed(itemEmbedText(item));
+      const updated = await store.updateItem(item.id, { embedding, ai_status: "ready" });
+      if (!updated) continue;
+      const outcome = await matchNewItem(store, { ...updated, embedding }, threshold);
+      matchesFound += outcome.matches.length;
+    } catch (e) {
+      failed++;
+      console.error("[rematchAll] failed for item", item.id, e);
+      await store.updateItem(item.id, { ai_status: "error" }).catch(() => {});
+    }
   }
-  return { itemsChecked: items.length, matchesFound };
+  return { itemsChecked: items.length, matchesFound, failed };
 }

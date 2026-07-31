@@ -163,3 +163,32 @@ test("rematchAll: 保管中の物品を再埋め込みし、当時見つから�
   expect(outcome2.matchesFound).toBe(0); // 既知の組み合わせなので再通知しない
   void returned;
 });
+
+test("rematchAll: 1件のembed失敗（モデルアクセス不可等）で残り全件を巻き込んで中断しない", async () => {
+  const store = new MemoryStore();
+  const failing: AIProvider = {
+    name: "always-fails",
+    async describeImages() {
+      throw new Error("not used");
+    },
+    async embed() {
+      throw new Error("model_not_found: text-embedding-3-small へのアクセス権がありません");
+    },
+    async chat() {
+      return "";
+    },
+  };
+
+  await store.createItem({ status: "stored", category: "傘", embedding: embed("傘") });
+  await store.createItem({ status: "stored", category: "水筒", embedding: embed("水筒") });
+  await store.createItem({ status: "stored", category: "財布", embedding: embed("財布") });
+
+  const outcome = await rematchAll(store, failing, 0.5);
+  expect(outcome.itemsChecked).toBe(3);
+  expect(outcome.failed).toBe(3); // 3件とも失敗するが、途中で処理が止まらず3件とも試行される
+  expect(outcome.matchesFound).toBe(0);
+
+  // 失敗した物品は ai_status:error になり、成功時に上書きされていた古い状態が残らない
+  const items = await store.listItems({});
+  expect(items.every((it) => it.ai_status === "error")).toBe(true);
+});
