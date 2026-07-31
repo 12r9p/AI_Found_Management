@@ -152,6 +152,9 @@ export function MapPicker({
       >
         <img src={imageUrl(mapKey)} alt="会場地図" className="map-img" draggable={false} />
 
+        {/* 塗りつぶし自体は元の座標系に忠実に描ければよいので SVG のまま（none で歪んでも
+            図形としては正しい）。ただしテキスト・頂点の丸は歪むと文字が横伸びして見えるため、
+            .map-pin と同じ「%指定のHTML要素」に out して実ピクセルで描く。 */}
         {((regions && regions.length > 0) || (previewPoints && previewPoints.length > 0)) && (
           <svg className="map-regions" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
             {regions?.map((r) => (
@@ -161,28 +164,33 @@ export function MapPicker({
                 className={r.name === activeRegionName ? "map-region map-region--active" : "map-region"}
               />
             ))}
-            {regions?.map((r) => {
-              const c = centroid(r.points);
-              return (
-                <text
-                  key={`${r.name}-label`}
-                  x={c.x * 100}
-                  y={c.y * 100}
-                  className="map-region-label"
-                  textAnchor="middle"
-                >
-                  {r.name}
-                </text>
-              );
-            })}
             {previewPoints && previewPoints.length > 0 && (
               <polygon points={toSvgPoints(previewPoints)} className="map-region-preview" />
             )}
-            {previewPoints?.map((p, i) => (
-              <circle key={i} cx={p.x * 100} cy={p.y * 100} r={1.2} className="map-region-vertex" />
-            ))}
           </svg>
         )}
+
+        {regions?.map((r) => {
+          const c = centroid(r.points);
+          return (
+            <span
+              key={`${r.name}-label`}
+              className="map-region-label"
+              style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }}
+              aria-hidden
+            >
+              {r.name}
+            </span>
+          );
+        })}
+        {previewPoints?.map((p, i) => (
+          <span
+            key={i}
+            className="map-region-vertex"
+            style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
+            aria-hidden
+          />
+        ))}
 
         {value && (
           <span
