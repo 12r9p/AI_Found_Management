@@ -15,6 +15,14 @@ import type { SearchFilters } from "./types.ts";
 /** 現在有効な地図画像のキーを保持する設定キー。 */
 const ACTIVE_MAP_KEY = "active_map_key";
 
+/**
+ * アップロード画像1枚あたりの上限（バイト）。
+ * クライアント側で長辺1600px・JPEG品質0.85に正規化してから送っているため
+ * 通常は数百KB〜1MB程度だが、それをバイパスする経路（将来の他クライアント等）
+ * に備え、R2/AI（Vision）へのコスト爆発を防ぐ安全網としてサーバー側にも上限を設ける。
+ */
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+
 function parseFilters(q: Record<string, any>): SearchFilters {
   return {
     q: q.q || undefined,
@@ -158,6 +166,11 @@ export function createApp() {
         set.status = 400;
         return { error: "画像ファイルがありません（multipart/form-data で送信してください）" };
       }
+      const tooLarge = files.find((f) => f.size > MAX_UPLOAD_BYTES);
+      if (tooLarge) {
+        set.status = 413;
+        return { error: `画像は1枚 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです（${tooLarge.name}）` };
+      }
       const keys: string[] = [];
       for (const f of files.slice(0, 2)) {
         const ct = f.type || "image/jpeg";
@@ -214,6 +227,10 @@ export function createApp() {
       if (!file) {
         set.status = 400;
         return { error: "地図画像がありません（multipart/form-data）" };
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        set.status = 413;
+        return { error: `地図画像は ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです` };
       }
       const ct = file.type || "image/png";
       const key = `map_${crypto.randomUUID()}.${extFromContentType(ct)}`;
