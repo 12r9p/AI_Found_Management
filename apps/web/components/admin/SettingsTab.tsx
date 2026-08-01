@@ -1,4 +1,5 @@
 "use client";
+import { Button as BaseButton } from "@base-ui/react/button";
 import { useEffect, useRef, useState } from "react";
 import {
   Badge,
@@ -273,10 +274,10 @@ function MapSetting() {
       </p>
 
       {uploading && (
-        <div className="rb-busy mt-16" role="status" aria-live="polite">
+        <output className="rb-busy mt-16" aria-live="polite">
           <span className="rb-spinner" aria-hidden />
           <span>地図をアップロード中…</span>
-        </div>
+        </output>
       )}
 
       <div className="rb-row mt-16">
@@ -444,23 +445,17 @@ function LocationPresetSetting() {
       >
         <div className="rb-chips mb-16">
           {draft.map((p, i) => (
-            <span
-              key={p.name}
-              className="rb-chip"
-              style={{ cursor: "pointer" }}
-              onClick={() => selectForEdit(i)}
-            >
-              {p.name}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  remove(i);
-                }}
-                aria-label={`${p.name} を削除`}
+            <span key={p.name} className="rb-chip">
+              <BaseButton
+                className="rb-chip__select"
+                onClick={() => selectForEdit(i)}
+                aria-label={`${p.name}を編集`}
               >
+                {p.name}
+              </BaseButton>
+              <BaseButton onClick={() => remove(i)} aria-label={`${p.name} を削除`}>
                 ×
-              </button>
+              </BaseButton>
             </span>
           ))}
           {draft.length === 0 && <span className="rb-tiny muted-text">プリセットがありません</span>}
@@ -672,20 +667,24 @@ function ListSetting({
           {draft.map((o, i) => (
             <div
               key={`${o.name}-${i}`}
-              className="rb-between"
+              className="rb-between rb-option-row"
               style={{
-                cursor: "pointer",
                 padding: "6px 8px",
                 border: "var(--bw-thin, 1px) solid var(--border)",
               }}
-              onClick={() => selectForEdit(i)}
             >
-              <span className="rb-row" style={{ gap: 8 }}>
-                <ColorSwatch color={o.color} />
-                <strong className="rb-small">{o.name}</strong>
-                {o.group && <span className="rb-tiny muted-text">{o.group}</span>}
-              </span>
-              <span className="rb-row" style={{ gap: 4 }} onClick={(e) => e.stopPropagation()}>
+              <BaseButton
+                className="rb-option-select"
+                onClick={() => selectForEdit(i)}
+                aria-label={`${o.name}を編集`}
+              >
+                <span className="rb-row" style={{ gap: 8 }}>
+                  <ColorSwatch color={o.color} />
+                  <strong className="rb-small">{o.name}</strong>
+                  {o.group && <span className="rb-tiny muted-text">{o.group}</span>}
+                </span>
+              </BaseButton>
+              <span className="rb-row" style={{ gap: 4 }}>
                 <Button
                   variant="outline"
                   size="sm"
@@ -747,7 +746,9 @@ function ListSetting({
                 />
                 <datalist id={`${kind}-groups`}>
                   {groupOptions.map((g) => (
-                    <option key={g} value={g} />
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
                   ))}
                 </datalist>
               </>

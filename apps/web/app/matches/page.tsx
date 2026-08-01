@@ -80,10 +80,10 @@ export default function MatchesPage() {
       </Card>
 
       {loading && (
-        <div className="rb-busy" role="status" aria-live="polite">
+        <output className="rb-busy" aria-live="polite">
           <span className="rb-spinner" aria-hidden />
           <span>読み込み中…</span>
-        </div>
+        </output>
       )}
 
       {!loading && matches.length === 0 && (

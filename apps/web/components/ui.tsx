@@ -1,4 +1,6 @@
 "use client";
+import { Button as BaseButton } from "@base-ui/react/button";
+import { Dialog } from "@base-ui/react/dialog";
 import React, {
   createContext,
   useCallback,
@@ -20,13 +22,14 @@ export function Button({
   block,
   className,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+}: Omit<React.ComponentProps<typeof BaseButton>, "className"> & {
   variant?: BtnVariant;
   size?: "sm";
   block?: boolean;
+  className?: string;
 }) {
   return (
-    <button
+    <BaseButton
       className={cx(
         "rb-btn",
         variant !== "default" && `rb-btn--${variant}`,
@@ -197,6 +200,7 @@ export function Modal({
   children,
   footer,
   context,
+  description,
   size,
 }: {
   open: boolean;
@@ -206,53 +210,40 @@ export function Modal({
   footer?: React.ReactNode;
   /** 呼び出し元の画面名。「どこから開いたか」を示して階層を意識させる。 */
   context?: string;
+  /** 支援技術がダイアログの目的を読み上げるための説明。 */
+  description?: string;
   size?: "wide" | "full";
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
-  // onClose は呼び出し側で毎レンダー新しい関数になりがち（インライン定義）。
-  // 依存配列に入れると、モーダル内で入力するたびに呼び出し元が再レンダーされ
-  // このeffectが再実行されてフォーカスを奪い返してしまう（1文字も打てなくなるバグの原因）。
-  // ref 経由で最新の onClose を参照し、effect 自体は open が変わった時だけ走らせる。
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCloseRef.current();
-    window.addEventListener("keydown", onKey);
-    // モーダル表示中は背後をスクロールさせない（元画面が動くと階層が曖昧になる）
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    // 開いた直後にモーダル内へフォーカスを移す
-    requestAnimationFrame(() => bodyRef.current?.focus());
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-  if (!open) return null;
   return (
-    <div className="rb-overlay" onClick={onClose}>
-      <div
-        className={cx("rb-modal", size && `rb-modal--${size}`)}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="rb-modal__head">
-          <span className="rb-modal__title">
-            {context && <span className="rb-modal__ctx">{context} ›</span>}[{title}]
-          </span>
-          <button className="rb-modal__close" onClick={onClose} aria-label="閉じる">
-            ×
-          </button>
-        </div>
-        <div className="rb-modal__body" ref={bodyRef} tabIndex={-1}>
-          {children}
-        </div>
-        {footer && <div className="rb-modal__foot">{footer}</div>}
-      </div>
-    </div>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="rb-overlay" />
+        <Dialog.Viewport className="rb-dialog-viewport">
+          <Dialog.Popup
+            className={cx("rb-modal", size && `rb-modal--${size}`)}
+            initialFocus={bodyRef}
+            finalFocus
+          >
+            <div className="rb-modal__head">
+              <Dialog.Title className="rb-modal__title">
+                {context && <span className="rb-modal__ctx">{context} ›</span>}[{title}]
+              </Dialog.Title>
+              <Dialog.Close className="rb-modal__close" aria-label="閉じる">
+                ×
+              </Dialog.Close>
+            </div>
+            <Dialog.Description className="rb-visually-hidden">
+              {description ?? `${title}の内容を確認し、必要な操作を行います。`}
+            </Dialog.Description>
+            <div className="rb-modal__body" ref={bodyRef} tabIndex={-1}>
+              {children}
+            </div>
+            {footer && <div className="rb-modal__foot">{footer}</div>}
+          </Dialog.Popup>
+        </Dialog.Viewport>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

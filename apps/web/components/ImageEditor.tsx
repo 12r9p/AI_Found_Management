@@ -1,4 +1,5 @@
 "use client";
+import { Button as BaseButton } from "@base-ui/react/button";
 import { useRef, useState } from "react";
 import { Button, useToast } from "./ui";
 import { api, imageUrl } from "../lib/api";
@@ -48,10 +49,10 @@ export function ImageEditor({
   return (
     <div>
       {uploading && (
-        <div className="rb-busy mb-8" role="status" aria-live="polite">
+        <output className="rb-busy mb-8" aria-live="polite">
           <span className="rb-spinner" aria-hidden />
           <span>画像をアップロード中…</span>
-        </div>
+        </output>
       )}
       <div className="rb-grid rb-grid--2">
         {keys.map((k) => (
@@ -70,18 +71,17 @@ export function ImageEditor({
           </div>
         ))}
         {keys.length < max && (
-          <div
+          <BaseButton
             className="dropzone"
             onClick={() => !busy && fileRef.current?.click()}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) =>
-              (e.key === "Enter" || e.key === " ") && !busy && fileRef.current?.click()
-            }
+            disabled={busy}
+            focusableWhenDisabled
           >
             ＋ 写真を追加
-            <div className="rb-tiny muted-text mt-8">あと{max - keys.length}枚</div>
-          </div>
+            <span className="rb-dropzone__hint rb-tiny muted-text mt-8">
+              あと{max - keys.length}枚
+            </span>
+          </BaseButton>
         )}
       </div>
       <input

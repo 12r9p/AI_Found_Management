@@ -1,4 +1,5 @@
 "use client";
+import { Button as BaseButton } from "@base-ui/react/button";
 import { useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import {
@@ -259,10 +260,10 @@ export default function SearchPage() {
           )}
 
           {loading && (
-            <div className="rb-busy mb-16" role="status" aria-live="polite">
+            <output className="rb-busy mb-16" aria-live="polite">
               <span className="rb-spinner" aria-hidden />
               <span>ベクトル検索中…</span>
-            </div>
+            </output>
           )}
 
           {!items && !loading && (
@@ -288,16 +289,14 @@ export default function SearchPage() {
               ) : (
                 <div className="rb-grid rb-grid--auto">
                   {items.map((it) => (
-                    <Card
+                    <BaseButton
                       key={it.id}
-                      variant="interactive"
+                      className="rb-card rb-card--interactive rb-interactive-card"
                       style={{ height: "100%" }}
-                      role="button"
-                      tabIndex={0}
                       onClick={() => setLookup(it)}
-                      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setLookup(it)}
+                      aria-label={`${it.display_id || [it.color, it.category].filter(Boolean).join(" ") || "物品"}の照会を開く`}
                     >
-                      <div className="rb-between mb-8">
+                      <span className="rb-between mb-8">
                         <strong className="rb-row" style={{ gap: 6 }}>
                           <ColorSwatch
                             color={meta.colors.find((c) => c.name === it.color)?.color}
@@ -309,25 +308,30 @@ export default function SearchPage() {
                             {(it.score * 100).toFixed(0)}%
                           </Badge>
                         )}
-                      </div>
+                      </span>
                       {it.display_id && (
-                        <div className="rb-mono rb-tiny muted-text mb-8">{it.display_id}</div>
+                        <span
+                          className="rb-mono rb-tiny muted-text mb-8"
+                          style={{ display: "block" }}
+                        >
+                          {it.display_id}
+                        </span>
                       )}
                       {it.image_keys[0] ? (
                         <img src={imageUrl(it.image_keys[0])} alt="" className="thumb mb-8" />
                       ) : (
-                        <div className="thumb thumb--empty mb-8">画像なし</div>
+                        <span className="thumb thumb--empty mb-8">画像なし</span>
                       )}
-                      <div className="rb-row mb-8" style={{ gap: 6 }}>
+                      <span className="rb-row mb-8" style={{ gap: 6 }}>
                         <Badge>{STATUS_LABEL[it.status]}</Badge>
                         <span className="rb-tiny muted-text">
                           拾得場所: {it.found_location || "—"}
                         </span>
-                      </div>
-                      <p className="rb-small" style={{ margin: 0 }}>
+                      </span>
+                      <span className="rb-small" style={{ display: "block" }}>
                         {it.ai_description.slice(0, 80)}
-                      </p>
-                    </Card>
+                      </span>
+                    </BaseButton>
                   ))}
                 </div>
               )}

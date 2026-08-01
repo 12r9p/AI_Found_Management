@@ -1,4 +1,5 @@
 "use client";
+import { Button as BaseButton } from "@base-ui/react/button";
 import { useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import { Badge, Button, Card, Field, Input, Textarea, useToast } from "../../components/ui";
@@ -163,10 +164,10 @@ export default function RegisterPage() {
         <div className="rb-label mb-8">画像（最大2枚）</div>
 
         {uploading && (
-          <div className="rb-busy mb-16" role="status" aria-live="polite">
+          <output className="rb-busy mb-16" aria-live="polite">
             <span className="rb-spinner" aria-hidden />
             <span>画像を送信中…</span>
-          </div>
+          </output>
         )}
 
         <div className="rb-grid rb-grid--2 mb-16">
@@ -186,18 +187,17 @@ export default function RegisterPage() {
             </div>
           ))}
           {keys.length < 2 && (
-            <div
+            <BaseButton
               className="dropzone"
               onClick={() => !busy && fileRef.current?.click()}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) =>
-                (e.key === "Enter" || e.key === " ") && !busy && fileRef.current?.click()
-              }
+              disabled={busy}
+              focusableWhenDisabled
             >
               ＋ 写真を撮る / 選ぶ
-              <div className="rb-tiny muted-text mt-8">タップしてカメラ起動</div>
-            </div>
+              <span className="rb-dropzone__hint rb-tiny muted-text mt-8">
+                タップしてカメラ起動
+              </span>
+            </BaseButton>
           )}
         </div>
         <input

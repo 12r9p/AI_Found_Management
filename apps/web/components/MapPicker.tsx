@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { Button as BaseButton } from "@base-ui/react/button";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, imageUrl } from "../lib/api";
 import { Button } from "./ui";
 
@@ -83,7 +84,8 @@ export function MapPicker({
 }) {
   const [mapKey, setMapKey] = useState<string>(mapKeyOverride ?? cachedMapKey ?? "");
   const [loading, setLoading] = useState(!mapKeyOverride && cachedMapKey == null);
-  const boxRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLButtonElement>(null);
+  const hintId = useId();
 
   useEffect(() => {
     if (mapKeyOverride) {
@@ -137,89 +139,104 @@ export function MapPicker({
     );
   }
 
+  const mapLayers = (
+    <>
+      <img src={imageUrl(mapKey)} alt="会場地図" className="map-img" draggable={false} />
+
+      {/* 塗りつぶし自体は元の座標系に忠実に描ければよいので SVG のまま（none で歪んでも
+          図形としては正しい）。ただしテキスト・頂点の丸は歪むと文字が横伸びして見えるため、
+          .map-pin と同じ「%指定のHTML要素」に out して実ピクセルで描く。 */}
+      {((regions && regions.length > 0) || (previewPoints && previewPoints.length > 0)) && (
+        <svg className="map-regions" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+          {regions?.map((r) => (
+            <polygon
+              key={r.name}
+              points={toSvgPoints(r.points)}
+              className={
+                r.name === activeRegionName ? "map-region map-region--active" : "map-region"
+              }
+            />
+          ))}
+          {previewPoints && previewPoints.length > 0 && (
+            <polygon points={toSvgPoints(previewPoints)} className="map-region-preview" />
+          )}
+        </svg>
+      )}
+
+      {regions?.map((r) => {
+        const c = centroid(r.points);
+        return (
+          <span
+            key={`${r.name}-label`}
+            className="map-region-label"
+            style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }}
+            aria-hidden
+          >
+            {r.name}
+          </span>
+        );
+      })}
+      {previewPoints?.map((p, i) => (
+        <span
+          key={i}
+          className="map-region-vertex"
+          style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
+          aria-hidden
+        />
+      ))}
+
+      {value && (
+        <span
+          className="map-pin"
+          style={{ left: `${value.x * 100}%`, top: `${value.y * 100}%` }}
+          aria-label={`拾得場所ピン (${(value.x * 100).toFixed(0)}%, ${(value.y * 100).toFixed(0)}%)`}
+        />
+      )}
+    </>
+  );
+
   return (
     <div>
-      <div
-        ref={boxRef}
-        className="map-box"
-        onClick={(e) => place(e.clientX, e.clientY)}
-        role={readOnly ? undefined : "button"}
-        tabIndex={readOnly ? undefined : 0}
-        aria-label={readOnly ? "拾得場所の地図" : "地図をタップして拾得場所を指定"}
-        onKeyDown={(e) => {
-          if (readOnly || !onChange || !value) return;
-          const step = e.shiftKey ? 0.05 : 0.01;
-          const moves: Record<string, Pin> = {
-            ArrowUp: { x: value.x, y: Math.max(0, value.y - step) },
-            ArrowDown: { x: value.x, y: Math.min(1, value.y + step) },
-            ArrowLeft: { x: Math.max(0, value.x - step), y: value.y },
-            ArrowRight: { x: Math.min(1, value.x + step), y: value.y },
-          };
-          if (moves[e.key]) {
-            e.preventDefault();
-            onChange(moves[e.key]);
-          }
-        }}
-      >
-        <img src={imageUrl(mapKey)} alt="会場地図" className="map-img" draggable={false} />
-
-        {/* 塗りつぶし自体は元の座標系に忠実に描ければよいので SVG のまま（none で歪んでも
-            図形としては正しい）。ただしテキスト・頂点の丸は歪むと文字が横伸びして見えるため、
-            .map-pin と同じ「%指定のHTML要素」に out して実ピクセルで描く。 */}
-        {((regions && regions.length > 0) || (previewPoints && previewPoints.length > 0)) && (
-          <svg className="map-regions" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-            {regions?.map((r) => (
-              <polygon
-                key={r.name}
-                points={toSvgPoints(r.points)}
-                className={
-                  r.name === activeRegionName ? "map-region map-region--active" : "map-region"
-                }
-              />
-            ))}
-            {previewPoints && previewPoints.length > 0 && (
-              <polygon points={toSvgPoints(previewPoints)} className="map-region-preview" />
-            )}
-          </svg>
-        )}
-
-        {regions?.map((r) => {
-          const c = centroid(r.points);
-          return (
-            <span
-              key={`${r.name}-label`}
-              className="map-region-label"
-              style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }}
-              aria-hidden
-            >
-              {r.name}
-            </span>
-          );
-        })}
-        {previewPoints?.map((p, i) => (
-          <span
-            key={i}
-            className="map-region-vertex"
-            style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
-            aria-hidden
-          />
-        ))}
-
-        {value && (
-          <span
-            className="map-pin"
-            style={{ left: `${value.x * 100}%`, top: `${value.y * 100}%` }}
-            aria-label={`拾得場所ピン (${(value.x * 100).toFixed(0)}%, ${(value.y * 100).toFixed(0)}%)`}
-          />
-        )}
-      </div>
+      {readOnly || !onChange ? (
+        <div className="map-box">{mapLayers}</div>
+      ) : (
+        <BaseButton
+          ref={boxRef}
+          className="map-box"
+          aria-label="地図をタップして拾得場所を指定。キーボードではEnterまたはSpaceで中央を選び、矢印キーで調整"
+          aria-describedby={hintId}
+          onClick={(e) => {
+            if (e.detail === 0) {
+              if (!value) onChange({ x: 0.5, y: 0.5 });
+              return;
+            }
+            place(e.clientX, e.clientY);
+          }}
+          onKeyDown={(e) => {
+            if (!value) return;
+            const step = e.shiftKey ? 0.05 : 0.01;
+            const moves: Record<string, Pin> = {
+              ArrowUp: { x: value.x, y: Math.max(0, value.y - step) },
+              ArrowDown: { x: value.x, y: Math.min(1, value.y + step) },
+              ArrowLeft: { x: Math.max(0, value.x - step), y: value.y },
+              ArrowRight: { x: Math.min(1, value.x + step), y: value.y },
+            };
+            if (moves[e.key]) {
+              e.preventDefault();
+              onChange(moves[e.key]);
+            }
+          }}
+        >
+          {mapLayers}
+        </BaseButton>
+      )}
       {!readOnly && (
         <div className="rb-row mt-8">
-          <span className="rb-hint">
+          <output id={hintId} className="rb-hint" aria-live="polite">
             {value
               ? `ピン位置: ${(value.x * 100).toFixed(0)}% , ${(value.y * 100).toFixed(0)}%（矢印キーで微調整）`
               : ""}
-          </span>
+          </output>
           {value && onChange && (
             <Button variant="outline" size="sm" onClick={() => onChange(null)}>
               ピンを消す

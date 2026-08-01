@@ -1,4 +1,5 @@
 "use client";
+import { Button as BaseButton } from "@base-ui/react/button";
 import { useCallback, useEffect, useState } from "react";
 import {
   Badge,
@@ -109,10 +110,10 @@ export function InquiriesTab() {
       </Card>
 
       {loading && (
-        <div className="rb-busy" role="status" aria-live="polite">
+        <output className="rb-busy" aria-live="polite">
           <span className="rb-spinner" aria-hidden />
           <span>読み込み中…</span>
-        </div>
+        </output>
       )}
 
       {!loading && inquiries.length === 0 && (
@@ -149,7 +150,7 @@ export function InquiriesTab() {
                   {cands.length === 0 && <span className="rb-thumb-sm rb-thumb-sm--empty">—</span>}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="rb-between mb-8">
+                  <span className="rb-between mb-8">
                     <strong>
                       受付No: {inq.reference_no || "—"}
                       <span className="muted-text">　/　</span>
@@ -169,7 +170,7 @@ export function InquiriesTab() {
                         {STATUS_LABEL[inq.status]}
                       </Badge>
                     </span>
-                  </div>
+                  </span>
                   <div className="rb-small muted-text">{inq.description.slice(0, 100) || "—"}</div>
                   <div className="rb-tiny muted-text mt-8">
                     受付: {new Date(inq.created_at).toLocaleString("ja-JP")}
@@ -410,31 +411,27 @@ function InquiryDetailModal({
             {cands.map((m) => {
               const pct = Math.round(m.score * 100);
               return (
-                <Card
+                <BaseButton
                   key={m.id}
-                  variant="interactive"
+                  className="rb-card rb-card--interactive rb-interactive-card"
                   onClick={() => setReviewing({ ...m, inquiry })}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) =>
-                    (e.key === "Enter" || e.key === " ") && setReviewing({ ...m, inquiry })
-                  }
+                  aria-label={`${[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}の照合候補を確認`}
                 >
-                  <div className="rb-between mb-8">
+                  <span className="rb-between mb-8">
                     <strong className="rb-small">
                       {[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}
                     </strong>
                     <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
-                  </div>
+                  </span>
                   {m.item?.image_keys?.[0] ? (
                     <img src={imageUrl(m.item.image_keys[0])} alt="" className="thumb mb-8" />
                   ) : (
-                    <div className="thumb thumb--empty mb-8">画像なし</div>
+                    <span className="thumb thumb--empty mb-8">画像なし</span>
                   )}
-                  <div className="rb-tiny muted-text">
+                  <span className="rb-tiny muted-text" style={{ display: "block" }}>
                     拾得場所: {m.item?.found_location || "—"} / {STATUS_LABEL[m.status]}
-                  </div>
-                </Card>
+                  </span>
+                </BaseButton>
               );
             })}
           </div>
