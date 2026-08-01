@@ -23,7 +23,9 @@ export default function AdminPage() {
   const presets = useLocationPresets();
   const [tab, setTab] = usePersistentState<Tab>("admin:tab", "items");
   const [filters, setFilters] = usePersistentState("admin:filters", {
-    category: "", status: "", location: "",
+    category: "",
+    status: "",
+    location: "",
   });
   const [items, setItems] = useState<Item[]>([]);
 
@@ -32,10 +34,15 @@ export default function AdminPage() {
     if (filters.category) q.category = filters.category;
     if (filters.status) q.status = filters.status;
     if (filters.location) q.location = filters.location;
-    api.listItems(q).then(setItems).catch(() => {});
+    api
+      .listItems(q)
+      .then(setItems)
+      .catch(() => {});
   }, [filters]);
 
-  useEffect(() => { loadItems(); }, [loadItems]);
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
 
   // 画像AI解析は登録後にバックグラウンドで進むため、解析待ちの行がある間だけ
   // 自動で再読込して進捗が見えるようにする（無くなれば止める）。
@@ -82,7 +89,10 @@ export default function AdminPage() {
               key={t.id}
               href={`#${t.id}`}
               className={tab === t.id ? "active" : ""}
-              onClick={(e) => { e.preventDefault(); selectTab(t.id); }}
+              onClick={(e) => {
+                e.preventDefault();
+                selectTab(t.id);
+              }}
             >
               {t.label}
             </a>
@@ -96,7 +106,11 @@ export default function AdminPage() {
             <div className="rb-grid rb-grid--3">
               <Field label="種別で絞込">
                 {(id) => (
-                  <Select id={id} value={filters.category} onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}>
+                  <Select
+                    id={id}
+                    value={filters.category}
+                    onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
+                  >
                     <option value="">すべて</option>
                     <MetaOptionList options={meta.categories} />
                   </Select>
@@ -104,25 +118,43 @@ export default function AdminPage() {
               </Field>
               <Field label="状態で絞込">
                 {(id) => (
-                  <Select id={id} value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+                  <Select
+                    id={id}
+                    value={filters.status}
+                    onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+                  >
                     <option value="">すべて</option>
-                    {meta.itemStatuses.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                    {meta.itemStatuses.map((s) => (
+                      <option key={s} value={s}>
+                        {STATUS_LABEL[s]}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>
               <Field label="拾得場所">
                 {(id) => (
-                  <Select id={id} value={filters.location} onChange={(e) => setFilters((f) => ({ ...f, location: e.target.value }))}>
+                  <Select
+                    id={id}
+                    value={filters.location}
+                    onChange={(e) => setFilters((f) => ({ ...f, location: e.target.value }))}
+                  >
                     <option value="">すべて</option>
-                    {presets.map((p) => <option key={p.name}>{p.name}</option>)}
+                    {presets.map((p) => (
+                      <option key={p.name}>{p.name}</option>
+                    ))}
                   </Select>
                 )}
               </Field>
             </div>
             <div className="rb-row">
-              <Button variant="outline" onClick={loadItems}>再読込</Button>
+              <Button variant="outline" onClick={loadItems}>
+                再読込
+              </Button>
               <Button onClick={printPdf}>PDF出力</Button>
-              <a className="rb-btn rb-btn--outline" href={csvHref} target="_blank" rel="noreferrer">CSV出力</a>
+              <a className="rb-btn rb-btn--outline" href={csvHref} target="_blank" rel="noreferrer">
+                CSV出力
+              </a>
               <span className="rb-tiny muted-text">{items.length}件</span>
             </div>
           </Card>

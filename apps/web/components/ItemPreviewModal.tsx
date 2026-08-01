@@ -31,7 +31,9 @@ export function ItemPreviewModal({
       onClose={onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>閉じる</Button>
+          <Button variant="outline" onClick={onClose}>
+            閉じる
+          </Button>
           <Button onClick={() => onEdit(item)}>編集する →</Button>
         </>
       }
@@ -80,14 +82,18 @@ export function ItemPreviewModal({
           </Card>
 
           <div className="rb-label mt-16 mb-8">AI特徴文</div>
-          <p className="rb-small" style={{ margin: 0 }}>{item.ai_description || "—"}</p>
+          <p className="rb-small" style={{ margin: 0 }}>
+            {item.ai_description || "—"}
+          </p>
 
           {item.tags.length > 0 && (
             <>
               <div className="rb-label mt-16 mb-8">タグ</div>
               <div className="rb-chips">
                 {item.tags.map((t) => (
-                  <span key={t} className="rb-chip">{t}</span>
+                  <span key={t} className="rb-chip">
+                    {t}
+                  </span>
                 ))}
               </div>
             </>
@@ -96,7 +102,9 @@ export function ItemPreviewModal({
           {item.notes && (
             <>
               <div className="rb-label mt-16 mb-8">メモ</div>
-              <p className="rb-small" style={{ margin: 0 }}>{item.notes}</p>
+              <p className="rb-small" style={{ margin: 0 }}>
+                {item.notes}
+              </p>
             </>
           )}
 

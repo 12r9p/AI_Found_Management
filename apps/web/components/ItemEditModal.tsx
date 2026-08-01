@@ -1,6 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast, useConfirm, MetaOptionList } from "./ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Modal,
+  Select,
+  Textarea,
+  useToast,
+  useConfirm,
+  MetaOptionList,
+} from "./ui";
 import { MapPicker, findRegionAt, type Pin } from "./MapPicker";
 import { ImageEditor } from "./ImageEditor";
 import { useMeta } from "./useMeta";
@@ -43,9 +55,7 @@ export function ItemEditModal({
     setForm({ ...item, tagsText: item.tags.join("、") });
     setImageKeys(item.image_keys);
     setPin(
-      item.found_x != null && item.found_y != null
-        ? { x: item.found_x, y: item.found_y }
-        : null,
+      item.found_x != null && item.found_y != null ? { x: item.found_x, y: item.found_y } : null,
     );
   }, [item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,7 +104,10 @@ export function ItemEditModal({
         found_y: pin?.y ?? null,
         image_keys: imageKeys,
         ai_description: form.ai_description,
-        tags: (form.tagsText ?? "").split(/[、,]/).map((t) => t.trim()).filter(Boolean),
+        tags: (form.tagsText ?? "")
+          .split(/[、,]/)
+          .map((t) => t.trim())
+          .filter(Boolean),
         notes: form.notes,
       });
       toast("保存しました", "success");
@@ -140,8 +153,12 @@ export function ItemEditModal({
           <Button variant="destructive" onClick={del} disabled={saving || deleting}>
             {deleting ? "削除中…" : "削除"}
           </Button>
-          <Button variant="outline" onClick={onClose} disabled={saving || deleting}>キャンセル</Button>
-          <Button onClick={save} disabled={saving || deleting}>{saving ? "保存中…" : "保存"}</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving || deleting}>
+            キャンセル
+          </Button>
+          <Button onClick={save} disabled={saving || deleting}>
+            {saving ? "保存中…" : "保存"}
+          </Button>
         </>
       }
     >
@@ -172,7 +189,9 @@ export function ItemEditModal({
           </Button>
 
           <div className="rb-between mb-8">
-            <div className="rb-label" style={{ margin: 0 }}>拾得場所（エリアをタップ）</div>
+            <div className="rb-label" style={{ margin: 0 }}>
+              拾得場所（エリアをタップ）
+            </div>
             {form.found_location && <Badge tone="success">{form.found_location}</Badge>}
           </div>
           <MapPicker
@@ -181,7 +200,7 @@ export function ItemEditModal({
             activeRegionName={form.found_location || undefined}
             onChange={(p) => {
               setPin(p);
-              set("found_location", p ? findRegionAt(presets, p)?.name ?? "" : "");
+              set("found_location", p ? (findRegionAt(presets, p)?.name ?? "") : "");
             }}
           />
         </div>
@@ -190,21 +209,31 @@ export function ItemEditModal({
           <div className="rb-grid rb-grid--2">
             <Field label="管理番号">
               {(id) => (
-                <Input id={id} value={form.display_id ?? ""} onChange={(e) => set("display_id", e.target.value)} />
+                <Input
+                  id={id}
+                  value={form.display_id ?? ""}
+                  onChange={(e) => set("display_id", e.target.value)}
+                />
               )}
             </Field>
             <Field label="状態">
               {(id) => (
                 <Select id={id} value={form.status} onChange={(e) => set("status", e.target.value)}>
                   {meta.itemStatuses.map((s) => (
-                    <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                    <option key={s} value={s}>
+                      {STATUS_LABEL[s]}
+                    </option>
                   ))}
                 </Select>
               )}
             </Field>
             <Field label="種別">
               {(id) => (
-                <Select id={id} value={form.category} onChange={(e) => set("category", e.target.value)}>
+                <Select
+                  id={id}
+                  value={form.category}
+                  onChange={(e) => set("category", e.target.value)}
+                >
                   <option value="">未設定</option>
                   <MetaOptionList options={meta.categories} />
                 </Select>
@@ -219,7 +248,13 @@ export function ItemEditModal({
               )}
             </Field>
             <Field label="ブランド/型番">
-              {(id) => <Input id={id} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />}
+              {(id) => (
+                <Input
+                  id={id}
+                  value={form.brand ?? ""}
+                  onChange={(e) => set("brand", e.target.value)}
+                />
+              )}
             </Field>
             <Field label="拾得日時">
               {(id) => (
@@ -227,21 +262,39 @@ export function ItemEditModal({
                   id={id}
                   type="datetime-local"
                   value={dt}
-                  onChange={(e) => set("found_at", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                  onChange={(e) =>
+                    set("found_at", e.target.value ? new Date(e.target.value).toISOString() : null)
+                  }
                 />
               )}
             </Field>
           </div>
           <Field label="AI特徴文">
             {(id) => (
-              <Textarea id={id} value={form.ai_description ?? ""} onChange={(e) => set("ai_description", e.target.value)} />
+              <Textarea
+                id={id}
+                value={form.ai_description ?? ""}
+                onChange={(e) => set("ai_description", e.target.value)}
+              />
             )}
           </Field>
           <Field label="タグ" hint="読点/カンマ区切り。保存時に再ベクトル化されます">
-            {(id) => <Input id={id} value={form.tagsText ?? ""} onChange={(e) => set("tagsText", e.target.value)} />}
+            {(id) => (
+              <Input
+                id={id}
+                value={form.tagsText ?? ""}
+                onChange={(e) => set("tagsText", e.target.value)}
+              />
+            )}
           </Field>
           <Field label="メモ" hint="個人情報は入力しないでください">
-            {(id) => <Textarea id={id} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />}
+            {(id) => (
+              <Textarea
+                id={id}
+                value={form.notes ?? ""}
+                onChange={(e) => set("notes", e.target.value)}
+              />
+            )}
           </Field>
         </div>
       </div>

@@ -105,7 +105,9 @@ export function MatchReviewModal({
             <p className="rb-tiny muted-text">画像なし</p>
           )}
           <div className="rb-small">
-            <strong>{[item?.color, item?.brand, item?.category].filter(Boolean).join(" ") || "—"}</strong>
+            <strong>
+              {[item?.color, item?.brand, item?.category].filter(Boolean).join(" ") || "—"}
+            </strong>
             <br />
             拾得場所: {item?.found_location || "—"}
             <br />
@@ -131,7 +133,9 @@ export function MatchReviewModal({
 
         {/* 問い合わせ（紙台帳の受付番号のみ） */}
         <Card variant="bordered">
-          <div className="rb-eyebrow mb-8">問い合わせ（受付No: {inquiry?.reference_no || "—"}）</div>
+          <div className="rb-eyebrow mb-8">
+            問い合わせ（受付No: {inquiry?.reference_no || "—"}）
+          </div>
           <div className="rb-small">
             <strong>{[inquiry?.color, inquiry?.category].filter(Boolean).join(" ") || "—"}</strong>
             <br />
@@ -140,11 +144,15 @@ export function MatchReviewModal({
             状態: {inquiry ? STATUS_LABEL[inquiry.status] : "—"}
           </div>
           <div className="rb-label mt-16 mb-8">聞き取り内容</div>
-          <p className="rb-small" style={{ margin: 0 }}>{inquiry?.description || "—"}</p>
+          <p className="rb-small" style={{ margin: 0 }}>
+            {inquiry?.description || "—"}
+          </p>
           {inquiry?.notes && (
             <>
               <div className="rb-label mt-16 mb-8">メモ</div>
-              <p className="rb-small" style={{ margin: 0 }}>{inquiry.notes}</p>
+              <p className="rb-small" style={{ margin: 0 }}>
+                {inquiry.notes}
+              </p>
             </>
           )}
           <p className="rb-tiny muted-text mt-16" style={{ marginBottom: 0 }}>

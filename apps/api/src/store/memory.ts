@@ -201,9 +201,7 @@ export class MemoryStore implements Store {
     return m;
   }
   async findMatch(itemId: string, inquiryId: string): Promise<Match | null> {
-    return (
-      this.matches.find((m) => m.item_id === itemId && m.inquiry_id === inquiryId) ?? null
-    );
+    return this.matches.find((m) => m.item_id === itemId && m.inquiry_id === inquiryId) ?? null;
   }
   async createMatchesBulk(entries: MatchBulkEntry[]): Promise<Match[]> {
     // 単一プロセスなのでラウンドトリップの問題はないが、D1実装とインターフェースを揃える。
@@ -212,7 +210,9 @@ export class MemoryStore implements Store {
       const m = await this.createMatch(e.match);
       out.push(m);
       if (e.inquiryStatusUpdate) {
-        await this.updateInquiry(e.inquiryStatusUpdate.id, { status: e.inquiryStatusUpdate.status });
+        await this.updateInquiry(e.inquiryStatusUpdate.id, {
+          status: e.inquiryStatusUpdate.status,
+        });
       }
       await this.createNotification({ ...e.notification, ref_match_id: m.id });
     }

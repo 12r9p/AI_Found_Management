@@ -72,23 +72,28 @@ export class D1VectorizeStore implements Store {
     if (d.embedding && d.embedding.length) {
       try {
         await this.vectorizeItems.upsert([
-          { id, values: d.embedding, metadata: { category: d.category ?? "", status: d.status ?? "stored" } },
+          {
+            id,
+            values: d.embedding,
+            metadata: { category: d.category ?? "", status: d.status ?? "stored" },
+          },
         ]);
       } catch (e) {
         // Vectorize への反映が失敗した状態でD1側だけ行が残ると、検索に絶対ヒットしない
         // 「幽霊データ」になる（クライアントにはエラーが返るのに実は登録済み、という不整合）。
         // 呼び出し元には作成失敗として伝え、D1側も削除して整合を保つ。
-        await this.db.prepare(`DELETE FROM items WHERE id=?`).bind(id).run().catch(() => {});
+        await this.db
+          .prepare(`DELETE FROM items WHERE id=?`)
+          .bind(id)
+          .run()
+          .catch(() => {});
         throw e;
       }
     }
     return rowToItem(row);
   }
   async getItem(id: string): Promise<Item | null> {
-    const row = await this.db
-      .prepare(`SELECT ${ITEM_COLS} FROM items WHERE id=?`)
-      .bind(id)
-      .first();
+    const row = await this.db.prepare(`SELECT ${ITEM_COLS} FROM items WHERE id=?`).bind(id).first();
     return row ? rowToItem(row) : null;
   }
   async listItems(f: SearchFilters): Promise<Item[]> {
@@ -106,9 +111,7 @@ export class D1VectorizeStore implements Store {
       row = await this.db.prepare(`SELECT ${ITEM_COLS} FROM items WHERE id=?`).bind(id).first();
     } else {
       row = await this.db
-        .prepare(
-          `UPDATE items SET ${set}, updated_at=? WHERE id=? RETURNING ${ITEM_COLS}`,
-        )
+        .prepare(`UPDATE items SET ${set}, updated_at=? WHERE id=? RETURNING ${ITEM_COLS}`)
         .bind(...params, nowIso(), id)
         .first();
     }
@@ -118,16 +121,17 @@ export class D1VectorizeStore implements Store {
       // 更新後の行全体(row)から現在値を組み立てる(そうしないと今回patchに
       // 含まれなかった方のフィールドのメタデータが消えてしまう)。
       await this.vectorizeItems.upsert([
-        { id, values: patch.embedding, metadata: { category: String(row.category ?? ""), status: String(row.status ?? "") } },
+        {
+          id,
+          values: patch.embedding,
+          metadata: { category: String(row.category ?? ""), status: String(row.status ?? "") },
+        },
       ]);
     }
     return rowToItem(row);
   }
   async deleteItem(id: string): Promise<boolean> {
-    const row = await this.db
-      .prepare(`DELETE FROM items WHERE id=? RETURNING id`)
-      .bind(id)
-      .first();
+    const row = await this.db.prepare(`DELETE FROM items WHERE id=? RETURNING id`).bind(id).first();
     if (!row) return false;
     await this.vectorizeItems.deleteByIds([id]);
     return true;
@@ -165,12 +169,20 @@ export class D1VectorizeStore implements Store {
    * 未作成だと filter 付きクエリ自体がエラーになる。その場合はフィルタ無しクエリにフォールバックし、
    * 呼び出し元の post-filter（applyItemFilters）に絞り込みを委ねる（結果は出るが上位K件問題は残る）。
    */
-  private async queryItemsWithFallback(embedding: number[], topK: number, metaFilter: Record<string, string>) {
+  private async queryItemsWithFallback(
+    embedding: number[],
+    topK: number,
+    metaFilter: Record<string, string>,
+  ) {
     if (Object.keys(metaFilter).length === 0) {
       return this.vectorizeItems.query(embedding, { topK, returnValues: true });
     }
     try {
-      return await this.vectorizeItems.query(embedding, { topK, returnValues: true, filter: metaFilter });
+      return await this.vectorizeItems.query(embedding, {
+        topK,
+        returnValues: true,
+        filter: metaFilter,
+      });
     } catch (e) {
       console.warn("[vectorize] items metadata filter failed, falling back to unfiltered query", e);
       return this.vectorizeItems.query(embedding, { topK, returnValues: true });
@@ -207,11 +219,19 @@ export class D1VectorizeStore implements Store {
     if (d.embedding && d.embedding.length) {
       try {
         await this.vectorizeInquiries.upsert([
-          { id, values: d.embedding, metadata: { category: d.category ?? "", status: d.status ?? "open" } },
+          {
+            id,
+            values: d.embedding,
+            metadata: { category: d.category ?? "", status: d.status ?? "open" },
+          },
         ]);
       } catch (e) {
         // createItem と同様、ベクトル未反映の幽霊データを残さないようD1側もロールバックする。
-        await this.db.prepare(`DELETE FROM inquiries WHERE id=?`).bind(id).run().catch(() => {});
+        await this.db
+          .prepare(`DELETE FROM inquiries WHERE id=?`)
+          .bind(id)
+          .run()
+          .catch(() => {});
         throw e;
       }
     }
@@ -230,19 +250,14 @@ export class D1VectorizeStore implements Store {
           .prepare(`SELECT ${INQ_COLS} FROM inquiries WHERE status=? ORDER BY created_at DESC`)
           .bind(status)
           .all()
-      : await this.db
-          .prepare(`SELECT ${INQ_COLS} FROM inquiries ORDER BY created_at DESC`)
-          .all();
+      : await this.db.prepare(`SELECT ${INQ_COLS} FROM inquiries ORDER BY created_at DESC`).all();
     return (results as any[]).map(rowToInquiry);
   }
   async updateInquiry(id: string, patch: Partial<Inquiry>): Promise<Inquiry | null> {
     const { set, params } = buildSet(patch, INQ_FIELDS);
     let row: any;
     if (!set) {
-      row = await this.db
-        .prepare(`SELECT ${INQ_COLS} FROM inquiries WHERE id=?`)
-        .bind(id)
-        .first();
+      row = await this.db.prepare(`SELECT ${INQ_COLS} FROM inquiries WHERE id=?`).bind(id).first();
     } else {
       row = await this.db
         .prepare(`UPDATE inquiries SET ${set}, updated_at=? WHERE id=? RETURNING ${INQ_COLS}`)
@@ -252,7 +267,11 @@ export class D1VectorizeStore implements Store {
     if (!row) return null;
     if (patch.embedding && patch.embedding.length) {
       await this.vectorizeInquiries.upsert([
-        { id, values: patch.embedding, metadata: { category: String(row.category ?? ""), status: String(row.status ?? "") } },
+        {
+          id,
+          values: patch.embedding,
+          metadata: { category: String(row.category ?? ""), status: String(row.status ?? "") },
+        },
       ]);
     }
     return rowToInquiry(row);
@@ -276,10 +295,17 @@ export class D1VectorizeStore implements Store {
     let res;
     try {
       res = metaFilter
-        ? await this.vectorizeInquiries.query(embedding, { topK, returnValues: true, filter: metaFilter })
+        ? await this.vectorizeInquiries.query(embedding, {
+            topK,
+            returnValues: true,
+            filter: metaFilter,
+          })
         : await this.vectorizeInquiries.query(embedding, { topK, returnValues: true });
     } catch (e) {
-      console.warn("[vectorize] inquiries metadata filter failed, falling back to unfiltered query", e);
+      console.warn(
+        "[vectorize] inquiries metadata filter failed, falling back to unfiltered query",
+        e,
+      );
       res = await this.vectorizeInquiries.query(embedding, { topK, returnValues: true });
     }
     if (res.matches.length === 0) return [];
@@ -365,7 +391,15 @@ export class D1VectorizeStore implements Store {
              VALUES (?,?,?,?,?,?,?)
              ON CONFLICT (item_id, inquiry_id) DO UPDATE SET score=excluded.score`,
           )
-          .bind(id, e.match.item_id, e.match.inquiry_id, e.match.score, e.match.status, e.match.direction, created_at),
+          .bind(
+            id,
+            e.match.item_id,
+            e.match.inquiry_id,
+            e.match.score,
+            e.match.status,
+            e.match.direction,
+            created_at,
+          ),
       );
       matches.push({ id, ...e.match, created_at });
       if (e.inquiryStatusUpdate) {
@@ -410,7 +444,16 @@ export class D1VectorizeStore implements Store {
          VALUES (?,?,?,?,?,?,?,0,?)
          RETURNING ${NOTIF_COLS}`,
       )
-      .bind(id, n.type, n.title, n.body, n.ref_item_id, n.ref_inquiry_id, n.ref_match_id, created_at)
+      .bind(
+        id,
+        n.type,
+        n.title,
+        n.body,
+        n.ref_item_id,
+        n.ref_inquiry_id,
+        n.ref_match_id,
+        created_at,
+      )
       .first();
     return rowToNotif(row);
   }
@@ -487,13 +530,32 @@ const NOTIF_COLS =
 // 更新可能フィールド(near-direct DB edit を許容)。embedding は D1 に列が無いので含めない
 // (呼び出し側の patch.embedding は updateItem/updateInquiry 内で個別に Vectorize へ upsert する)。
 const ITEM_FIELDS = [
-  "display_id", "status", "category", "color", "brand", "found_location", "found_at",
-  "map_key", "found_x", "found_y",
-  "image_keys", "ai_description", "tags", "notes", "ai_status",
+  "display_id",
+  "status",
+  "category",
+  "color",
+  "brand",
+  "found_location",
+  "found_at",
+  "map_key",
+  "found_x",
+  "found_y",
+  "image_keys",
+  "ai_description",
+  "tags",
+  "notes",
+  "ai_status",
 ];
 const INQ_FIELDS = [
-  "status", "description", "category", "color", "ai_description", "tags",
-  "reference_no", "notes", "matched_item_id",
+  "status",
+  "description",
+  "category",
+  "color",
+  "ai_description",
+  "tags",
+  "reference_no",
+  "notes",
+  "matched_item_id",
 ];
 const JSON_FIELDS = new Set(["image_keys", "tags"]);
 
@@ -609,10 +671,7 @@ function buildItemWhere(f: SearchFilters): { where: string; params: any[] } {
   return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
 }
 
-function buildSet(
-  patch: Record<string, any>,
-  allowed: string[],
-): { set: string; params: any[] } {
+function buildSet(patch: Record<string, any>, allowed: string[]): { set: string; params: any[] } {
   const parts: string[] = [];
   const params: any[] = [];
   for (const key of allowed) {

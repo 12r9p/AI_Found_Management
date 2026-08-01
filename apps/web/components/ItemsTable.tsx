@@ -6,7 +6,11 @@ import { Badge, Button, ColorSwatch } from "./ui";
 import { ItemPreviewModal } from "./ItemPreviewModal";
 import { ItemEditModal } from "./ItemEditModal";
 
-const TEXT_COLS: { key: "category" | "color" | "brand" | "found_location" | "notes"; label: string; w?: number }[] = [
+const TEXT_COLS: {
+  key: "category" | "color" | "brand" | "found_location" | "notes";
+  label: string;
+  w?: number;
+}[] = [
   { key: "category", label: "種別", w: 96 },
   { key: "color", label: "色", w: 72 },
   { key: "brand", label: "ブランド", w: 110 },
@@ -14,7 +18,15 @@ const TEXT_COLS: { key: "category" | "color" | "brand" | "found_location" | "not
   { key: "notes", label: "メモ", w: 160 },
 ];
 
-export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Meta; onChanged: () => void }) {
+export function ItemsTable({
+  items,
+  meta,
+  onChanged,
+}: {
+  items: Item[];
+  meta: Meta;
+  onChanged: () => void;
+}) {
   const [rows, setRows] = useState<Item[]>(items);
 
   useEffect(() => {
@@ -43,7 +55,9 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
             <th style={{ width: 172 }}>管理番号</th>
             <th style={{ width: 96 }}>状態</th>
             {TEXT_COLS.map((c) => (
-              <th key={c.key} style={{ width: c.w }}>{c.label}</th>
+              <th key={c.key} style={{ width: c.w }}>
+                {c.label}
+              </th>
             ))}
             <th style={{ width: 150 }}>操作</th>
           </tr>
@@ -55,15 +69,17 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
                 {/* 現物の識別が一番速いので画像を先頭に置く。クリックで詳細ポップアップ。 */}
                 <div className="rb-cell-thumbs">
                   {it.image_keys.length > 0 ? (
-                    it.image_keys.slice(0, 2).map((k) => (
-                      <img
-                        key={k}
-                        src={imageUrl(k)}
-                        alt=""
-                        className="rb-cell-thumb"
-                        onClick={() => setPreview(it)}
-                      />
-                    ))
+                    it.image_keys
+                      .slice(0, 2)
+                      .map((k) => (
+                        <img
+                          key={k}
+                          src={imageUrl(k)}
+                          alt=""
+                          className="rb-cell-thumb"
+                          onClick={() => setPreview(it)}
+                        />
+                      ))
                   ) : (
                     <span className="rb-cell-thumb rb-cell-thumb--empty">無</span>
                   )}
@@ -72,7 +88,9 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
               <td className="rb-mono rb-small">{it.display_id || "—"}</td>
               <td>
                 <div className="rb-row" style={{ gap: 4 }}>
-                  <Badge tone={it.status === "stored" ? "success" : "info"}>{STATUS_LABEL[it.status]}</Badge>
+                  <Badge tone={it.status === "stored" ? "success" : "info"}>
+                    {STATUS_LABEL[it.status]}
+                  </Badge>
                   {it.ai_status === "pending" && <Badge tone="warning">AI解析中</Badge>}
                   {it.ai_status === "error" && <Badge tone="error">AI解析失敗</Badge>}
                 </div>
@@ -93,8 +111,12 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
                 <div className="rb-row" style={{ gap: 4, padding: "0 6px", flexWrap: "nowrap" }}>
                   {/* 一覧では確認・編集ともポップアップで完結させ、行の高さや画面を崩さない。
                       削除は誤操作を避けるため一覧からは無くし、編集画面の中に置く。 */}
-                  <Button variant="outline" size="sm" onClick={() => setPreview(it)}>詳細</Button>
-                  <Button size="sm" onClick={() => setEditing(it)}>編集</Button>
+                  <Button variant="outline" size="sm" onClick={() => setPreview(it)}>
+                    詳細
+                  </Button>
+                  <Button size="sm" onClick={() => setEditing(it)}>
+                    編集
+                  </Button>
                 </div>
               </td>
             </tr>
@@ -112,7 +134,10 @@ export function ItemsTable({ items, meta, onChanged }: { items: Item[]; meta: Me
         item={preview}
         context="管理 › 物品一覧"
         onClose={() => setPreview(null)}
-        onEdit={(it) => { setPreview(null); setEditing(it); }}
+        onEdit={(it) => {
+          setPreview(null);
+          setEditing(it);
+        }}
       />
       <ItemEditModal
         item={editing}

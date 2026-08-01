@@ -58,7 +58,11 @@ export function Field({
     <div className="rb-field">
       <label className="rb-label" htmlFor={id}>
         {label}
-        {required && <span className="req" aria-hidden>*</span>}
+        {required && (
+          <span className="req" aria-hidden>
+            *
+          </span>
+        )}
       </label>
       {children(id)}
       {hint && !error && <span className="rb-hint">{hint}</span>}
@@ -72,7 +76,13 @@ export const Input = React.forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }
 >(function Input({ className, invalid, ...props }, ref) {
-  return <input ref={ref} className={cx("rb-input", invalid && "rb-input--error", className)} {...props} />;
+  return (
+    <input
+      ref={ref}
+      className={cx("rb-input", invalid && "rb-input--error", className)}
+      {...props}
+    />
+  );
 });
 
 export function Textarea({
@@ -80,7 +90,12 @@ export function Textarea({
   invalid,
   ...props
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }) {
-  return <textarea className={cx("rb-textarea", invalid && "rb-textarea--error", className)} {...props} />;
+  return (
+    <textarea
+      className={cx("rb-textarea", invalid && "rb-textarea--error", className)}
+      {...props}
+    />
+  );
 }
 
 export function Select({
@@ -151,7 +166,11 @@ export function Badge({
   tone?: "success" | "warning" | "error" | "info";
   fill?: boolean;
 }) {
-  return <span className={cx("rb-badge", fill && "rb-badge--fill", tone && `rb-badge--${tone}`)}>{children}</span>;
+  return (
+    <span className={cx("rb-badge", fill && "rb-badge--fill", tone && `rb-badge--${tone}`)}>
+      {children}
+    </span>
+  );
 }
 
 // ---------------- Card ----------------
@@ -162,7 +181,12 @@ export function Card({
 }: React.HTMLAttributes<HTMLDivElement> & {
   variant?: "default" | "interactive" | "bordered" | "elevated" | "muted";
 }) {
-  return <div className={cx("rb-card", variant !== "default" && `rb-card--${variant}`, className)} {...props} />;
+  return (
+    <div
+      className={cx("rb-card", variant !== "default" && `rb-card--${variant}`, className)}
+      {...props}
+    />
+  );
 }
 
 // ---------------- Modal ----------------
@@ -217,8 +241,7 @@ export function Modal({
       >
         <div className="rb-modal__head">
           <span className="rb-modal__title">
-            {context && <span className="rb-modal__ctx">{context} ›</span>}
-            [{title}]
+            {context && <span className="rb-modal__ctx">{context} ›</span>}[{title}]
           </span>
           <button className="rb-modal__close" onClick={onClose} aria-label="閉じる">
             ×
@@ -255,13 +278,10 @@ export const useToast = () => useContext(ToastCtx);
 
 export function UIProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const dismiss = useCallback(
-    (id: number) => setToasts((t) => t.filter((x) => x.id !== id)),
-    [],
-  );
+  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
   const push = useCallback<ToastFn>((msg, opts) => {
     // 旧シグネチャ toast(msg, "success") も受ける
-    const o: ToastOpts = typeof opts === "string" ? { tone: opts } : opts ?? {};
+    const o: ToastOpts = typeof opts === "string" ? { tone: opts } : (opts ?? {});
     const id = Date.now() + Math.random();
     // 誤操作のリカバリ用アクションは押す時間が要るので長めに出す
     const ms = o.duration ?? (o.action ? 10000 : 4000);
@@ -312,7 +332,10 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
               <Button variant="outline" onClick={() => settle(false)}>
                 キャンセル
               </Button>
-              <Button variant={confirmState?.danger ? "destructive" : "default"} onClick={() => settle(true)}>
+              <Button
+                variant={confirmState?.danger ? "destructive" : "default"}
+                onClick={() => settle(true)}
+              >
                 {confirmState?.okLabel ?? "OK"}
               </Button>
             </>
@@ -344,7 +367,13 @@ export function ThemeToggle() {
     setTheme(next);
   };
   return (
-    <Button variant="outline" size="sm" onClick={toggle} aria-label="テーマ切替" title="ライト/ダーク切替">
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={toggle}
+      aria-label="テーマ切替"
+      title="ライト/ダーク切替"
+    >
       {theme === "dark" ? "☀ LIGHT" : "☾ DARK"}
     </Button>
   );

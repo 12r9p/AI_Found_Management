@@ -31,11 +31,12 @@ export function findRegionAt<T extends MapRegion>(regions: T[], pt: Pin): T | nu
     const poly = region.points;
     let inside = false;
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const xi = poly[i].x, yi = poly[i].y;
-      const xj = poly[j].x, yj = poly[j].y;
+      const xi = poly[i].x,
+        yi = poly[i].y;
+      const xj = poly[j].x,
+        yj = poly[j].y;
       const intersect =
-        yi > pt.y !== yj > pt.y &&
-        pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi;
+        yi > pt.y !== yj > pt.y && pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi;
       if (intersect) inside = !inside;
     }
     if (inside) return region;
@@ -99,11 +100,21 @@ export function MapPicker({
       // 失敗時はキャッシュに残さない（次のマウントで再取得できるようにする）。
       // ここで空文字をキャッシュしてしまうと、一時的な通信エラーが
       // 「地図なし」として固定されてしまい、タブを閉じるまで直らなくなる。
-      cachedMapKeyPromise = api.getMap().then((k) => { cachedMapKey = k; return k; });
+      cachedMapKeyPromise = api.getMap().then((k) => {
+        cachedMapKey = k;
+        return k;
+      });
     }
     cachedMapKeyPromise
-      .then((k) => { setMapKey(k); setLoading(false); })
-      .catch(() => { cachedMapKeyPromise = null; setMapKey(""); setLoading(false); });
+      .then((k) => {
+        setMapKey(k);
+        setLoading(false);
+      })
+      .catch(() => {
+        cachedMapKeyPromise = null;
+        setMapKey("");
+        setLoading(false);
+      });
   }, [mapKeyOverride]);
 
   const place = (clientX: number, clientY: number) => {
@@ -161,7 +172,9 @@ export function MapPicker({
               <polygon
                 key={r.name}
                 points={toSvgPoints(r.points)}
-                className={r.name === activeRegionName ? "map-region map-region--active" : "map-region"}
+                className={
+                  r.name === activeRegionName ? "map-region map-region--active" : "map-region"
+                }
               />
             ))}
             {previewPoints && previewPoints.length > 0 && (

@@ -1,7 +1,19 @@
 "use client";
 import { useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { Button, Card, Field, Input, Select, Badge, Modal, Textarea, useToast, MetaOptionList, ColorSwatch } from "../../components/ui";
+import {
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+  Badge,
+  Modal,
+  Textarea,
+  useToast,
+  MetaOptionList,
+  ColorSwatch,
+} from "../../components/ui";
 import { useMeta } from "../../components/useMeta";
 import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
@@ -35,7 +47,11 @@ export default function SearchPage() {
   const doSearch = async () => {
     setLoading(true);
     try {
-      const { items: res, degraded: isDegraded } = await api.search({ q: q || undefined, ...filters, limit: 50 });
+      const { items: res, degraded: isDegraded } = await api.search({
+        q: q || undefined,
+        ...filters,
+        limit: 50,
+      });
       setItems(res);
       setDegraded(!!isDegraded);
       if (isDegraded) {
@@ -52,7 +68,9 @@ export default function SearchPage() {
 
   /** 一覧内の1件だけ差し替える（再検索せずに状態表示を最新化） */
   const patchLocal = (updated: Item) =>
-    setItems((list) => (list ? list.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) : list));
+    setItems((list) =>
+      list ? list.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)) : list,
+    );
 
   /** 編集画面から削除された物品を結果一覧からも消す。 */
   const removeLocal = (id: string) =>
@@ -92,7 +110,10 @@ export default function SearchPage() {
         color: filters.color,
       });
       if (res.matches.length > 0) {
-        toast(`保管中の物品と${res.matches.length}件一致しました。照合画面で確認してください`, "success");
+        toast(
+          `保管中の物品と${res.matches.length}件一致しました。照合画面で確認してください`,
+          "success",
+        );
       } else {
         toast("未解決として保存しました。新規登録時に自動照合されます", "success");
       }
@@ -131,7 +152,11 @@ export default function SearchPage() {
             <div className="rb-eyebrow mt-16 mb-8">フィルター</div>
             <Field label="種別">
               {(id) => (
-                <Select id={id} value={filters.category} onChange={(e) => setF("category", e.target.value)}>
+                <Select
+                  id={id}
+                  value={filters.category}
+                  onChange={(e) => setF("category", e.target.value)}
+                >
                   <option value="">すべて</option>
                   <MetaOptionList options={meta.categories} />
                 </Select>
@@ -139,7 +164,11 @@ export default function SearchPage() {
             </Field>
             <Field label="色">
               {(id) => (
-                <Select id={id} value={filters.color} onChange={(e) => setF("color", e.target.value)}>
+                <Select
+                  id={id}
+                  value={filters.color}
+                  onChange={(e) => setF("color", e.target.value)}
+                >
                   <option value="">すべて</option>
                   <MetaOptionList options={meta.colors} />
                 </Select>
@@ -147,26 +176,54 @@ export default function SearchPage() {
             </Field>
             <Field label="状態">
               {(id) => (
-                <Select id={id} value={filters.status} onChange={(e) => setF("status", e.target.value)}>
+                <Select
+                  id={id}
+                  value={filters.status}
+                  onChange={(e) => setF("status", e.target.value)}
+                >
                   <option value="">すべて</option>
-                  {meta.itemStatuses.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                  {meta.itemStatuses.map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_LABEL[s]}
+                    </option>
+                  ))}
                 </Select>
               )}
             </Field>
             <Field label="拾得場所">
               {(id) => (
-                <Select id={id} value={filters.location} onChange={(e) => setF("location", e.target.value)}>
+                <Select
+                  id={id}
+                  value={filters.location}
+                  onChange={(e) => setF("location", e.target.value)}
+                >
                   <option value="">すべて</option>
-                  {presets.map((p) => <option key={p.name}>{p.name}</option>)}
+                  {presets.map((p) => (
+                    <option key={p.name}>{p.name}</option>
+                  ))}
                 </Select>
               )}
             </Field>
             {/* 条件カラムは狭いので日付は縦積み（横並びだと入力欄が潰れる） */}
             <Field label="拾得日 (から)">
-              {(id) => <Input id={id} type="date" value={filters.from} onChange={(e) => setF("from", e.target.value)} />}
+              {(id) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={filters.from}
+                  onChange={(e) => setF("from", e.target.value)}
+                />
+              )}
             </Field>
             <Field label="拾得日 (まで)">
-              {(id) => <Input id={id} type="date" value={filters.to} onChange={(e) => setF("to", e.target.value)} />}
+              {(id) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={filters.to}
+                  onChange={(e) => setF("to", e.target.value)}
+                />
+              )}
             </Field>
 
             <Button block onClick={doSearch} disabled={loading}>
@@ -242,11 +299,15 @@ export default function SearchPage() {
                     >
                       <div className="rb-between mb-8">
                         <strong className="rb-row" style={{ gap: 6 }}>
-                          <ColorSwatch color={meta.colors.find((c) => c.name === it.color)?.color} />
+                          <ColorSwatch
+                            color={meta.colors.find((c) => c.name === it.color)?.color}
+                          />
                           {[it.color, it.category].filter(Boolean).join(" ") || "物品"}
                         </strong>
                         {typeof it.score === "number" && it.score != null && (
-                          <Badge tone={it.score >= 0.6 ? "success" : "info"}>{(it.score * 100).toFixed(0)}%</Badge>
+                          <Badge tone={it.score >= 0.6 ? "success" : "info"}>
+                            {(it.score * 100).toFixed(0)}%
+                          </Badge>
                         )}
                       </div>
                       {it.display_id && (
@@ -259,9 +320,13 @@ export default function SearchPage() {
                       )}
                       <div className="rb-row mb-8" style={{ gap: 6 }}>
                         <Badge>{STATUS_LABEL[it.status]}</Badge>
-                        <span className="rb-tiny muted-text">拾得場所: {it.found_location || "—"}</span>
+                        <span className="rb-tiny muted-text">
+                          拾得場所: {it.found_location || "—"}
+                        </span>
                       </div>
-                      <p className="rb-small" style={{ margin: 0 }}>{it.ai_description.slice(0, 80)}</p>
+                      <p className="rb-small" style={{ margin: 0 }}>
+                        {it.ai_description.slice(0, 80)}
+                      </p>
                     </Card>
                   ))}
                 </div>
@@ -297,8 +362,12 @@ export default function SearchPage() {
         onClose={() => setInqOpen(false)}
         footer={
           <>
-            <Button variant="outline" onClick={() => setInqOpen(false)}>キャンセル</Button>
-            <Button onClick={registerInquiry} disabled={inqBusy}>{inqBusy ? "登録中" : "登録"}</Button>
+            <Button variant="outline" onClick={() => setInqOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={registerInquiry} disabled={inqBusy}>
+              {inqBusy ? "登録中" : "登録"}
+            </Button>
           </>
         }
       >
@@ -307,7 +376,14 @@ export default function SearchPage() {
           連絡先等は紙台帳で管理し、ここには受付番号のみ記録します。
         </p>
         <Field label="受付番号（紙台帳）" hint="個人情報ではありません">
-          {(id) => <Input id={id} value={inqRef} onChange={(e) => setInqRef(e.target.value)} placeholder="R-1004" />}
+          {(id) => (
+            <Input
+              id={id}
+              value={inqRef}
+              onChange={(e) => setInqRef(e.target.value)}
+              placeholder="R-1004"
+            />
+          )}
         </Field>
         <Field label="特徴（検索文を引用）">
           {(id) => <Textarea id={id} value={q} onChange={(e) => setQ(e.target.value)} />}

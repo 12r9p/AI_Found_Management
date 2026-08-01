@@ -31,7 +31,10 @@ async function analyzeOnce(c: AppContext, item: Item): Promise<void> {
     if (obj) dataUrls.push(arrayBufferToDataUrl(obj.body, obj.contentType));
   }
   const { categories, colors } = await getMetaLists(c.store);
-  const d = await c.ai.describeImages(dataUrls.map((url) => ({ url })), { hint: item.notes, categories, colors });
+  const d = await c.ai.describeImages(
+    dataUrls.map((url) => ({ url })),
+    { hint: item.notes, categories, colors },
+  );
   const patch = {
     ai_description: d.description,
     tags: d.tags,

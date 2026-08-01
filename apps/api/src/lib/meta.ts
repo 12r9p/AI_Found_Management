@@ -10,9 +10,24 @@ export interface MetaOption {
 }
 
 const DEFAULT_CATEGORIES: MetaOption[] = [
-  "財布", "かばん", "傘", "スマートフォン", "携帯電話", "鍵", "水筒",
-  "眼鏡", "帽子", "衣類", "イヤホン", "時計", "アクセサリー", "書類",
-  "カード類", "現金", "おもちゃ", "その他",
+  "財布",
+  "かばん",
+  "傘",
+  "スマートフォン",
+  "携帯電話",
+  "鍵",
+  "水筒",
+  "眼鏡",
+  "帽子",
+  "衣類",
+  "イヤホン",
+  "時計",
+  "アクセサリー",
+  "書類",
+  "カード類",
+  "現金",
+  "おもちゃ",
+  "その他",
 ].map((name) => ({ name }));
 
 // 色名からの色は「だいたいこの色」という目安（正式な色見本ではない）。
@@ -51,11 +66,14 @@ export function normalizeMetaOptions(input: any): MetaOption[] {
   const seen = new Set<string>();
   const out: MetaOption[] = [];
   for (const raw of input) {
-    const name = String(raw?.name ?? "").trim().slice(0, 40);
+    const name = String(raw?.name ?? "")
+      .trim()
+      .slice(0, 40);
     if (!name || seen.has(name)) continue;
     seen.add(name);
     const group = typeof raw?.group === "string" ? raw.group.trim().slice(0, 40) : "";
-    const color = typeof raw?.color === "string" && HEX_RE.test(raw.color.trim()) ? raw.color.trim() : "";
+    const color =
+      typeof raw?.color === "string" && HEX_RE.test(raw.color.trim()) ? raw.color.trim() : "";
     out.push({ name, ...(group ? { group } : {}), ...(color ? { color } : {}) });
     if (out.length >= 200) break;
   }
@@ -95,17 +113,15 @@ export async function getMetaOptions(
 }
 
 /** 設定に保存されたリスト（種別・色）を名前だけの配列で読む。未設定・壊れていれば既定値。 */
-export async function readList(
-  store: Store,
-  key: string,
-  fallback: string[],
-): Promise<string[]> {
+export async function readList(store: Store, key: string, fallback: string[]): Promise<string[]> {
   const raw = await store.getSetting(key);
   if (!raw) return fallback;
   try {
     const v = JSON.parse(raw);
     if (!Array.isArray(v) || v.length === 0) return fallback;
-    return typeof v[0] === "string" ? v.map(String) : v.map((o: any) => String(o?.name ?? "")).filter(Boolean);
+    return typeof v[0] === "string"
+      ? v.map(String)
+      : v.map((o: any) => String(o?.name ?? "")).filter(Boolean);
   } catch {
     return fallback;
   }
@@ -113,7 +129,9 @@ export async function readList(
 
 /** AIの種別・色推定を、スタッフが設定画面で編集できる選択肢に合わせるためのヒント（名前のみでよい）。
  * 表記ゆれ（「スマホ」vs「スマートフォン」）でフィルタ絞り込みから漏れるのを防ぐ。 */
-export async function getMetaLists(store: Store): Promise<{ categories: string[]; colors: string[] }> {
+export async function getMetaLists(
+  store: Store,
+): Promise<{ categories: string[]; colors: string[] }> {
   const [categories, colors] = await Promise.all([
     readList(store, "categories", CATEGORIES),
     readList(store, "colors", COLORS),

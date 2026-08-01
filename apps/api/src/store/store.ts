@@ -66,9 +66,7 @@ export interface Store {
   createMatchesBulk(entries: MatchBulkEntry[]): Promise<Match[]>;
 
   // --- notifications ---
-  createNotification(
-    n: Omit<Notification, "id" | "created_at" | "read">,
-  ): Promise<Notification>;
+  createNotification(n: Omit<Notification, "id" | "created_at" | "read">): Promise<Notification>;
   listNotifications(unreadOnly?: boolean): Promise<Notification[]>;
   markNotificationRead(id: string): Promise<boolean>;
   unreadCount(): Promise<number>;

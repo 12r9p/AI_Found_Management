@@ -173,7 +173,14 @@ export default function RegisterPage() {
           {keys.map((k) => (
             <div key={k}>
               <img src={imageUrl(k)} alt="拾得物" className="thumb" />
-              <Button variant="destructive" size="sm" block className="mt-8" onClick={() => removeImage(k)} disabled={busy}>
+              <Button
+                variant="destructive"
+                size="sm"
+                block
+                className="mt-8"
+                onClick={() => removeImage(k)}
+                disabled={busy}
+              >
                 削除
               </Button>
             </div>
@@ -184,7 +191,9 @@ export default function RegisterPage() {
               onClick={() => !busy && fileRef.current?.click()}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !busy && fileRef.current?.click()}
+              onKeyDown={(e) =>
+                (e.key === "Enter" || e.key === " ") && !busy && fileRef.current?.click()
+              }
             >
               ＋ 写真を撮る / 選ぶ
               <div className="rb-tiny muted-text mt-8">タップしてカメラ起動</div>
@@ -207,7 +216,9 @@ export default function RegisterPage() {
 
       <Card variant="bordered" className="mb-16">
         <div className="rb-between mb-8">
-          <div className="rb-label" style={{ margin: 0 }}>拾得場所（エリアをタップ）</div>
+          <div className="rb-label" style={{ margin: 0 }}>
+            拾得場所（エリアをタップ）
+          </div>
           {foundLocation && <Badge tone="success">{foundLocation}</Badge>}
         </div>
         <MapPicker
@@ -216,7 +227,7 @@ export default function RegisterPage() {
           activeRegionName={foundLocation || undefined}
           onChange={(p) => {
             setPin(p);
-            setFoundLocation(p ? findRegionAt(presets, p)?.name ?? "" : "");
+            setFoundLocation(p ? (findRegionAt(presets, p)?.name ?? "") : "");
           }}
         />
       </Card>
@@ -238,12 +249,19 @@ export default function RegisterPage() {
                   </Button>
                 ))}
               </div>
-              <Input id={id} type="datetime-local" value={form.found_at} onChange={(e) => set("found_at", e.target.value)} />
+              <Input
+                id={id}
+                type="datetime-local"
+                value={form.found_at}
+                onChange={(e) => set("found_at", e.target.value)}
+              />
             </>
           )}
         </Field>
         <Field label="メモ" hint="ブランドなど、気づいたことがあれば">
-          {(id) => <Textarea id={id} value={form.notes} onChange={(e) => set("notes", e.target.value)} />}
+          {(id) => (
+            <Textarea id={id} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+          )}
         </Field>
         <Button block onClick={submit} disabled={saving || busy}>
           {saving ? "登録中…" : uploading ? "画像の送信を待っています…" : "この内容で登録する"}
@@ -257,11 +275,7 @@ export default function RegisterPage() {
         onContinue={handleContinue}
         onEdit={handleEditFromResult}
       />
-      <ItemEditModal
-        item={editing}
-        context="登録 › 登録完了"
-        onClose={() => setEditing(null)}
-      />
+      <ItemEditModal item={editing} context="登録 › 登録完了" onClose={() => setEditing(null)} />
     </AppShell>
   );
 }

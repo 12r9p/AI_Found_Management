@@ -27,7 +27,9 @@ export default function PrintPage() {
           ),
         );
       };
-      setTimeout(() => { waitImages().then(() => window.print()); }, 300);
+      setTimeout(() => {
+        waitImages().then(() => window.print());
+      }, 300);
     });
   }, []);
 
@@ -35,9 +37,25 @@ export default function PrintPage() {
 
   return (
     <div style={{ padding: 24, background: "#fff", color: "#000", minHeight: "100vh" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "3px solid #000", paddingBottom: 8, marginBottom: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          borderBottom: "3px solid #000",
+          paddingBottom: 8,
+          marginBottom: 12,
+        }}
+      >
         <div>
-          <div style={{ fontFamily: "monospace", textTransform: "uppercase", letterSpacing: 2, fontSize: 11 }}>
+          <div
+            style={{
+              fontFamily: "monospace",
+              textTransform: "uppercase",
+              letterSpacing: 2,
+              fontSize: 11,
+            }}
+          >
             LOST &amp; FOUND / REGISTERED ITEMS
           </div>
           <h1 style={{ margin: 0, fontSize: 28 }}>遺失物 登録一覧</h1>
@@ -49,11 +67,38 @@ export default function PrintPage() {
         </div>
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: 11 }}>
+      <table
+        style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: 11 }}
+      >
         <thead>
           <tr>
-            {["No", "画像", "管理番号", "状態", "種別", "色", "ブランド", "拾得場所", "地図位置", "拾得日", "特徴"].map((h) => (
-              <th key={h} style={{ background: "#000", color: "#fff", padding: "5px 6px", textAlign: "left", border: "1px solid #000", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as any}>
+            {[
+              "No",
+              "画像",
+              "管理番号",
+              "状態",
+              "種別",
+              "色",
+              "ブランド",
+              "拾得場所",
+              "地図位置",
+              "拾得日",
+              "特徴",
+            ].map((h) => (
+              <th
+                key={h}
+                style={
+                  {
+                    background: "#000",
+                    color: "#fff",
+                    padding: "5px 6px",
+                    textAlign: "left",
+                    border: "1px solid #000",
+                    WebkitPrintColorAdjust: "exact",
+                    printColorAdjust: "exact",
+                  } as any
+                }
+              >
                 {h}
               </th>
             ))}
@@ -69,7 +114,13 @@ export default function PrintPage() {
                   <img
                     src={imageUrl(it.image_keys[0])}
                     alt=""
-                    style={{ width: 54, height: 54, objectFit: "cover", border: "1px solid #000", display: "block" }}
+                    style={{
+                      width: 54,
+                      height: 54,
+                      objectFit: "cover",
+                      border: "1px solid #000",
+                      display: "block",
+                    }}
                   />
                 ) : (
                   <span style={{ fontSize: 9 }}>—</span>
@@ -86,7 +137,9 @@ export default function PrintPage() {
                   ? `${(it.found_x * 100).toFixed(0)},${(it.found_y * 100).toFixed(0)}`
                   : ""}
               </td>
-              <td style={cell}>{it.found_at ? new Date(it.found_at).toLocaleDateString("ja-JP") : ""}</td>
+              <td style={cell}>
+                {it.found_at ? new Date(it.found_at).toLocaleDateString("ja-JP") : ""}
+              </td>
               <td style={{ ...cell, maxWidth: 220 }}>{it.ai_description.slice(0, 60)}</td>
             </tr>
           ))}
@@ -100,4 +153,8 @@ export default function PrintPage() {
   );
 }
 
-const cell: React.CSSProperties = { padding: "4px 6px", border: "1px solid #000", verticalAlign: "top" };
+const cell: React.CSSProperties = {
+  padding: "4px 6px",
+  border: "1px solid #000",
+  verticalAlign: "top",
+};

@@ -11,6 +11,8 @@
     "dev:api": "bun run --cwd apps/api dev",
     "dev:web": "bun run --cwd apps/web dev",
     "build": "bun run --cwd apps/web build",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "seed": "bun run --cwd apps/api seed",
     "test": "bun run --cwd apps/api test",
     "cf-dev:api": "bun run --cwd apps/api cf-dev",
@@ -22,7 +24,8 @@
     "deploy": "bun run deploy:api && bun run deploy:web"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "oxfmt": "0.61.0"
   },
   "packageManager": "bun@1.3.5"
 }

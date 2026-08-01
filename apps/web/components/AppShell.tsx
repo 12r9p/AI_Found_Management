@@ -24,12 +24,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hasHealthIssue = apiUnreachable || aiMock;
 
   const refreshUnread = useCallback(() => {
-    api.unreadCount().then(setUnread).catch(() => {});
+    api
+      .unreadCount()
+      .then(setUnread)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     let alive = true;
-    const load = () => api.unreadCount().then((c) => alive && setUnread(c)).catch(() => {});
+    const load = () =>
+      api
+        .unreadCount()
+        .then((c) => alive && setUnread(c))
+        .catch(() => {});
     const loadHealth = () =>
       api
         .health()
@@ -79,7 +86,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
           <nav className="rb-nav" aria-label="主要ナビゲーション">
             {NAV.map((n) => (
-              <Link key={n.href} href={n.href} className={pathname.startsWith(n.href) ? "active" : ""}>
+              <Link
+                key={n.href}
+                href={n.href}
+                className={pathname.startsWith(n.href) ? "active" : ""}
+              >
                 {n.label}
               </Link>
             ))}
@@ -120,7 +131,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <ThemeToggle />
                 <span className="rb-menu__label">メニュー</span>
                 {NAV.map((n) => (
-                  <Link key={n.href} href={n.href} role="menuitem" onClick={() => setMenuOpen(false)}>
+                  <Link
+                    key={n.href}
+                    href={n.href}
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                  >
                     {n.label}
                   </Link>
                 ))}

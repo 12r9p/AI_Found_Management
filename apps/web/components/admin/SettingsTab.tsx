@@ -1,6 +1,17 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Badge, Button, Card, Field, Input, Modal, Select, useToast, useConfirm, ColorSwatch } from "../ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Modal,
+  Select,
+  useToast,
+  useConfirm,
+  ColorSwatch,
+} from "../ui";
 import { MapPicker, invalidateMapCache, type Pin } from "../MapPicker";
 import { api } from "../../lib/api";
 import type { IdRule, LocationPreset, MetaOption } from "../../lib/types";
@@ -40,10 +51,13 @@ function IdRuleSetting() {
   const [draft, setDraft] = useState<IdRule | null>(null);
 
   useEffect(() => {
-    api.getIdRule().then(({ rule, preview }) => {
-      setRule(rule);
-      setPreview(preview);
-    }).catch(() => {});
+    api
+      .getIdRule()
+      .then(({ rule, preview }) => {
+        setRule(rule);
+        setPreview(preview);
+      })
+      .catch(() => {});
   }, []);
 
   if (!rule) return null;
@@ -57,10 +71,13 @@ function IdRuleSetting() {
     const p = (n: number) => String(n).padStart(2, "0");
     const y = now.getFullYear();
     const dp =
-      d.dateFormat === "YYYYMMDD" ? `${y}${p(now.getMonth() + 1)}${p(now.getDate())}`
-      : d.dateFormat === "YYMMDD" ? `${String(y).slice(2)}${p(now.getMonth() + 1)}${p(now.getDate())}`
-      : d.dateFormat === "YYYYMM" ? `${y}${p(now.getMonth() + 1)}`
-      : "";
+      d.dateFormat === "YYYYMMDD"
+        ? `${y}${p(now.getMonth() + 1)}${p(now.getDate())}`
+        : d.dateFormat === "YYMMDD"
+          ? `${String(y).slice(2)}${p(now.getMonth() + 1)}${p(now.getDate())}`
+          : d.dateFormat === "YYYYMM"
+            ? `${y}${p(now.getMonth() + 1)}`
+            : "";
     return `${d.prefix}${dp}${dp ? d.separator : ""}${String(d.start).padStart(d.digits, "0")}`;
   };
 
@@ -95,14 +112,18 @@ function IdRuleSetting() {
       <Card variant="bordered">
         <div className="rb-between mb-8">
           <h3 style={{ margin: 0 }}>管理番号の採番ルール</h3>
-          <Button variant="outline" size="sm" onClick={openEdit}>編集</Button>
+          <Button variant="outline" size="sm" onClick={openEdit}>
+            編集
+          </Button>
         </div>
         <p className="rb-small muted-text">
           登録時に自動で付く管理番号の形式です。紙台帳の記法に合わせて設定してください。
         </p>
         <Card variant="muted" className="mt-16">
           <div className="rb-eyebrow mb-8">採番フォーマットの例（プレビュー）</div>
-          <span className="rb-idtag" style={{ fontSize: 16 }}>{preview}</span>
+          <span className="rb-idtag" style={{ fontSize: 16 }}>
+            {preview}
+          </span>
         </Card>
       </Card>
 
@@ -114,8 +135,12 @@ function IdRuleSetting() {
         onClose={cancel}
         footer={
           <>
-            <Button variant="outline" onClick={cancel} disabled={saving}>キャンセル</Button>
-            <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+            <Button variant="outline" onClick={cancel} disabled={saving}>
+              キャンセル
+            </Button>
+            <Button onClick={save} disabled={saving}>
+              {saving ? "保存中…" : "保存"}
+            </Button>
           </>
         }
       >
@@ -123,15 +148,27 @@ function IdRuleSetting() {
           <>
             <Card variant="muted" className="mb-16">
               <div className="rb-eyebrow mb-8">採番フォーマットの例（プレビュー）</div>
-              <span className="rb-idtag" style={{ fontSize: 16 }}>{localPreview(draft)}</span>
+              <span className="rb-idtag" style={{ fontSize: 16 }}>
+                {localPreview(draft)}
+              </span>
             </Card>
             <div className="rb-grid rb-grid--3">
               <Field label="接頭辞" hint="例: FD-">
-                {(id) => <Input id={id} value={draft.prefix} onChange={(e) => set("prefix", e.target.value)} />}
+                {(id) => (
+                  <Input
+                    id={id}
+                    value={draft.prefix}
+                    onChange={(e) => set("prefix", e.target.value)}
+                  />
+                )}
               </Field>
               <Field label="日付">
                 {(id) => (
-                  <Select id={id} value={draft.dateFormat} onChange={(e) => set("dateFormat", e.target.value as IdRule["dateFormat"])}>
+                  <Select
+                    id={id}
+                    value={draft.dateFormat}
+                    onChange={(e) => set("dateFormat", e.target.value as IdRule["dateFormat"])}
+                  >
                     <option value="none">なし</option>
                     <option value="YYYYMMDD">年月日 (20260729)</option>
                     <option value="YYMMDD">年月日 (260729)</option>
@@ -140,23 +177,44 @@ function IdRuleSetting() {
                 )}
               </Field>
               <Field label="区切り文字" hint="日付と連番の間">
-                {(id) => <Input id={id} value={draft.separator} onChange={(e) => set("separator", e.target.value)} />}
+                {(id) => (
+                  <Input
+                    id={id}
+                    value={draft.separator}
+                    onChange={(e) => set("separator", e.target.value)}
+                  />
+                )}
               </Field>
               <Field label="連番の桁数">
                 {(id) => (
-                  <Input id={id} type="number" min={1} max={10} value={draft.digits}
-                    onChange={(e) => set("digits", Number(e.target.value) || 1)} />
+                  <Input
+                    id={id}
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={draft.digits}
+                    onChange={(e) => set("digits", Number(e.target.value) || 1)}
+                  />
                 )}
               </Field>
               <Field label="連番の開始値">
                 {(id) => (
-                  <Input id={id} type="number" min={0} value={draft.start}
-                    onChange={(e) => set("start", Number(e.target.value) || 0)} />
+                  <Input
+                    id={id}
+                    type="number"
+                    min={0}
+                    value={draft.start}
+                    onChange={(e) => set("start", Number(e.target.value) || 0)}
+                  />
                 )}
               </Field>
               <Field label="連番のリセット" hint="この周期で開始値に戻ります">
                 {(id) => (
-                  <Select id={id} value={draft.reset} onChange={(e) => set("reset", e.target.value as IdRule["reset"])}>
+                  <Select
+                    id={id}
+                    value={draft.reset}
+                    onChange={(e) => set("reset", e.target.value as IdRule["reset"])}
+                  >
                     <option value="never">しない（通し番号）</option>
                     <option value="daily">毎日</option>
                     <option value="monthly">毎月</option>
@@ -178,8 +236,14 @@ function MapSetting() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const load = () => api.getMap().then(setMapKey).catch(() => setMapKey(""));
-  useEffect(() => { load(); }, []);
+  const load = () =>
+    api
+      .getMap()
+      .then(setMapKey)
+      .catch(() => setMapKey(""));
+  useEffect(() => {
+    load();
+  }, []);
 
   const upload = async (f: File | undefined) => {
     if (!f) return;
@@ -224,7 +288,10 @@ function MapSetting() {
           type="file"
           accept="image/*"
           hidden
-          onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }}
+          onChange={(e) => {
+            upload(e.target.files?.[0]);
+            e.target.value = "";
+          }}
         />
         {mapKey ? <Badge tone="success">設定済</Badge> : <Badge tone="warning">未設定</Badge>}
       </div>
@@ -252,8 +319,14 @@ function LocationPresetSetting() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = () => api.getLocationPresets().then(setPresets).catch(() => {});
-  useEffect(() => { load(); }, []);
+  const load = () =>
+    api
+      .getLocationPresets()
+      .then(setPresets)
+      .catch(() => {});
+  useEffect(() => {
+    load();
+  }, []);
 
   const resetForm = () => {
     setPoints([]);
@@ -335,7 +408,9 @@ function LocationPresetSetting() {
       <Card variant="bordered">
         <div className="rb-between mb-8">
           <h3 style={{ margin: 0 }}>拾得場所プリセット</h3>
-          <Button variant="outline" size="sm" onClick={openEdit}>編集</Button>
+          <Button variant="outline" size="sm" onClick={openEdit}>
+            編集
+          </Button>
         </div>
         <p className="rb-small muted-text">
           地図上のエリアを塗りつぶして名前を付けておくと、登録・編集時にそのエリアをタップするだけで
@@ -358,8 +433,12 @@ function LocationPresetSetting() {
         onClose={cancel}
         footer={
           <>
-            <Button variant="outline" onClick={cancel} disabled={saving}>キャンセル</Button>
-            <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+            <Button variant="outline" onClick={cancel} disabled={saving}>
+              キャンセル
+            </Button>
+            <Button onClick={save} disabled={saving}>
+              {saving ? "保存中…" : "保存"}
+            </Button>
           </>
         }
       >
@@ -374,7 +453,10 @@ function LocationPresetSetting() {
               {p.name}
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); remove(i); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  remove(i);
+                }}
                 aria-label={`${p.name} を削除`}
               >
                 ×
@@ -392,7 +474,12 @@ function LocationPresetSetting() {
             <Button variant="outline" size="sm" onClick={undoPoint} disabled={points.length === 0}>
               1点戻す
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setPoints([])} disabled={points.length === 0}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPoints([])}
+              disabled={points.length === 0}
+            >
               やり直す
             </Button>
           </div>
@@ -449,7 +536,9 @@ function ListSetting({
     api.meta().then((m) => {
       setValues(kind === "categories" ? m.categories : m.colors);
     });
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    load(); /* eslint-disable-next-line */
+  }, []);
 
   const resetForm = () => {
     setName("");
@@ -545,7 +634,9 @@ function ListSetting({
       <Card variant="bordered">
         <div className="rb-between mb-8">
           <h3 style={{ margin: 0 }}>{title}</h3>
-          <Button variant="outline" size="sm" onClick={openEdit}>編集</Button>
+          <Button variant="outline" size="sm" onClick={openEdit}>
+            編集
+          </Button>
         </div>
         <p className="rb-small muted-text">{description}</p>
         <div className="rb-chips mt-16">
@@ -568,8 +659,12 @@ function ListSetting({
         onClose={cancel}
         footer={
           <>
-            <Button variant="outline" onClick={cancel} disabled={saving}>キャンセル</Button>
-            <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+            <Button variant="outline" onClick={cancel} disabled={saving}>
+              キャンセル
+            </Button>
+            <Button onClick={save} disabled={saving}>
+              {saving ? "保存中…" : "保存"}
+            </Button>
           </>
         }
       >
@@ -578,7 +673,11 @@ function ListSetting({
             <div
               key={`${o.name}-${i}`}
               className="rb-between"
-              style={{ cursor: "pointer", padding: "6px 8px", border: "var(--bw-thin, 1px) solid var(--border)" }}
+              style={{
+                cursor: "pointer",
+                padding: "6px 8px",
+                border: "var(--bw-thin, 1px) solid var(--border)",
+              }}
               onClick={() => selectForEdit(i)}
             >
               <span className="rb-row" style={{ gap: 8 }}>
@@ -587,13 +686,30 @@ function ListSetting({
                 {o.group && <span className="rb-tiny muted-text">{o.group}</span>}
               </span>
               <span className="rb-row" style={{ gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                <Button variant="outline" size="sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`${o.name} を上へ`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => move(i, -1)}
+                  disabled={i === 0}
+                  aria-label={`${o.name} を上へ`}
+                >
                   ↑
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => move(i, 1)} disabled={i === draft.length - 1} aria-label={`${o.name} を下へ`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => move(i, 1)}
+                  disabled={i === draft.length - 1}
+                  aria-label={`${o.name} を下へ`}
+                >
                   ↓
                 </Button>
-                <Button variant="destructive" size="sm" onClick={() => remove(i)} aria-label={`${o.name} を削除`}>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => remove(i)}
+                  aria-label={`${o.name} を削除`}
+                >
                   ×
                 </Button>
               </span>
@@ -623,9 +739,16 @@ function ListSetting({
           <Field label="グループ見出し">
             {(id) => (
               <>
-                <Input id={id} list={`${kind}-groups`} value={group} onChange={(e) => setGroup(e.target.value)} />
+                <Input
+                  id={id}
+                  list={`${kind}-groups`}
+                  value={group}
+                  onChange={(e) => setGroup(e.target.value)}
+                />
                 <datalist id={`${kind}-groups`}>
-                  {groupOptions.map((g) => <option key={g} value={g} />)}
+                  {groupOptions.map((g) => (
+                    <option key={g} value={g} />
+                  ))}
                 </datalist>
               </>
             )}
@@ -639,10 +762,17 @@ function ListSetting({
                     type="color"
                     value={color || "#888888"}
                     onChange={(e) => setColor(e.target.value)}
-                    style={{ width: 40, height: 34, padding: 0, border: "var(--bw-thin, 1px) solid var(--border)" }}
+                    style={{
+                      width: 40,
+                      height: 34,
+                      padding: 0,
+                      border: "var(--bw-thin, 1px) solid var(--border)",
+                    }}
                   />
                   {color && (
-                    <Button variant="outline" size="sm" onClick={() => setColor("")}>クリア</Button>
+                    <Button variant="outline" size="sm" onClick={() => setColor("")}>
+                      クリア
+                    </Button>
                   )}
                 </div>
               )}

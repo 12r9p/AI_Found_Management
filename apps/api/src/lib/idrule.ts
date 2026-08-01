@@ -61,10 +61,14 @@ function datePart(fmt: IdRule["dateFormat"], d: Date): string {
   const m = pad(d.getMonth() + 1, 2);
   const day = pad(d.getDate(), 2);
   switch (fmt) {
-    case "YYYYMMDD": return `${y}${m}${day}`;
-    case "YYMMDD": return `${String(y).slice(2)}${m}${day}`;
-    case "YYYYMM": return `${y}${m}`;
-    default: return "";
+    case "YYYYMMDD":
+      return `${y}${m}${day}`;
+    case "YYMMDD":
+      return `${String(y).slice(2)}${m}${day}`;
+    case "YYYYMM":
+      return `${y}${m}`;
+    default:
+      return "";
   }
 }
 
@@ -74,10 +78,14 @@ function periodKey(reset: IdRule["reset"], d: Date): string {
   const m = pad(d.getMonth() + 1, 2);
   const day = pad(d.getDate(), 2);
   switch (reset) {
-    case "daily": return `${y}${m}${day}`;
-    case "monthly": return `${y}${m}`;
-    case "yearly": return `${y}`;
-    default: return "all";
+    case "daily":
+      return `${y}${m}${day}`;
+    case "monthly":
+      return `${y}${m}`;
+    case "yearly":
+      return `${y}`;
+    default:
+      return "all";
   }
 }
 

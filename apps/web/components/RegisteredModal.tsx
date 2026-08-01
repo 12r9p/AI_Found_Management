@@ -31,8 +31,12 @@ export function RegisteredModal({
       onClose={onClose}
       footer={
         <>
-          <Button variant="outline" onClick={() => onEdit(item)}>編集</Button>
-          <Button variant="outline" onClick={onClose}>閉じる</Button>
+          <Button variant="outline" onClick={() => onEdit(item)}>
+            編集
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            閉じる
+          </Button>
           <Button onClick={onContinue}>同じ属性で続けて登録</Button>
         </>
       }
@@ -64,25 +68,38 @@ export function RegisteredModal({
         <div>
           <Card variant="muted">
             <div className="rb-small rb-mono">
-              拾得日時: <strong>{item.found_at ? new Date(item.found_at).toLocaleString("ja-JP") : "—"}</strong>
+              拾得日時:{" "}
+              <strong>
+                {item.found_at ? new Date(item.found_at).toLocaleString("ja-JP") : "—"}
+              </strong>
             </div>
           </Card>
           {item.notes && (
             <>
               <div className="rb-label mt-16 mb-8">メモ</div>
-              <p className="rb-small" style={{ margin: 0 }}>{item.notes}</p>
+              <p className="rb-small" style={{ margin: 0 }}>
+                {item.notes}
+              </p>
             </>
           )}
           <div className="rb-between mt-16 mb-8">
-            <span className="rb-label" style={{ margin: 0 }}>特徴</span>
+            <span className="rb-label" style={{ margin: 0 }}>
+              特徴
+            </span>
             {item.ai_status === "pending" && <Badge tone="warning">解析中</Badge>}
           </div>
           {item.ai_status !== "pending" && (
             <>
-              <p className="rb-small" style={{ margin: 0 }}>{item.ai_description || "—"}</p>
+              <p className="rb-small" style={{ margin: 0 }}>
+                {item.ai_description || "—"}
+              </p>
               {item.tags.length > 0 && (
                 <div className="rb-chips mt-16">
-                  {item.tags.map((t) => <span key={t} className="rb-chip">{t}</span>)}
+                  {item.tags.map((t) => (
+                    <span key={t} className="rb-chip">
+                      {t}
+                    </span>
+                  ))}
                 </div>
               )}
             </>

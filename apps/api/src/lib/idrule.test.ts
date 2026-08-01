@@ -27,8 +27,12 @@ test("リセットなしなら日をまたいでも通し番号", async () => {
 test("ルール変更が採番に反映される", async () => {
   const store = new MemoryStore();
   await setIdRule(store, {
-    prefix: "LOST/", dateFormat: "YYMMDD", separator: "_",
-    digits: 3, reset: "monthly", start: 100,
+    prefix: "LOST/",
+    dateFormat: "YYMMDD",
+    separator: "_",
+    digits: 3,
+    reset: "monthly",
+    start: 100,
   });
   expect(await nextDisplayId(store, new Date("2026-07-29T10:00:00"))).toBe("LOST/260729_100");
   expect(await nextDisplayId(store, new Date("2026-07-29T11:00:00"))).toBe("LOST/260729_101");

@@ -27,12 +27,12 @@
   --bw-heavy: 5px;
 
   /* Fonts */
-  --font-headline: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN",
-    "Yu Gothic", "Meiryo", system-ui, sans-serif;
-  --font-body: system-ui, -apple-system, "Hiragino Kaku Gothic ProN",
-    "Yu Gothic", "Meiryo", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas",
-    "DejaVu Sans Mono", monospace;
+  --font-headline:
+    "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui,
+    sans-serif;
+  --font-body:
+    system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", "DejaVu Sans Mono", monospace;
 
   color-scheme: light;
 }
@@ -618,12 +618,24 @@ h3,
   gap: 12px;
   flex-wrap: wrap;
 }
-.mt-0 { margin-top: 0; }
-.mt-8 { margin-top: 8px; }
-.mt-16 { margin-top: 16px; }
-.mt-24 { margin-top: 24px; }
-.mb-8 { margin-bottom: 8px; }
-.mb-16 { margin-bottom: 16px; }
+.mt-0 {
+  margin-top: 0;
+}
+.mt-8 {
+  margin-top: 8px;
+}
+.mt-16 {
+  margin-top: 16px;
+}
+.mt-24 {
+  margin-top: 24px;
+}
+.mb-8 {
+  margin-bottom: 8px;
+}
+.mb-16 {
+  margin-bottom: 16px;
+}
 .muted-text {
   color: color-mix(in srgb, var(--foreground) 60%, transparent);
 }

@@ -75,12 +75,12 @@ export function ImageEditor({
             onClick={() => !busy && fileRef.current?.click()}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !busy && fileRef.current?.click()}
+            onKeyDown={(e) =>
+              (e.key === "Enter" || e.key === " ") && !busy && fileRef.current?.click()
+            }
           >
             ＋ 写真を追加
-            <div className="rb-tiny muted-text mt-8">
-              あと{max - keys.length}枚
-            </div>
+            <div className="rb-tiny muted-text mt-8">あと{max - keys.length}枚</div>
           </div>
         )}
       </div>

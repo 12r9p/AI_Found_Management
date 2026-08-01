@@ -15,7 +15,9 @@ export function normalizePresets(input: any): LocationPreset[] {
   const seen = new Set<string>();
   const out: LocationPreset[] = [];
   for (const raw of input) {
-    const name = String(raw?.name ?? "").trim().slice(0, 40);
+    const name = String(raw?.name ?? "")
+      .trim()
+      .slice(0, 40);
     const rawPoints = Array.isArray(raw?.points) ? raw.points : [];
     const points = rawPoints
       .map((p: any) => ({ x: Number(p?.x), y: Number(p?.y) }))
@@ -40,7 +42,10 @@ export async function getLocationPresets(store: Store): Promise<LocationPreset[]
   }
 }
 
-export async function setLocationPresets(store: Store, presets: LocationPreset[]): Promise<LocationPreset[]> {
+export async function setLocationPresets(
+  store: Store,
+  presets: LocationPreset[],
+): Promise<LocationPreset[]> {
   const p = normalizePresets(presets);
   await store.setSetting(PRESETS_KEY, JSON.stringify(p));
   return p;
