@@ -7,13 +7,15 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
+    "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "cf-dev": "wrangler dev --experimental-vectorize-bind-to-prod",
     "seed": "bun run src/scripts/seed.ts",
     "migrate": "bun run src/scripts/migrate.ts",
     "migrate:local": "wrangler d1 migrations apply found-db --local",
     "migrate:remote": "wrangler d1 migrations apply found-db --remote",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.1.1",

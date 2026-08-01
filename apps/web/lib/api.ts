@@ -18,7 +18,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.body && !(init.body instanceof FormData)
         ? { "content-type": "application/json" }
         : {}),
-      ...(init?.headers ?? {}),
+      ...init?.headers,
     },
     credentials: "include",
   });

@@ -133,7 +133,7 @@ test("rematchAll: 保管中の物品を再埋め込みし、当時見つから�
   const ai = embedOnlyProvider();
 
   const desc = "紺色の折りたたみ傘。持ち手は黒。";
-  const item = await store.createItem({
+  await store.createItem({
     status: "stored",
     category: "傘",
     color: "紺",

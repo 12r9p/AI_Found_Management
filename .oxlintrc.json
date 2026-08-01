@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["apps/web/next-env.d.ts"],
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "nextjs", "import"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    // 認証付き画像はNext.jsの画像最適化経由では取得できないため、ネイティブimg要素を許可する。
+    "nextjs/no-img-element": "off"
+  },
+  "settings": {
+    "next": {
+      "rootDir": "apps/web"
+    }
+  }
+}

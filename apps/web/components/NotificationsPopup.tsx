@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Modal, useToast } from "./ui";
-import { api, imageUrl } from "../lib/api";
+import { api } from "../lib/api";
 import type { Notification } from "../lib/types";
 
 /**
