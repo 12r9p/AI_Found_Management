@@ -21,6 +21,7 @@ import {
   normalizeMetaOptions,
 } from "./lib/meta.ts";
 import type { SearchFilters } from "./types.ts";
+import { DuplicateDisplayIdError } from "./store/index.ts";
 
 /** 現在有効な地図画像のキーを保持する設定キー。 */
 const ACTIVE_MAP_KEY = "active_map_key";
@@ -66,6 +67,10 @@ export function createApp() {
   // aot(実行時コード生成)は Cloudflare Workers のサンドボックスで禁止されているため無効化。
   const app = new Elysia({ aot: false })
     .onError(({ error, code, set }) => {
+      if (error instanceof DuplicateDisplayIdError) {
+        set.status = 409;
+        return { error: error.code };
+      }
       const status = code === "NOT_FOUND" ? 404 : 500;
       set.status = status;
       console.error("[api error]", code, (error as Error)?.message);

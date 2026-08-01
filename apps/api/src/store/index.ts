@@ -4,6 +4,7 @@ import { MemoryStore } from "./memory.ts";
 import { D1VectorizeStore } from "./d1.ts";
 
 export * from "./store.ts";
+export * from "./errors.ts";
 
 // Bun のローカル開発では単一プロセスなのでストアを使い回す。
 let cached: Store | null = null;
