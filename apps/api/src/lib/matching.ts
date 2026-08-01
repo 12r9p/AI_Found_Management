@@ -1,5 +1,4 @@
 import type { Store, MatchBulkEntry } from "../store/index.ts";
-import { MAX_ITEM_PAGE_LIMIT } from "../store/item-pagination.ts";
 import type { Item, Inquiry, Match } from "../types.ts";
 import type { AIProvider } from "../ai/provider.ts";
 import { itemEmbedText } from "./embed-text.ts";
@@ -146,31 +145,36 @@ function label(x: Item): string {
   );
 }
 
-export interface RematchOutcome {
+export const REMATCH_PAGE_SIZE = 100;
+
+export interface RematchPageOutcome {
   itemsChecked: number;
   matchesFound: number;
   failed: number;
+  nextCursor: string | null;
+  done: boolean;
 }
 
 /**
- * 保管中の全物品を対象に、埋め込みを再計算した上で未解決の問い合わせと再照合する。
+ * 保管中の物品を100件ずつ読み、埋め込みを再計算して未解決の問い合わせと再照合する。
  * しきい値の変更や、種別・色の表記を後から直した場合など、既存データには
- * 自動反映されない変更を一括で追いつかせるためのスタッフ手動トリガー
- * （管理画面の「全件再照合」ボタンから呼ばれる）。
+ * 自動反映されない変更を追いつかせるため、管理画面がカーソルを渡しながら
+ * この処理を順番に呼び出す。
  * embedding を都度取り直す（＝Vectorizeのメタデータも同時に更新される）ため、
  * 過去に登録された物品でもプレフィルタ用メタデータの取りこぼしを拾い直せる。
  * 1件の失敗（AI障害・モデルアクセス不可等）で残り全件を巻き込んで中断しないよう、
  * 物品ごとに独立してエラーを捕捉し、失敗件数を集計して返す。
  */
-export async function rematchAll(
+export async function rematchPage(
   store: Store,
   ai: AIProvider,
   threshold: number,
-): Promise<RematchOutcome> {
-  const { items } = await store.listItems({ status: "stored" }, { limit: MAX_ITEM_PAGE_LIMIT });
+  cursor?: string,
+): Promise<RematchPageOutcome> {
+  const page = await store.listItems({ status: "stored" }, { cursor, limit: REMATCH_PAGE_SIZE });
   let matchesFound = 0;
   let failed = 0;
-  for (const item of items) {
+  for (const item of page.items) {
     try {
       const embedding = await ai.embed(itemEmbedText(item));
       const updated = await store.updateItem(item.id, { embedding, ai_status: "ready" });
@@ -179,9 +183,15 @@ export async function rematchAll(
       matchesFound += outcome.matches.length;
     } catch (e) {
       failed++;
-      console.error("[rematchAll] failed for item", item.id, e);
+      console.error("[rematchPage] failed for item", item.id, e);
       await store.updateItem(item.id, { ai_status: "error" }).catch(() => {});
     }
   }
-  return { itemsChecked: items.length, matchesFound, failed };
+  return {
+    itemsChecked: page.items.length,
+    matchesFound,
+    failed,
+    nextCursor: page.nextCursor,
+    done: page.nextCursor === null,
+  };
 }

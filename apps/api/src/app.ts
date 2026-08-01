@@ -3,7 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { buildContext, type AppContext } from "./context.ts";
 import { getEnv, waitUntil } from "./env-holder.ts";
 import { itemEmbedText, inquiryEmbedText } from "./lib/embed-text.ts";
-import { matchNewItem, matchNewInquiry, rematchAll } from "./lib/matching.ts";
+import { matchNewItem, matchNewInquiry, rematchPage } from "./lib/matching.ts";
 import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
 import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
@@ -20,12 +20,12 @@ import {
   getMetaOptions,
   normalizeMetaOptions,
 } from "./lib/meta.ts";
+import { createItemsCsvStream } from "./lib/items-csv.ts";
 import type { SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError } from "./store/index.ts";
 import {
   InvalidItemCursorError,
   InvalidItemLimitError,
-  MAX_ITEM_PAGE_LIMIT,
   parseItemCursor,
   parseItemPageLimit,
   type ItemListOptions,
@@ -453,12 +453,24 @@ export function createApp() {
       return { items };
     })
 
-    // ---- 全件再照合（管理画面の手動トリガー） ----
-    // しきい値変更・表記修正など、既存データには自動反映されない変更を
-    // スタッフの操作で一括で追いつかせるためのメンテナンス用エンドポイント。
-    .post("/api/rematch", async () => {
-      const c = await ctx();
-      return rematchAll(c.store, c.ai, c.cfg.matchThreshold);
+    // ---- ページ単位の全件再照合（管理画面の手動トリガー） ----
+    // 管理画面がカーソルを引き継ぎ、100件ずつ終端まで順番に呼び出す。
+    .post("/api/rematch", async ({ body, set }) => {
+      const cursor = (body as { cursor?: unknown } | undefined)?.cursor;
+      if (cursor !== undefined && (typeof cursor !== "string" || !cursor)) {
+        set.status = 400;
+        return { error: "invalid_cursor" };
+      }
+      try {
+        const c = await ctx();
+        return await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
+      } catch (error) {
+        if (error instanceof InvalidItemCursorError) {
+          set.status = 400;
+          return { error: error.message };
+        }
+        throw error;
+      }
     })
 
     // ---- inquiries ----
@@ -604,48 +616,15 @@ export function createApp() {
       return { ok: await c.store.markNotificationRead(params.id) };
     })
 
-    // ---- CSV export (bonus) ----
-    .get("/api/export/items.csv", async ({ query, set }) => {
+    // ---- 物品CSV出力 ----
+    .get("/api/export/items.csv", async ({ query }) => {
       const c = await ctx();
-      const { items } = await c.store.listItems(parseFilters(query as any), {
-        limit: MAX_ITEM_PAGE_LIMIT,
+      return new Response(createItemsCsvStream(c.store, parseFilters(query as any)), {
+        headers: {
+          "content-type": "text/csv; charset=utf-8",
+          "content-disposition": 'attachment; filename="items.csv"',
+        },
       });
-      const head = [
-        "id",
-        "status",
-        "category",
-        "color",
-        "brand",
-        "found_location",
-        "map_pin",
-        "found_at",
-        "ai_description",
-        "tags",
-        "created_at",
-      ];
-      const esc = (s: any) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-      const rows = items.map((i) =>
-        [
-          i.id,
-          i.status,
-          i.category,
-          i.color,
-          i.brand,
-          i.found_location,
-          i.found_x != null && i.found_y != null
-            ? `${(i.found_x * 100).toFixed(1)}%,${(i.found_y * 100).toFixed(1)}%`
-            : "",
-          i.found_at ?? "",
-          i.ai_description,
-          i.tags.join(";"),
-          i.created_at,
-        ]
-          .map(esc)
-          .join(","),
-      );
-      set.headers["content-type"] = "text/csv; charset=utf-8";
-      set.headers["content-disposition"] = 'attachment; filename="items.csv"';
-      return "﻿" + [head.join(","), ...rows].join("\n");
     });
 
   return app;

@@ -28,6 +28,15 @@ const STATUS_FILTERS = [
   { id: "closed", label: "取下げ" },
 ];
 
+interface RematchProgress {
+  itemsChecked: number;
+  matchesFound: number;
+  failed: number;
+  resumeCursor: string | null;
+  done: boolean;
+  interrupted: boolean;
+}
+
 /**
  * 管理 > 問い合わせ。
  * 一覧行をクリックで詳細ポップアップ（照合候補を画像付きで表示）。
@@ -40,6 +49,7 @@ export function InquiriesTab() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Inquiry | null>(null);
   const [rematching, setRematching] = useState(false);
+  const [rematchProgress, setRematchProgress] = useState<RematchProgress | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -54,22 +64,54 @@ export function InquiriesTab() {
     load();
   }, [load]);
 
-  /** しきい値変更や表記修正など、既存データには自動反映されない変更を
-   * 保管中の全物品について一括で追いつかせる（新しい一致は通知ベルに届く）。 */
-  const rematchAll = async () => {
+  /** 保管中の物品を100件ずつ順に処理し、通信が途切れた場合は最後に完了した
+   * カーソルと累積件数を残して同じ位置から再開できるようにする。 */
+  const runRematch = async (resume: boolean) => {
+    const previous = resume ? rematchProgress : null;
+    const totals = {
+      itemsChecked: previous?.itemsChecked ?? 0,
+      matchesFound: previous?.matchesFound ?? 0,
+      failed: previous?.failed ?? 0,
+    };
+    let cursor = previous?.resumeCursor ?? null;
     setRematching(true);
+    setRematchProgress({ ...totals, resumeCursor: cursor, done: false, interrupted: false });
     try {
-      const { itemsChecked, matchesFound, failed } = await api.rematchAll();
-      const failedNote = failed > 0 ? `(${failed}件は失敗)` : "";
+      for (;;) {
+        const requestedCursor = cursor;
+        const page = await api.rematchPage(cursor ?? undefined);
+        totals.itemsChecked += page.itemsChecked;
+        totals.matchesFound += page.matchesFound;
+        totals.failed += page.failed;
+        cursor = page.nextCursor;
+        setRematchProgress({
+          ...totals,
+          resumeCursor: cursor,
+          done: page.done,
+          interrupted: false,
+        });
+        if (page.done) break;
+        if (!cursor || cursor === requestedCursor) throw new Error("rematch_pagination_stalled");
+      }
+      const failedNote = totals.failed > 0 ? `(${totals.failed}件は失敗)` : "";
       toast(
-        matchesFound > 0
-          ? `${itemsChecked}件を再照合し、新たに${matchesFound}件の一致候補が見つかりました${failedNote}`
-          : `${itemsChecked}件を再照合しましたが、新たな一致はありませんでした${failedNote}`,
-        failed > 0 && failed === itemsChecked ? "error" : "success",
+        totals.matchesFound > 0
+          ? `${totals.itemsChecked}件を再照合し、新たに${totals.matchesFound}件の一致候補が見つかりました${failedNote}`
+          : `${totals.itemsChecked}件を再照合しましたが、新たな一致はありませんでした${failedNote}`,
+        totals.failed > 0 && totals.failed === totals.itemsChecked ? "error" : "success",
       );
       load();
     } catch (e) {
-      toast(`再照合に失敗しました: ${(e as Error).message}`, "error");
+      setRematchProgress({
+        ...totals,
+        resumeCursor: cursor,
+        done: false,
+        interrupted: true,
+      });
+      toast(
+        `再照合が${totals.itemsChecked}件で中断しました。続きから再開できます: ${(e as Error).message}`,
+        "error",
+      );
     } finally {
       setRematching(false);
     }
@@ -98,12 +140,35 @@ export function InquiriesTab() {
               <Button variant="outline" onClick={load}>
                 再読込
               </Button>
-              <Button variant="outline" onClick={rematchAll} disabled={rematching}>
+              <Button variant="outline" onClick={() => runRematch(false)} disabled={rematching}>
                 {rematching ? "再照合中…" : "全件再照合"}
               </Button>
             </div>
           </div>
         </div>
+        {rematchProgress && (
+          <output className="rb-between mt-8" aria-live="polite">
+            <span className="rb-tiny muted-text">
+              {rematchProgress.done
+                ? "再照合完了"
+                : rematchProgress.interrupted
+                  ? "再照合中断"
+                  : "再照合中"}
+              : {rematchProgress.itemsChecked}件確認・{rematchProgress.matchesFound}件一致・
+              {rematchProgress.failed}件失敗
+            </span>
+            {rematchProgress.interrupted && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => runRematch(true)}
+                disabled={rematching}
+              >
+                続きから再開
+              </Button>
+            )}
+          </output>
+        )}
         <p className="rb-tiny muted-text" style={{ margin: 0 }}>
           行をクリックすると詳細と照合候補を確認できます。個人情報は紙台帳（受付No）で管理します。
         </p>

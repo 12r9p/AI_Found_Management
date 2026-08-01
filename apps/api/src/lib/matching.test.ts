@@ -1,8 +1,11 @@
 import { test, expect } from "bun:test";
 import { MemoryStore } from "../store/memory.ts";
 import { deterministicEmbed } from "../ai/provider.ts";
-import { matchNewItem, matchNewInquiry, rematchAll } from "./matching.ts";
+import { matchNewItem, matchNewInquiry, rematchPage } from "./matching.ts";
 import type { AIProvider } from "../ai/provider.ts";
+import { createApp } from "../app.ts";
+import { setEnv } from "../env-holder.ts";
+import type { Env } from "../config.ts";
 
 const DIM = 512;
 const embed = (t: string) => deterministicEmbed(t, DIM);
@@ -112,12 +115,12 @@ test("該当なしの問い合わせは open のまま保存され、後日の�
   expect((await store.listNotifications(true)).length).toBe(1);
 });
 
-/** rematchAll は embedding を再取得するだけなので、embed だけ実装したスタブで足りる。 */
+/** rematchPage は embedding を再取得するだけなので、embed だけ実装したスタブで足りる。 */
 function embedOnlyProvider(): AIProvider {
   return {
     name: "test-embed-only",
     async describeImages() {
-      throw new Error("not used by rematchAll");
+      throw new Error("not used by rematchPage");
     },
     async embed(text: string) {
       return embed(text);
@@ -128,7 +131,7 @@ function embedOnlyProvider(): AIProvider {
   };
 }
 
-test("rematchAll: 保管中の物品を再埋め込みし、当時見つからなかった一致も拾い直す", async () => {
+test("再照合ページは保管中の物品を再埋め込みし、当時見つからなかった一致も拾い直す", async () => {
   const store = new MemoryStore();
   const ai = embedOnlyProvider();
 
@@ -151,9 +154,11 @@ test("rematchAll: 保管中の物品を再埋め込みし、当時見つから�
   // ここでは matchNewItem/matchNewInquiry を一切呼んでいないため、
   // 一致は存在しない状態（＝しきい値変更などで見逃されたケースを模している）。
 
-  const outcome = await rematchAll(store, ai, 0.5);
+  const outcome = await rematchPage(store, ai, 0.5);
   expect(outcome.itemsChecked).toBe(1);
   expect(outcome.matchesFound).toBe(1);
+  expect(outcome.done).toBe(true);
+  expect(outcome.nextCursor).toBeNull();
   expect((await store.listNotifications()).length).toBe(1);
 
   // 保管中でない物品は対象外
@@ -162,13 +167,13 @@ test("rematchAll: 保管中の物品を再埋め込みし、当時見つから�
     category: "鍵",
     embedding: embed("鍵"),
   });
-  const outcome2 = await rematchAll(store, ai, 0.5);
+  const outcome2 = await rematchPage(store, ai, 0.5);
   expect(outcome2.itemsChecked).toBe(1); // returned は数えない
   expect(outcome2.matchesFound).toBe(0); // 既知の組み合わせなので再通知しない
   void returned;
 });
 
-test("rematchAll: 1件のembed失敗（モデルアクセス不可等）で残り全件を巻き込んで中断しない", async () => {
+test("再照合ページは1件のembed失敗で残りを巻き込んで中断しない", async () => {
   const store = new MemoryStore();
   const failing: AIProvider = {
     name: "always-fails",
@@ -187,7 +192,7 @@ test("rematchAll: 1件のembed失敗（モデルアクセス不可等）で残�
   await store.createItem({ status: "stored", category: "水筒", embedding: embed("水筒") });
   await store.createItem({ status: "stored", category: "財布", embedding: embed("財布") });
 
-  const outcome = await rematchAll(store, failing, 0.5);
+  const outcome = await rematchPage(store, failing, 0.5);
   expect(outcome.itemsChecked).toBe(3);
   expect(outcome.failed).toBe(3); // 3件とも失敗するが、途中で処理が止まらず3件とも試行される
   expect(outcome.matchesFound).toBe(0);
@@ -195,4 +200,84 @@ test("rematchAll: 1件のembed失敗（モデルアクセス不可等）で残�
   // 失敗した物品は ai_status:error になり、成功時に上書きされていた古い状態が残らない
   const { items } = await store.listItems({});
   expect(items.every((it) => it.ai_status === "error")).toBe(true);
+});
+
+test("再照合ページは同じ作成日時の1,001件を100件以下ずつ終端まで処理する", async () => {
+  const store = new MemoryStore();
+  const ai = embedOnlyProvider();
+  const createdAt = "2026-08-01T09:00:00.000Z";
+  for (let index = 0; index < 1_001; index++) {
+    const item = await store.createItem({ status: "stored", category: "傘" });
+    await store.updateItem(item.id, { created_at: createdAt });
+  }
+
+  let cursor: string | undefined;
+  let itemsChecked = 0;
+  let pages = 0;
+  do {
+    const outcome = await rematchPage(store, ai, 0.5, cursor);
+    expect(outcome.itemsChecked).toBeLessThanOrEqual(100);
+    itemsChecked += outcome.itemsChecked;
+    pages++;
+    cursor = outcome.nextCursor ?? undefined;
+    expect(outcome.done).toBe(!cursor);
+  } while (cursor);
+
+  expect(itemsChecked).toBe(1_001);
+  expect(pages).toBe(11);
+});
+
+test("再照合を途中から再開しても一致候補と通知を重複させない", async () => {
+  const store = new MemoryStore();
+  const ai = embedOnlyProvider();
+  const description = "紺色の折りたたみ傘。持ち手は黒。";
+  const createdAt = "2026-08-01T09:00:00.000Z";
+  await store.createInquiry({
+    status: "open",
+    category: "傘",
+    description,
+    ai_description: description,
+    embedding: embed(`傘 ${description}`),
+    reference_no: "R-10",
+  });
+  for (let index = 0; index < 101; index++) {
+    const item = await store.createItem({
+      status: "stored",
+      category: "傘",
+      ai_description: description,
+      embedding: embed(`傘 ${description}`),
+    });
+    await store.updateItem(item.id, { created_at: createdAt });
+  }
+
+  const first = await rematchPage(store, ai, 0, undefined);
+  expect(first.itemsChecked).toBe(100);
+  expect(first.done).toBe(false);
+  const terminal = await rematchPage(store, ai, 0, first.nextCursor!);
+  expect(terminal.itemsChecked).toBe(1);
+  expect(terminal.done).toBe(true);
+  expect(first.matchesFound + terminal.matchesFound).toBe(101);
+  expect(await store.listMatches()).toHaveLength(101);
+  expect(await store.listNotifications()).toHaveLength(101);
+
+  const resumed = await rematchPage(store, ai, 0, first.nextCursor!);
+  const repeated = await rematchPage(store, ai, 0, undefined);
+  expect(resumed.matchesFound).toBe(0);
+  expect(repeated.matchesFound).toBe(0);
+  expect(await store.listMatches()).toHaveLength(101);
+  expect(await store.listNotifications()).toHaveLength(101);
+});
+
+test("POST /api/rematchは不正カーソルを400で返す", async () => {
+  setEnv({} as Env);
+  const response = await createApp().handle(
+    new Request("http://localhost/api/rematch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cursor: "not-a-cursor" }),
+    }),
+  );
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_cursor" });
 });

@@ -19,6 +19,14 @@ export interface ItemCursor {
   id: string;
 }
 
+export interface RematchPage {
+  itemsChecked: number;
+  matchesFound: number;
+  failed: number;
+  nextCursor: string | null;
+  done: boolean;
+}
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -85,10 +93,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  // 保管中の全物品を未解決の問い合わせと一括で再照合する（管理画面の手動トリガー）
-  rematchAll: () =>
-    req<{ itemsChecked: number; matchesFound: number; failed: number }>("/api/rematch", {
+  // 保管中の物品を100件ずつ再照合し、管理画面側で終端まで順に呼び出す。
+  rematchPage: (cursor?: string) =>
+    req<RematchPage>("/api/rematch", {
       method: "POST",
+      body: JSON.stringify(cursor ? { cursor } : {}),
     }),
 
   // uploads / analyze
