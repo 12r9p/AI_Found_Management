@@ -513,8 +513,26 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
     .delete("/api/items/:id", async ({ params }) => {
       const c = await ctx();
       const item = await c.store.getItem(params.id);
-      for (const key of item?.image_keys ?? []) await c.images.delete(key).catch(() => {});
-      return { deleted: await c.store.deleteItem(params.id) };
+      const deleted = await c.store.deleteItem(params.id);
+      if (deleted && item) {
+        const cleanupResults = await Promise.allSettled(
+          item.image_keys.map((key) => c.images.delete(key)),
+        );
+        cleanupResults.forEach((result, index) => {
+          if (result.status === "fulfilled") return;
+          console.error(
+            JSON.stringify({
+              event: "deletion_cleanup_failed",
+              resource: "r2_image",
+              entityId: item.id,
+              objectKey: item.image_keys[index],
+              applied: true,
+              error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            }),
+          );
+        });
+      }
+      return { deleted };
     })
 
     // ---- search (vector + filters) ----

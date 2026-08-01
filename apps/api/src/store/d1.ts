@@ -198,9 +198,40 @@ export class D1VectorizeStore implements Store {
     return rowToItem(row);
   }
   async deleteItem(id: string): Promise<boolean> {
-    const row = await this.db.prepare(`DELETE FROM items WHERE id=? RETURNING id`).bind(id).first();
-    if (!row) return false;
-    await this.vectorizeItems.deleteByIds([id]);
+    const results = await this.db.batch([
+      this.prepareInquiryStateUpdate({ kind: "deleted_item", id }, nowIso()),
+      this.db.prepare(`DELETE FROM items WHERE id=? RETURNING id`).bind(id),
+    ]);
+    if (!results[1]?.results?.[0]) return false;
+
+    const inquiries = (results[0]?.results ?? []).map(rowToInquiry);
+    const cleanupTargets = [
+      {
+        resource: "items_vectorize",
+        entityId: id,
+        run: () => this.vectorizeItems.deleteByIds([id]),
+      },
+      ...inquiries.map((inquiry) => ({
+        resource: "inquiries_vectorize",
+        entityId: inquiry.id,
+        run: () => this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, inquiry.id),
+      })),
+    ];
+    const cleanupResults = await Promise.allSettled(cleanupTargets.map((target) => target.run()));
+    cleanupResults.forEach((result, index) => {
+      if (result.status === "fulfilled") return;
+      const target = cleanupTargets[index];
+      if (!target) return;
+      console.error(
+        JSON.stringify({
+          event: "deletion_cleanup_failed",
+          resource: target.resource,
+          entityId: target.entityId,
+          applied: true,
+          error: errorMessage(result.reason),
+        }),
+      );
+    });
     return true;
   }
   async searchItems(embedding: number[], f: SearchFilters): Promise<ScoredItem[]> {
@@ -354,7 +385,19 @@ export class D1VectorizeStore implements Store {
       .bind(id)
       .first();
     if (!row) return false;
-    await this.vectorizeInquiries.deleteByIds([id]);
+    try {
+      await this.vectorizeInquiries.deleteByIds([id]);
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          event: "deletion_cleanup_failed",
+          resource: "inquiries_vectorize",
+          entityId: id,
+          applied: true,
+          error: errorMessage(error),
+        }),
+      );
+    }
     return true;
   }
   async searchInquiries(
@@ -464,32 +507,7 @@ export class D1VectorizeStore implements Store {
              RETURNING ${MATCH_COLS}`,
           )
           .bind(decision, id),
-        this.db
-          .prepare(
-            `UPDATE inquiries
-             SET status=CASE
-                   WHEN status='closed' THEN 'closed'
-                   WHEN EXISTS (
-                     SELECT 1 FROM matches
-                     WHERE inquiry_id=inquiries.id AND status='confirmed'
-                   ) THEN 'resolved'
-                   WHEN EXISTS (
-                     SELECT 1 FROM matches
-                     WHERE inquiry_id=inquiries.id AND status='pending'
-                   ) THEN 'matched'
-                   ELSE 'open'
-                 END,
-                 matched_item_id=(
-                   SELECT item_id FROM matches
-                   WHERE inquiry_id=inquiries.id AND status='confirmed'
-                   ORDER BY created_at ASC, id ASC
-                   LIMIT 1
-                 ),
-                 updated_at=?
-             WHERE id=?
-             RETURNING ${INQ_COLS}`,
-          )
-          .bind(updated_at, current.inquiry_id),
+        this.prepareInquiryStateUpdate({ kind: "inquiry", id: current.inquiry_id }, updated_at),
       ]);
     } catch (error) {
       if (decision === "confirmed" && isConfirmationConflictError(error)) {
@@ -507,6 +525,63 @@ export class D1VectorizeStore implements Store {
     const inquiry = rowToInquiry(inquiryRow);
     await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, inquiry.id);
     return { ok: true, match, inquiry };
+  }
+
+  /** 照合判断と物品削除で共通の問い合わせ状態再計算をD1文として組み立てる。 */
+  private prepareInquiryStateUpdate(
+    target: { kind: "inquiry"; id: string } | { kind: "deleted_item"; id: string },
+    updatedAt: string,
+  ): D1PreparedStatement {
+    const deletedItemId = target.kind === "deleted_item" ? target.id : null;
+    const selection =
+      target.kind === "inquiry"
+        ? "id=?"
+        : `EXISTS (SELECT 1 FROM items WHERE id=(SELECT item_id FROM target))
+           AND (
+             matched_item_id=(SELECT item_id FROM target)
+             OR EXISTS (
+               SELECT 1 FROM matches
+               WHERE inquiry_id=inquiries.id
+                 AND item_id=(SELECT item_id FROM target)
+             )
+           )`;
+    const statement = this.db.prepare(
+       `WITH target(item_id) AS (VALUES (?))
+       UPDATE inquiries
+       SET status=CASE
+             WHEN status='closed' THEN 'closed'
+             WHEN EXISTS (
+               SELECT 1 FROM matches
+               WHERE inquiry_id=inquiries.id
+                 AND ((SELECT item_id FROM target) IS NULL
+                      OR item_id<>(SELECT item_id FROM target))
+                 AND status='confirmed'
+             ) THEN 'resolved'
+             WHEN EXISTS (
+               SELECT 1 FROM matches
+               WHERE inquiry_id=inquiries.id
+                 AND ((SELECT item_id FROM target) IS NULL
+                      OR item_id<>(SELECT item_id FROM target))
+                 AND status='pending'
+             ) THEN 'matched'
+             ELSE 'open'
+           END,
+           matched_item_id=(
+             SELECT item_id FROM matches
+             WHERE inquiry_id=inquiries.id
+               AND ((SELECT item_id FROM target) IS NULL
+                    OR item_id<>(SELECT item_id FROM target))
+               AND status='confirmed'
+             ORDER BY created_at ASC, id ASC
+             LIMIT 1
+           ),
+           updated_at=?
+       WHERE ${selection}
+       RETURNING ${INQ_COLS}`,
+    );
+    return target.kind === "inquiry"
+      ? statement.bind(deletedItemId, updatedAt, target.id)
+      : statement.bind(deletedItemId, updatedAt);
   }
 
   async findMatch(itemId: string, inquiryId: string): Promise<Match | null> {
