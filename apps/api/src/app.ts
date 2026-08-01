@@ -27,7 +27,7 @@ import {
 } from "./lib/meta.ts";
 import { createItemsCsvStream } from "./lib/items-csv.ts";
 import type { SearchFilters } from "./types.ts";
-import { DuplicateDisplayIdError } from "./store/index.ts";
+import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
 import {
   InvalidItemCursorError,
   InvalidItemLimitError,
@@ -141,7 +141,27 @@ function parseItemListOptions(q: Record<string, unknown>): ItemListOptions {
   };
 }
 
-async function ctx(): Promise<AppContext> {
+/** PATCHが実際に特徴量を変える場合だけ再埋め込みする。同値の配列も内容で比較する。 */
+function changesAnyField(
+  current: object,
+  patch: Record<string, unknown>,
+  fields: readonly string[],
+): boolean {
+  const values = current as Record<string, unknown>;
+  return fields.some((field) => {
+    if (!(field in patch)) return false;
+    const before = values[field];
+    const after = patch[field];
+    if (Array.isArray(before) && Array.isArray(after)) {
+      return (
+        before.length !== after.length || before.some((value, index) => value !== after[index])
+      );
+    }
+    return before !== after;
+  });
+}
+
+async function defaultContext(): Promise<AppContext> {
   return buildContext(getEnv());
 }
 
@@ -157,13 +177,18 @@ async function safeEmbed(ai: AppContext["ai"], text: string): Promise<number[]> 
   }
 }
 
-export function createApp() {
+export function createApp(resolveContext: () => Promise<AppContext> = defaultContext) {
+  const ctx = resolveContext;
   // aot(実行時コード生成)は Cloudflare Workers のサンドボックスで禁止されているため無効化。
   const app = new Elysia({ aot: false })
     .onError(({ error, code, set }) => {
       if (error instanceof DuplicateDisplayIdError) {
         set.status = 409;
         return { error: error.code };
+      }
+      if (error instanceof VectorMetadataSyncError) {
+        set.status = 503;
+        return { error: error.code, applied: error.applied };
       }
       const status = code === "NOT_FOUND" ? 404 : 500;
       set.status = status;
@@ -462,18 +487,19 @@ export function createApp() {
       const patch = { ...(body as any) };
       delete patch.id;
       delete patch.embedding; // 埋め込みは派生値。手編集させない
-      // 特徴に関わる項目が変わったら再埋め込み。
+      // 特徴に関わる項目が実際に変わったら再埋め込み。
+      // category/status は検索metadataとして既存vectorへ同期し、それだけの変更では
+      // AIを呼ばない。同値PATCHもmetadata同期の再試行経路として残す。
       // 埋め込みが失敗しても、他のフィールドの編集（状態変更など）まで巻き込んで
       // 失敗にしない — 埋め込みだけ古いまま保持し、ai_status で要再解析を示す。
-      const touchesFeatures = [
-        "category",
+      const touchesFeatures = changesAnyField(existing, patch, [
         "color",
         "brand",
         "ai_description",
         "tags",
         "found_location",
         "notes",
-      ].some((k) => k in patch);
+      ]);
       let embedding: number[] | undefined;
       let ai_status: typeof existing.ai_status | undefined;
       if (touchesFeatures) {
@@ -649,7 +675,8 @@ export function createApp() {
       const patch = { ...(body as any) };
       delete patch.id;
       delete patch.embedding;
-      const touches = ["category", "color", "description", "tags", "notes"].some((k) => k in patch);
+      // category/statusだけの変更は既存vectorのmetadata同期で処理し、AIを呼ばない。
+      const touches = changesAnyField(existing, patch, ["color", "description", "tags", "notes"]);
       let embedding: number[] | undefined;
       if (touches) {
         // 失敗しても他フィールドの編集は保存する（埋め込みだけ古いまま据え置く）。

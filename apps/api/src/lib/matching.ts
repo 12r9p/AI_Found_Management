@@ -184,7 +184,13 @@ export async function rematchPage(
       matchesFound += outcome.matches.length;
     } catch (e) {
       failed++;
-      console.error("[rematchPage] failed for item", item.id, e);
+      console.error(
+        JSON.stringify({
+          event: "rematch_item_failed",
+          itemId: item.id,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
       await store.updateItem(item.id, { ai_status: "error" }).catch(() => {});
     }
   }

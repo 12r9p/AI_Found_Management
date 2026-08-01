@@ -26,6 +26,22 @@ export interface MatchBulkEntry {
   inquiryStatusUpdate?: { id: string; status: Inquiry["status"] };
 }
 
+export class VectorMetadataSyncError extends Error {
+  readonly code = "vector_metadata_sync_failed" as const;
+  readonly applied = true as const;
+
+  constructor(
+    readonly entity: "item" | "inquiry",
+    readonly entityId: string,
+    readonly attempts: number,
+    cause: unknown,
+  ) {
+    super(`Vectorize metadata synchronization failed for ${entity} ${entityId}`);
+    this.name = "VectorMetadataSyncError";
+    this.cause = cause;
+  }
+}
+
 /**
  * データアクセス抽象。現場で「DB をほぼ直接触る」編集要件に応えるため、
  * update は任意フィールドの部分更新を許す。
