@@ -715,17 +715,34 @@ h3,
   stroke-width: 0.5;
   stroke-dasharray: 2 1.5;
 }
+/* 頂点の丸・ラベルは SVG ではなく .map-pin と同じ「%指定のHTML要素」で描く。
+   viewBox="0 0 100 100" に preserveAspectRatio="none" を使う塗りつぶしSVGは、
+   画像が正方形でないと縦横で拡大率が変わり、SVG内の文字・円がその歪みをそのまま受けて
+   潰れる/伸びる（横に間延びして見える）。実ピクセルで置く要素は歪まない。 */
 .map-region-vertex {
-  fill: var(--error);
-  stroke: var(--background);
-  stroke-width: 0.4;
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--error);
+  border: 2px solid var(--background);
+  outline: 1px solid var(--foreground);
+  pointer-events: none;
 }
 .map-region-label {
-  font: 3px var(--font-mono);
-  fill: var(--foreground);
-  paint-order: stroke;
-  stroke: var(--background);
-  stroke-width: 0.6px;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 80%, transparent);
+  border: 1px solid var(--border);
+  padding: 2px 5px;
+  pointer-events: none;
 }
 
 /* ---- Hamburger menu ---- */
