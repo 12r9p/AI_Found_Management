@@ -7,6 +7,9 @@ import type {
   NewInquiry,
   SearchFilters,
 } from "../types.ts";
+import type { ItemListOptions, ItemPage } from "./item-pagination.ts";
+
+export * from "./item-pagination.ts";
 
 export interface ScoredItem extends Item {
   score: number;
@@ -34,7 +37,7 @@ export interface Store {
   // --- items ---
   createItem(data: NewItem): Promise<Item>;
   getItem(id: string): Promise<Item | null>;
-  listItems(filters: SearchFilters): Promise<Item[]>;
+  listItems(filters: SearchFilters, options?: ItemListOptions): Promise<ItemPage>;
   updateItem(id: string, patch: Partial<Item>): Promise<Item | null>;
   deleteItem(id: string): Promise<boolean>;
   searchItems(embedding: number[], filters: SearchFilters): Promise<ScoredItem[]>;

@@ -1,0 +1,119 @@
+import type { Item } from "../types.ts";
+
+export const DEFAULT_ITEM_PAGE_LIMIT = 100;
+export const MAX_ITEM_PAGE_LIMIT = 200;
+
+export interface ItemListOptions {
+  cursor?: string;
+  limit?: number;
+}
+
+export interface ItemPage {
+  items: Item[];
+  nextCursor: string | null;
+}
+
+export interface ItemCursorPosition {
+  createdAt: string;
+  id: string;
+}
+
+export class InvalidItemCursorError extends Error {
+  constructor() {
+    super("invalid_cursor");
+    this.name = "InvalidItemCursorError";
+  }
+}
+
+export class InvalidItemLimitError extends Error {
+  constructor() {
+    super("invalid_limit");
+    this.name = "InvalidItemLimitError";
+  }
+}
+
+export function normalizeItemPageLimit(limit?: number): number {
+  if (limit === undefined) return DEFAULT_ITEM_PAGE_LIMIT;
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new InvalidItemLimitError();
+  return Math.min(limit, MAX_ITEM_PAGE_LIMIT);
+}
+
+export function parseItemPageLimit(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string" || !/^[1-9]\d*$/.test(value)) {
+    throw new InvalidItemLimitError();
+  }
+  const limit = Number(value);
+  if (!Number.isSafeInteger(limit)) throw new InvalidItemLimitError();
+  return normalizeItemPageLimit(limit);
+}
+
+export function encodeItemCursor(item: Pick<Item, "created_at" | "id">): string {
+  const payload = JSON.stringify({ v: 1, createdAt: item.created_at, id: item.id });
+  return btoa(payload).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
+}
+
+export function decodeItemCursor(cursor: string): ItemCursorPosition {
+  try {
+    if (!cursor || !/^[A-Za-z0-9_-]+$/.test(cursor) || cursor.length % 4 === 1) {
+      throw new InvalidItemCursorError();
+    }
+    const base64 = cursor.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const parsed = JSON.parse(atob(padded)) as unknown;
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      (parsed as { v?: unknown }).v !== 1 ||
+      typeof (parsed as { createdAt?: unknown }).createdAt !== "string" ||
+      !isCanonicalCursorDate((parsed as { createdAt: string }).createdAt) ||
+      typeof (parsed as { id?: unknown }).id !== "string" ||
+      !(parsed as { id: string }).id
+    ) {
+      throw new InvalidItemCursorError();
+    }
+    return {
+      createdAt: (parsed as { createdAt: string }).createdAt,
+      id: (parsed as { id: string }).id,
+    };
+  } catch (error) {
+    if (error instanceof InvalidItemCursorError) throw error;
+    throw new InvalidItemCursorError();
+  }
+}
+
+function isCanonicalCursorDate(value: string): boolean {
+  try {
+    return new Date(value).toISOString() === value;
+  } catch {
+    return false;
+  }
+}
+
+export function isItemAfterCursor(
+  item: Pick<Item, "created_at" | "id">,
+  cursor: ItemCursorPosition,
+): boolean {
+  return (
+    item.created_at < cursor.createdAt ||
+    (item.created_at === cursor.createdAt && item.id < cursor.id)
+  );
+}
+
+export function compareItemsNewestFirst(
+  a: Pick<Item, "created_at" | "id">,
+  b: Pick<Item, "created_at" | "id">,
+): number {
+  if (a.created_at !== b.created_at) return a.created_at > b.created_at ? -1 : 1;
+  if (a.id === b.id) return 0;
+  return a.id > b.id ? -1 : 1;
+}
+
+export function toItemPage(items: Item[], limit: number): ItemPage {
+  const hasNextPage = items.length > limit;
+  const pageItems = hasNextPage ? items.slice(0, limit) : items;
+  return {
+    items: pageItems,
+    nextCursor: hasNextPage ? encodeItemCursor(pageItems[pageItems.length - 1]!) : null,
+  };
+}

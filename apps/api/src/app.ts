@@ -22,6 +22,13 @@ import {
 } from "./lib/meta.ts";
 import type { SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError } from "./store/index.ts";
+import {
+  InvalidItemCursorError,
+  InvalidItemLimitError,
+  MAX_ITEM_PAGE_LIMIT,
+  parseItemPageLimit,
+  type ItemListOptions,
+} from "./store/item-pagination.ts";
 
 /** 現在有効な地図画像のキーを保持する設定キー。 */
 const ACTIVE_MAP_KEY = "active_map_key";
@@ -44,6 +51,17 @@ function parseFilters(q: Record<string, any>): SearchFilters {
     from: q.from || undefined,
     to: q.to || undefined,
     limit: q.limit ? parseInt(q.limit, 10) : undefined,
+  };
+}
+
+function parseItemListOptions(q: Record<string, unknown>): ItemListOptions {
+  const cursor = q.cursor;
+  if (cursor !== undefined && (typeof cursor !== "string" || !cursor)) {
+    throw new InvalidItemCursorError();
+  }
+  return {
+    cursor: cursor as string | undefined,
+    limit: parseItemPageLimit(q.limit),
   };
 }
 
@@ -286,9 +304,20 @@ export function createApp() {
     })
 
     // ---- items ----
-    .get("/api/items", async ({ query }) => {
-      const c = await ctx();
-      return { items: await c.store.listItems(parseFilters(query as any)) };
+    .get("/api/items", async ({ query, set }) => {
+      try {
+        const c = await ctx();
+        return await c.store.listItems(
+          parseFilters(query as Record<string, unknown>),
+          parseItemListOptions(query as Record<string, unknown>),
+        );
+      } catch (error) {
+        if (error instanceof InvalidItemCursorError || error instanceof InvalidItemLimitError) {
+          set.status = 400;
+          return { error: error.message };
+        }
+        throw error;
+      }
     })
     .post("/api/items", async ({ body }) => {
       const c = await ctx();
@@ -403,7 +432,8 @@ export function createApp() {
       const filters: SearchFilters = { ...parseFilters(b), limit: b.limit ?? 50 };
       if (!filters.q) {
         // クエリ無しならフィルタのみの一覧
-        return { items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })) };
+        const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
+        return { items: page.items.map((i) => ({ ...i, score: null })) };
       }
       const embedding = await safeEmbed(c.ai, filters.q);
       if (!embedding.length) {
@@ -411,10 +441,8 @@ export function createApp() {
         // （検索自体を丸ごとエラーにしない）。degraded を立てて呼び出し側に
         // 「ベクトル検索はできていない」ことを伝える（何も伝えないと検索してるのに
         // スコアが出ず、壊れているようにしか見えない）。
-        return {
-          items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })),
-          degraded: true,
-        };
+        const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
+        return { items: page.items.map((i) => ({ ...i, score: null })), degraded: true };
       }
       const items = await c.store.searchItems(embedding, filters);
       return { items };
@@ -574,7 +602,9 @@ export function createApp() {
     // ---- CSV export (bonus) ----
     .get("/api/export/items.csv", async ({ query, set }) => {
       const c = await ctx();
-      const items = await c.store.listItems(parseFilters(query as any));
+      const { items } = await c.store.listItems(parseFilters(query as any), {
+        limit: MAX_ITEM_PAGE_LIMIT,
+      });
       const head = [
         "id",
         "status",

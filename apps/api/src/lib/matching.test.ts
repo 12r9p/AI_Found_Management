@@ -193,6 +193,6 @@ test("rematchAll: 1件のembed失敗（モデルアクセス不可等）で残�
   expect(outcome.matchesFound).toBe(0);
 
   // 失敗した物品は ai_status:error になり、成功時に上書きされていた古い状態が残らない
-  const items = await store.listItems({});
+  const { items } = await store.listItems({});
   expect(items.every((it) => it.ai_status === "error")).toBe(true);
 });

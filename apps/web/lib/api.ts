@@ -9,6 +9,11 @@ import type {
   LocationPreset,
 } from "./types";
 
+export interface ItemPage {
+  items: Item[];
+  nextCursor: string | null;
+}
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -56,7 +61,7 @@ export const api = {
 
   // items
   listItems: (q: Record<string, string> = {}) =>
-    req<{ items: Item[] }>(`/api/items?${new URLSearchParams(q)}`).then((r) => r.items),
+    req<ItemPage>(`/api/items?${new URLSearchParams(q)}`),
   getItem: (id: string) => req<{ item: Item; matches: Match[] }>(`/api/items/${id}`),
   createItem: (body: Partial<Item>) =>
     req<{ item: Item; matches: Match[]; topScore: number }>("/api/items", {

@@ -1,4 +1,5 @@
 import type { Store, MatchBulkEntry } from "../store/index.ts";
+import { MAX_ITEM_PAGE_LIMIT } from "../store/item-pagination.ts";
 import type { Item, Inquiry, Match } from "../types.ts";
 import type { AIProvider } from "../ai/provider.ts";
 import { itemEmbedText } from "./embed-text.ts";
@@ -166,7 +167,7 @@ export async function rematchAll(
   ai: AIProvider,
   threshold: number,
 ): Promise<RematchOutcome> {
-  const items = await store.listItems({ status: "stored", limit: 1000 });
+  const { items } = await store.listItems({ status: "stored" }, { limit: MAX_ITEM_PAGE_LIMIT });
   let matchesFound = 0;
   let failed = 0;
   for (const item of items) {

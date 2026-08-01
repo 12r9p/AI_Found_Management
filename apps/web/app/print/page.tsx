@@ -11,8 +11,8 @@ export default function PrintPage() {
 
   useEffect(() => {
     const q = Object.fromEntries(new URLSearchParams(location.search));
-    api.listItems(q as Record<string, string>).then((its) => {
-      setItems(its);
+    api.listItems(q as Record<string, string>).then(({ items: loadedItems }) => {
+      setItems(loadedItems);
       // 画像の読み込みが終わってから印刷ダイアログを出す（空欄で印刷されるのを防ぐ）
       const waitImages = () => {
         const imgs = Array.from(document.images);
