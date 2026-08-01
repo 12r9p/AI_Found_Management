@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
+import { resolveConfig } from "./config.ts";
 import { buildContext, type AppContext } from "./context.ts";
 import { getEnv, waitUntil } from "./env-holder.ts";
 import { itemEmbedText, inquiryEmbedText } from "./lib/embed-text.ts";
@@ -32,6 +33,12 @@ const ACTIVE_MAP_KEY = "active_map_key";
  * に備え、R2/AI（Vision）へのコスト爆発を防ぐ安全網としてサーバー側にも上限を設ける。
  */
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+
+function isAllowedCorsOrigin(request: Request): boolean {
+  const origin = request.headers.get("Origin");
+  if (!origin || origin === "null") return false;
+  return origin === resolveConfig(getEnv()).webOrigin;
+}
 
 function parseFilters(q: Record<string, any>): SearchFilters {
   return {
@@ -71,10 +78,18 @@ export function createApp() {
       console.error("[api error]", code, (error as Error)?.message);
       return { error: (error as Error)?.message ?? "internal error", code };
     })
+    .onRequest(({ request, set }) => {
+      // 動的な Origin 判定ではキャッシュが別 Origin のレスポンスを再利用しないようにする。
+      set.headers.vary = "Origin";
+      if (isAllowedCorsOrigin(request)) {
+        set.headers["access-control-allow-credentials"] = "true";
+      }
+    })
     .use(
       cors({
-        origin: true, // 認証は Cloudflare Zero Trust に委譲。CORS は許可（同一 Access 配下）。
-        credentials: true,
+        origin: isAllowedCorsOrigin,
+        // 不許可 Origin に credentials ヘッダーを返さないため、許可時だけ上の hook で付与する。
+        credentials: false,
       }),
     )
     // ---- Cloudflare Access (Zero Trust) 検証 ----

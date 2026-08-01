@@ -37,6 +37,18 @@ export interface Config {
   access: { teamDomain: string | null; aud: string | null; enabled: boolean };
 }
 
+/**
+ * CORS の比較に使う WEB_ORIGIN を URL の origin へ正規化する。
+ * opaque origin（`null`）は資格情報付き CORS の許可先として扱えない。
+ */
+export function normalizeWebOrigin(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new TypeError("WEB_ORIGIN must be an absolute HTTP(S) origin");
+  }
+  return url.origin;
+}
+
 export function resolveConfig(env: Env = {} as Env): Config {
   // Workers では env、Bun では process.env をマージ
   const p = (globalThis as any).process?.env ?? {};
@@ -55,7 +67,7 @@ export function resolveConfig(env: Env = {} as Env): Config {
       embedDim: parseInt(get("EMBED_DIM") ?? "1536", 10),
     },
     matchThreshold: parseFloat(get("MATCH_THRESHOLD") ?? "0.5"),
-    webOrigin: get("WEB_ORIGIN") ?? "http://localhost:3000",
+    webOrigin: normalizeWebOrigin(get("WEB_ORIGIN") ?? "http://localhost:3000"),
     r2: env.IMAGES ?? null,
     access: (() => {
       const teamDomain = get("ACCESS_TEAM_DOMAIN") || null;
