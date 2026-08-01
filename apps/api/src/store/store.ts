@@ -26,6 +26,12 @@ export interface MatchBulkEntry {
   inquiryStatusUpdate?: { id: string; status: Inquiry["status"] };
 }
 
+export type MatchDecision = Exclude<Match["status"], "pending">;
+
+export type MatchDecisionResult =
+  | { ok: true; match: Match; inquiry: Inquiry }
+  | { ok: false; reason: "not_found" | "confirmation_conflict" };
+
 export class VectorMetadataSyncError extends Error {
   readonly code = "vector_metadata_sync_failed" as const;
   readonly applied = true as const;
@@ -76,7 +82,10 @@ export interface Store {
   createMatch(m: Omit<Match, "id" | "created_at">): Promise<Match>;
   listMatches(status?: string): Promise<Match[]>;
   getMatch(id: string): Promise<Match | null>;
-  updateMatch(id: string, patch: Partial<Match>): Promise<Match | null>;
+  /**
+   * 照合判断と、その問い合わせの状態・確定物品を1つの原子的な操作として更新する。
+   */
+  decideMatch(id: string, decision: MatchDecision): Promise<MatchDecisionResult>;
   findMatch(itemId: string, inquiryId: string): Promise<Match | null>;
   /**
    * 複数の突き合わせヒットを一括で確定させる（match作成＋通知作成＋問い合わせ状態更新）。

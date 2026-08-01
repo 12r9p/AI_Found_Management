@@ -12,6 +12,8 @@ import {
   type ScoredItem,
   type ScoredInquiry,
   type MatchBulkEntry,
+  type MatchDecision,
+  type MatchDecisionResult,
   VectorMetadataSyncError,
   nowIso,
   newId,
@@ -423,20 +425,93 @@ export class D1VectorizeStore implements Store {
       .first();
     return row ? rowToMatch(row) : null;
   }
-  async updateMatch(id: string, patch: Partial<Match>): Promise<Match | null> {
-    const { set, params } = buildSet(patch, ["status"]);
-    if (!set) {
-      const row = await this.db
-        .prepare(`SELECT ${MATCH_COLS} FROM matches WHERE id=?`)
-        .bind(id)
-        .first();
-      return row ? rowToMatch(row) : null;
+  async decideMatch(id: string, decision: MatchDecision): Promise<MatchDecisionResult> {
+    const current = await this.getMatch(id);
+    if (!current) return { ok: false, reason: "not_found" };
+
+    const updated_at = nowIso();
+    let results: D1Result[];
+    try {
+      results = await this.db.batch([
+        // D1のバッチ処理は1つのトランザクションとして実行される。別の照合候補の確定があれば
+        // 同じ主キーの挿入を意図的に発生させ、後続更新も含めて全体をロールバックする。
+        this.db
+          .prepare(
+            `INSERT INTO matches (id, item_id, inquiry_id, score, status, direction, created_at)
+             SELECT target.id, target.item_id, target.inquiry_id, target.score,
+                    target.status, target.direction, target.created_at
+             FROM matches AS target
+             WHERE target.id=? AND ?='confirmed'
+               AND EXISTS (
+                 SELECT 1 FROM matches AS other
+                 WHERE other.inquiry_id=target.inquiry_id
+                   AND other.id<>target.id
+                   AND other.status='confirmed'
+               )`,
+          )
+          .bind(id, decision),
+        this.db
+          .prepare(
+            `UPDATE matches SET status=?
+             WHERE id=?
+               AND EXISTS (SELECT 1 FROM inquiries WHERE id=matches.inquiry_id)
+             RETURNING ${MATCH_COLS}`,
+          )
+          .bind(decision, id),
+        this.db
+          .prepare(
+            `UPDATE inquiries
+             SET status=CASE
+                   WHEN EXISTS (
+                     SELECT 1 FROM matches
+                     WHERE inquiry_id=inquiries.id AND status='confirmed'
+                   ) THEN 'resolved'
+                   WHEN EXISTS (
+                     SELECT 1 FROM matches
+                     WHERE inquiry_id=inquiries.id AND status='pending'
+                   ) THEN 'matched'
+                   ELSE 'open'
+                 END,
+                 matched_item_id=(
+                   SELECT item_id FROM matches
+                   WHERE inquiry_id=inquiries.id AND status='confirmed'
+                   ORDER BY created_at ASC, id ASC
+                   LIMIT 1
+                 ),
+                 updated_at=?
+             WHERE id=?
+             RETURNING ${INQ_COLS}`,
+          )
+          .bind(updated_at, current.inquiry_id),
+      ]);
+    } catch (error) {
+      if (decision === "confirmed" && (await this.hasConfirmedMatchOtherThan(current))) {
+        return { ok: false, reason: "confirmation_conflict" };
+      }
+      throw error;
     }
+
+    const matchRow = results[1]?.results?.[0];
+    const inquiryRow = results[2]?.results?.[0];
+    if (!matchRow) return { ok: false, reason: "not_found" };
+    if (!inquiryRow) throw new Error(`照合 ${id} の問い合わせが見つかりません`);
+
+    const match = rowToMatch(matchRow);
+    const inquiry = rowToInquiry(inquiryRow);
+    await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, inquiry.id);
+    return { ok: true, match, inquiry };
+  }
+
+  private async hasConfirmedMatchOtherThan(match: Match): Promise<boolean> {
     const row = await this.db
-      .prepare(`UPDATE matches SET ${set} WHERE id=? RETURNING ${MATCH_COLS}`)
-      .bind(...params, id)
+      .prepare(
+        `SELECT id FROM matches
+         WHERE inquiry_id=? AND id<>? AND status='confirmed'
+         LIMIT 1`,
+      )
+      .bind(match.inquiry_id, match.id)
       .first();
-    return row ? rowToMatch(row) : null;
+    return row !== null;
   }
   async findMatch(itemId: string, inquiryId: string): Promise<Match | null> {
     const row = await this.db

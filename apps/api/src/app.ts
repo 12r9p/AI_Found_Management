@@ -696,29 +696,22 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
     })
     .patch("/api/matches/:id", async ({ params, body, set }) => {
       const c = await ctx();
-      const m = await c.store.getMatch(params.id);
-      if (!m) {
+      const status = (body as any)?.status;
+      if (status !== "confirmed" && status !== "rejected") {
+        set.status = 400;
+        return { error: "invalid_match_status" };
+      }
+
+      const result = await c.store.decideMatch(params.id, status);
+      if (!result.ok && result.reason === "not_found") {
         set.status = 404;
         return { error: "not found" };
       }
-      const status = (body as any)?.status;
-      const updated = await c.store.updateMatch(params.id, { status });
-      if (status === "confirmed") {
-        // 一致確定：問い合わせを解決に、遺失物は返却手続きへ（保管中→返却は現場判断）
-        await c.store.updateInquiry(m.inquiry_id, {
-          status: "resolved",
-          matched_item_id: m.item_id,
-        });
-      } else if (status === "rejected") {
-        const inq = await c.store.getInquiry(m.inquiry_id);
-        if (inq && inq.status === "matched") {
-          const others = (await c.store.listMatches()).filter(
-            (x) => x.inquiry_id === m.inquiry_id && x.id !== m.id && x.status === "pending",
-          );
-          if (others.length === 0) await c.store.updateInquiry(m.inquiry_id, { status: "open" });
-        }
+      if (!result.ok) {
+        set.status = 409;
+        return { error: "match_confirmation_conflict" };
       }
-      return { match: updated };
+      return { match: result.match, inquiry: result.inquiry };
     })
 
     // ---- notifications ----

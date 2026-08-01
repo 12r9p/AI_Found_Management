@@ -188,8 +188,8 @@ export const api = {
     req<{ matches: Match[] }>(`/api/matches${status ? `?status=${status}` : ""}`).then(
       (r) => r.matches,
     ),
-  updateMatch: (id: string, status: string) =>
-    req<{ match: Match }>(`/api/matches/${id}`, {
+  updateMatch: (id: string, status: Exclude<Match["status"], "pending">) =>
+    req<{ match: Match; inquiry: Inquiry }>(`/api/matches/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),

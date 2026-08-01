@@ -13,6 +13,8 @@ import {
   type ScoredItem,
   type ScoredInquiry,
   type MatchBulkEntry,
+  type MatchDecision,
+  type MatchDecisionResult,
   nowIso,
   newId,
 } from "./store.ts";
@@ -221,12 +223,37 @@ export class MemoryStore implements Store {
   async getMatch(id: string): Promise<Match | null> {
     return this.matches.find((m) => m.id === id) ?? null;
   }
-  async updateMatch(id: string, patch: Partial<Match>): Promise<Match | null> {
-    const m = this.matches.find((x) => x.id === id);
-    if (!m) return null;
-    Object.assign(m, patch, { id });
+  async decideMatch(id: string, decision: MatchDecision): Promise<MatchDecisionResult> {
+    const match = this.matches.find((candidate) => candidate.id === id);
+    if (!match) return { ok: false, reason: "not_found" };
+
+    if (
+      decision === "confirmed" &&
+      this.matches.some(
+        (candidate) =>
+          candidate.inquiry_id === match.inquiry_id &&
+          candidate.id !== match.id &&
+          candidate.status === "confirmed",
+      )
+    ) {
+      return { ok: false, reason: "confirmation_conflict" };
+    }
+
+    const inquiry = this.inquiries.find((candidate) => candidate.id === match.inquiry_id);
+    if (!inquiry) throw new Error(`照合 ${id} の問い合わせが見つかりません`);
+
+    match.status = decision;
+    const related = this.matches.filter((candidate) => candidate.inquiry_id === inquiry.id);
+    const confirmed = related.find((candidate) => candidate.status === "confirmed");
+    inquiry.status = confirmed
+      ? "resolved"
+      : related.some((candidate) => candidate.status === "pending")
+        ? "matched"
+        : "open";
+    inquiry.matched_item_id = confirmed?.item_id ?? null;
+    inquiry.updated_at = nowIso();
     this.persist();
-    return m;
+    return { ok: true, match, inquiry };
   }
   async findMatch(itemId: string, inquiryId: string): Promise<Match | null> {
     return this.matches.find((m) => m.item_id === itemId && m.inquiry_id === inquiryId) ?? null;
