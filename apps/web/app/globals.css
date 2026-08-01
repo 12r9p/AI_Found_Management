@@ -82,6 +82,12 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
+body {
+  position: relative;
+}
+.root {
+  isolation: isolate;
+}
 a {
   color: var(--info);
   text-decoration: underline;
@@ -334,6 +340,14 @@ h3,
 .rb-card--interactive:hover .rb-hint {
   color: inherit;
 }
+.rb-interactive-card {
+  appearance: none;
+  display: block;
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+}
 .rb-card--bordered {
   border: var(--bw-thick) solid var(--border);
 }
@@ -436,15 +450,21 @@ h3,
 
 /* ---- Modal ---- */
 .rb-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: color-mix(in srgb, var(--foreground) 30%, transparent);
   backdrop-filter: blur(3px);
+  z-index: 100;
+}
+.rb-dialog-viewport {
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  z-index: 100;
+  overflow-y: auto;
+  z-index: 101;
 }
 .rb-modal {
   background: var(--background);
@@ -648,16 +668,23 @@ h3,
   display: block;
 }
 .dropzone {
+  appearance: none;
+  width: 100%;
   border: var(--bw-thick) dashed var(--border);
   padding: 24px;
   text-align: center;
   font-family: var(--font-mono);
   font-size: 13px;
+  line-height: 1.6;
   cursor: pointer;
   background: var(--muted);
+  color: var(--foreground);
 }
 .dropzone:hover {
   background: var(--input-hover);
+}
+.rb-dropzone__hint {
+  display: block;
 }
 
 /* ---- Map pin (拾得場所) ---- */
@@ -672,8 +699,16 @@ h3,
      余白（レターボックス）を作らない。ピン座標もこれで画像に正確に一致する。 */
   line-height: 0;
 }
-.map-box[role="button"]:focus-visible {
+.map-box:focus-visible {
   border-width: var(--bw-heavy);
+}
+button.map-box {
+  appearance: none;
+  display: block;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: initial;
 }
 .map-img {
   display: block;
@@ -904,6 +939,9 @@ h3,
   align-items: baseline;
   gap: 8px;
   min-width: 0;
+  margin: 0;
+  font: inherit;
+  line-height: inherit;
 }
 /* 「どこから開いたか」を示すパンくず。元画面を意識させる。 */
 .rb-modal__ctx {
@@ -914,6 +952,17 @@ h3,
 }
 .rb-modal__body:focus {
   outline: none;
+}
+.rb-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ---- 突き合わせ: 左右比較 ---- */
@@ -978,6 +1027,7 @@ h3,
   background: var(--background);
 }
 .rb-chip button {
+  appearance: none;
   border: none;
   background: transparent;
   color: inherit;
@@ -989,6 +1039,30 @@ h3,
 }
 .rb-chip button:hover {
   color: var(--error);
+}
+.rb-chip .rb-chip__select {
+  padding: 0;
+  font-weight: inherit;
+  text-align: left;
+}
+.rb-chip .rb-chip__select:hover {
+  color: inherit;
+}
+.rb-option-row {
+  flex-wrap: nowrap;
+}
+.rb-option-select {
+  appearance: none;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
 
 /* 一覧行（問い合わせ等）: クリックで詳細ポップアップ */
@@ -1137,6 +1211,17 @@ h3,
   border: var(--bw-thin) solid var(--border);
   background: var(--muted);
   cursor: pointer;
+}
+.rb-cell-thumb-button {
+  appearance: none;
+  display: block;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
 }
 .rb-cell-thumb--empty {
   display: flex;

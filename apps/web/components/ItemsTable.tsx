@@ -1,4 +1,5 @@
 "use client";
+import { Button as BaseButton } from "@base-ui/react/button";
 import { useEffect, useState } from "react";
 import { imageUrl } from "../lib/api";
 import { STATUS_LABEL, type Item, type Meta } from "../lib/types";
@@ -69,17 +70,16 @@ export function ItemsTable({
                 {/* 現物の識別が一番速いので画像を先頭に置く。クリックで詳細ポップアップ。 */}
                 <div className="rb-cell-thumbs">
                   {it.image_keys.length > 0 ? (
-                    it.image_keys
-                      .slice(0, 2)
-                      .map((k) => (
-                        <img
-                          key={k}
-                          src={imageUrl(k)}
-                          alt=""
-                          className="rb-cell-thumb"
-                          onClick={() => setPreview(it)}
-                        />
-                      ))
+                    it.image_keys.slice(0, 2).map((k, index) => (
+                      <BaseButton
+                        key={k}
+                        className="rb-cell-thumb-button"
+                        onClick={() => setPreview(it)}
+                        aria-label={`${it.display_id || "物品"}の画像${index + 1}を表示`}
+                      >
+                        <img src={imageUrl(k)} alt="" className="rb-cell-thumb" />
+                      </BaseButton>
+                    ))
                   ) : (
                     <span className="rb-cell-thumb rb-cell-thumb--empty">無</span>
                   )}
