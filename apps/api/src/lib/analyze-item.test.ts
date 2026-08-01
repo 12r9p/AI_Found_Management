@@ -13,7 +13,13 @@ function flakyProvider(failTimes: number): AIProvider {
     async describeImages(): Promise<DescribeResult> {
       calls++;
       if (calls <= failTimes) throw new Error("transient AI error");
-      return { description: "テスト特徴文", tags: ["黒", "財布"], category: "財布", color: "黒", brand: "" };
+      return {
+        description: "テスト特徴文",
+        tags: ["黒", "財布"],
+        category: "財布",
+        color: "黒",
+        brand: "",
+      };
     },
     async embed(text: string) {
       return Array.from({ length: 8 }, (_, i) => (text.length + i) % 7);
@@ -44,7 +50,12 @@ test("runBackgroundAnalysis は Vision解析に失敗しても埋め込みだけ
     notes: "紺色の折りたたみ傘",
     ai_status: "pending",
   });
-  const c: AppContext = { cfg: resolveConfig({}), store, ai: flakyProvider(99), images: fakeImages };
+  const c: AppContext = {
+    cfg: resolveConfig({}),
+    store,
+    ai: flakyProvider(99),
+    images: fakeImages,
+  };
   await runBackgroundAnalysis(c, item);
   const updated = await store.getItem(item.id);
   expect(updated?.ai_status).toBe("error");

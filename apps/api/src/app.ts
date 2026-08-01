@@ -7,9 +7,19 @@ import { matchNewItem, matchNewInquiry, rematchAll } from "./lib/matching.ts";
 import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
 import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
-import { getLocationPresets, setLocationPresets, normalizePresets } from "./lib/location-presets.ts";
+import {
+  getLocationPresets,
+  setLocationPresets,
+  normalizePresets,
+} from "./lib/location-presets.ts";
 import { verifyAccessJwt } from "./lib/access.ts";
-import { ITEM_STATUSES, INQUIRY_STATUSES, getMetaLists, getMetaOptions, normalizeMetaOptions } from "./lib/meta.ts";
+import {
+  ITEM_STATUSES,
+  INQUIRY_STATUSES,
+  getMetaLists,
+  getMetaOptions,
+  normalizeMetaOptions,
+} from "./lib/meta.ts";
 import type { SearchFilters } from "./types.ts";
 
 /** 現在有効な地図画像のキーを保持する設定キー。 */
@@ -180,7 +190,9 @@ export function createApp() {
       const tooLarge = files.find((f) => f.size > MAX_UPLOAD_BYTES);
       if (tooLarge) {
         set.status = 413;
-        return { error: `画像は1枚 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです（${tooLarge.name}）` };
+        return {
+          error: `画像は1枚 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです（${tooLarge.name}）`,
+        };
       }
       const keys: string[] = [];
       for (const f of files.slice(0, 2)) {
@@ -344,7 +356,13 @@ export function createApp() {
       // 埋め込みが失敗しても、他のフィールドの編集（状態変更など）まで巻き込んで
       // 失敗にしない — 埋め込みだけ古いまま保持し、ai_status で要再解析を示す。
       const touchesFeatures = [
-        "category", "color", "brand", "ai_description", "tags", "found_location", "notes",
+        "category",
+        "color",
+        "brand",
+        "ai_description",
+        "tags",
+        "found_location",
+        "notes",
       ].some((k) => k in patch);
       let embedding: number[] | undefined;
       let ai_status: typeof existing.ai_status | undefined;
@@ -518,7 +536,10 @@ export function createApp() {
       const updated = await c.store.updateMatch(params.id, { status });
       if (status === "confirmed") {
         // 一致確定：問い合わせを解決に、遺失物は返却手続きへ（保管中→返却は現場判断）
-        await c.store.updateInquiry(m.inquiry_id, { status: "resolved", matched_item_id: m.item_id });
+        await c.store.updateInquiry(m.inquiry_id, {
+          status: "resolved",
+          matched_item_id: m.item_id,
+        });
       } else if (status === "rejected") {
         const inq = await c.store.getInquiry(m.inquiry_id);
         if (inq && inq.status === "matched") {
@@ -550,17 +571,34 @@ export function createApp() {
       const c = await ctx();
       const items = await c.store.listItems(parseFilters(query as any));
       const head = [
-        "id", "status", "category", "color", "brand", "found_location",
-        "map_pin", "found_at", "ai_description", "tags", "created_at",
+        "id",
+        "status",
+        "category",
+        "color",
+        "brand",
+        "found_location",
+        "map_pin",
+        "found_at",
+        "ai_description",
+        "tags",
+        "created_at",
       ];
       const esc = (s: any) => `"${String(s ?? "").replace(/"/g, '""')}"`;
       const rows = items.map((i) =>
         [
-          i.id, i.status, i.category, i.color, i.brand, i.found_location,
+          i.id,
+          i.status,
+          i.category,
+          i.color,
+          i.brand,
+          i.found_location,
           i.found_x != null && i.found_y != null
             ? `${(i.found_x * 100).toFixed(1)}%,${(i.found_y * 100).toFixed(1)}%`
             : "",
-          i.found_at ?? "", i.ai_description, i.tags.join(";"), i.created_at,
+          i.found_at ?? "",
+          i.ai_description,
+          i.tags.join(";"),
+          i.created_at,
         ]
           .map(esc)
           .join(","),

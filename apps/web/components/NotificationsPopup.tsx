@@ -160,7 +160,9 @@ export function NotificationsPopup({
                 <Badge tone="warning">未読</Badge>
               )}
             </div>
-            <p className="rb-small" style={{ margin: 0 }}>{n.body}</p>
+            <p className="rb-small" style={{ margin: 0 }}>
+              {n.body}
+            </p>
             {!n.synthetic && (
               <div className="rb-row mt-8">
                 {n.ref_match_id && (
@@ -169,7 +171,11 @@ export function NotificationsPopup({
                   </Button>
                 )}
                 {n.ref_item_id && (
-                  <Button size="sm" variant="outline" onClick={() => goTo(n, `/items/${n.ref_item_id}`)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => goTo(n, `/items/${n.ref_item_id}`)}
+                  >
                     該当の物品を見る →
                   </Button>
                 )}

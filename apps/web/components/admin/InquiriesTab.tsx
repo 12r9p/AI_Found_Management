@@ -1,6 +1,18 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Field, Input, Modal, Select, Textarea, useToast, useConfirm, MetaOptionList } from "../ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Modal,
+  Select,
+  Textarea,
+  useToast,
+  useConfirm,
+  MetaOptionList,
+} from "../ui";
 import { MatchReviewModal } from "../MatchReviewModal";
 import { useMeta } from "../useMeta";
 import { usePersistentState } from "../usePersistentState";
@@ -37,7 +49,9 @@ export function InquiriesTab() {
       .finally(() => setLoading(false));
   }, [status]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   /** しきい値変更や表記修正など、既存データには自動反映されない変更を
    * 保管中の全物品について一括で追いつかせる（新しい一致は通知ベルに届く）。 */
@@ -61,7 +75,7 @@ export function InquiriesTab() {
   };
 
   // 選択中の問い合わせを最新に保つ（判断後にダイアログの中身も更新）
-  const current = selected ? inquiries.find((i) => i.id === selected.id) ?? selected : null;
+  const current = selected ? (inquiries.find((i) => i.id === selected.id) ?? selected) : null;
 
   return (
     <div className="rb-col">
@@ -71,14 +85,18 @@ export function InquiriesTab() {
             {(id) => (
               <Select id={id} value={status} onChange={(e) => setStatus(e.target.value)}>
                 {STATUS_FILTERS.map((f) => (
-                  <option key={f.id} value={f.id}>{f.label}</option>
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
                 ))}
               </Select>
             )}
           </Field>
           <div className="rb-field" style={{ justifyContent: "flex-end" }}>
             <div className="rb-row" style={{ gap: 8 }}>
-              <Button variant="outline" onClick={load}>再読込</Button>
+              <Button variant="outline" onClick={load}>
+                再読込
+              </Button>
               <Button variant="outline" onClick={rematchAll} disabled={rematching}>
                 {rematching ? "再照合中…" : "全件再照合"}
               </Button>
@@ -116,9 +134,16 @@ export function InquiriesTab() {
                 <div className="rb-thumbs">
                   {cands.slice(0, 2).map((m) =>
                     m.item?.image_keys?.[0] ? (
-                      <img key={m.id} src={imageUrl(m.item.image_keys[0])} alt="" className="rb-thumb-sm" />
+                      <img
+                        key={m.id}
+                        src={imageUrl(m.item.image_keys[0])}
+                        alt=""
+                        className="rb-thumb-sm"
+                      />
                     ) : (
-                      <span key={m.id} className="rb-thumb-sm rb-thumb-sm--empty">無</span>
+                      <span key={m.id} className="rb-thumb-sm rb-thumb-sm--empty">
+                        無
+                      </span>
                     ),
                   )}
                   {cands.length === 0 && <span className="rb-thumb-sm rb-thumb-sm--empty">—</span>}
@@ -131,10 +156,16 @@ export function InquiriesTab() {
                       {[inq.color, inq.category].filter(Boolean).join(" ") || "種別未設定"}
                     </strong>
                     <span className="rb-row" style={{ gap: 6 }}>
-                      {cands.length > 0 && (
-                        <Badge tone="info">候補 {cands.length}</Badge>
-                      )}
-                      <Badge tone={inq.status === "resolved" ? "success" : inq.status === "open" ? "warning" : undefined}>
+                      {cands.length > 0 && <Badge tone="info">候補 {cands.length}</Badge>}
+                      <Badge
+                        tone={
+                          inq.status === "resolved"
+                            ? "success"
+                            : inq.status === "open"
+                              ? "warning"
+                              : undefined
+                        }
+                      >
                         {STATUS_LABEL[inq.status]}
                       </Badge>
                     </span>
@@ -150,11 +181,7 @@ export function InquiriesTab() {
         </>
       )}
 
-      <InquiryDetailModal
-        inquiry={current}
-        onClose={() => setSelected(null)}
-        onChanged={load}
-      />
+      <InquiryDetailModal inquiry={current} onClose={() => setSelected(null)} onChanged={load} />
     </div>
   );
 }
@@ -233,15 +260,28 @@ function InquiryDetailModal({
         footer={
           edit ? (
             <>
-              <Button variant="outline" onClick={() => { setForm({ ...inquiry }); setEdit(false); }} disabled={saving}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setForm({ ...inquiry });
+                  setEdit(false);
+                }}
+                disabled={saving}
+              >
                 取消
               </Button>
-              <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
+              <Button onClick={save} disabled={saving}>
+                {saving ? "保存中…" : "保存"}
+              </Button>
             </>
           ) : (
             <>
-              <Button variant="destructive" onClick={del}>削除</Button>
-              <Button variant="outline" onClick={() => setEdit(true)}>編集</Button>
+              <Button variant="destructive" onClick={del}>
+                削除
+              </Button>
+              <Button variant="outline" onClick={() => setEdit(true)}>
+                編集
+              </Button>
               <Button onClick={onClose}>閉じる</Button>
             </>
           )
@@ -250,17 +290,31 @@ function InquiryDetailModal({
         {!edit ? (
           <Card variant="muted" className="mb-16">
             <div className="rb-between mb-8">
-              <strong>{[inquiry.color, inquiry.category].filter(Boolean).join(" ") || "種別未設定"}</strong>
-              <Badge tone={inquiry.status === "resolved" ? "success" : inquiry.status === "open" ? "warning" : undefined}>
+              <strong>
+                {[inquiry.color, inquiry.category].filter(Boolean).join(" ") || "種別未設定"}
+              </strong>
+              <Badge
+                tone={
+                  inquiry.status === "resolved"
+                    ? "success"
+                    : inquiry.status === "open"
+                      ? "warning"
+                      : undefined
+                }
+              >
                 {STATUS_LABEL[inquiry.status]}
               </Badge>
             </div>
             <div className="rb-label mb-8">聞き取り内容</div>
-            <p className="rb-small" style={{ margin: 0 }}>{inquiry.description || "—"}</p>
+            <p className="rb-small" style={{ margin: 0 }}>
+              {inquiry.description || "—"}
+            </p>
             {inquiry.notes && (
               <>
                 <div className="rb-label mt-16 mb-8">メモ</div>
-                <p className="rb-small" style={{ margin: 0 }}>{inquiry.notes}</p>
+                <p className="rb-small" style={{ margin: 0 }}>
+                  {inquiry.notes}
+                </p>
               </>
             )}
             <div className="rb-tiny muted-text mt-16">
@@ -273,21 +327,37 @@ function InquiryDetailModal({
             <div className="rb-grid rb-grid--2">
               <Field label="受付番号（紙台帳）">
                 {(id) => (
-                  <Input id={id} value={form.reference_no ?? ""} onChange={(e) => setForm((f) => ({ ...f, reference_no: e.target.value }))} />
+                  <Input
+                    id={id}
+                    value={form.reference_no ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, reference_no: e.target.value }))}
+                  />
                 )}
               </Field>
               <Field label="状態">
                 {(id) => (
-                  <Select id={id} value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as Inquiry["status"] }))}>
+                  <Select
+                    id={id}
+                    value={form.status}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, status: e.target.value as Inquiry["status"] }))
+                    }
+                  >
                     {meta.inquiryStatuses.map((s) => (
-                      <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                      <option key={s} value={s}>
+                        {STATUS_LABEL[s]}
+                      </option>
                     ))}
                   </Select>
                 )}
               </Field>
               <Field label="種別">
                 {(id) => (
-                  <Select id={id} value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}>
+                  <Select
+                    id={id}
+                    value={form.category}
+                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  >
                     <option value="">未設定</option>
                     <MetaOptionList options={meta.categories} />
                   </Select>
@@ -295,7 +365,11 @@ function InquiryDetailModal({
               </Field>
               <Field label="色">
                 {(id) => (
-                  <Select id={id} value={form.color} onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}>
+                  <Select
+                    id={id}
+                    value={form.color}
+                    onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                  >
                     <option value="">未設定</option>
                     <MetaOptionList options={meta.colors} />
                   </Select>
@@ -304,12 +378,20 @@ function InquiryDetailModal({
             </div>
             <Field label="聞き取り内容" hint="保存すると再ベクトル化され、以後の照合に反映されます">
               {(id) => (
-                <Textarea id={id} value={form.description ?? ""} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+                <Textarea
+                  id={id}
+                  value={form.description ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                />
               )}
             </Field>
             <Field label="メモ" hint="個人情報は入力しないでください">
               {(id) => (
-                <Textarea id={id} value={form.notes ?? ""} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+                <Textarea
+                  id={id}
+                  value={form.notes ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                />
               )}
             </Field>
           </Card>
@@ -334,7 +416,9 @@ function InquiryDetailModal({
                   onClick={() => setReviewing({ ...m, inquiry })}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setReviewing({ ...m, inquiry })}
+                  onKeyDown={(e) =>
+                    (e.key === "Enter" || e.key === " ") && setReviewing({ ...m, inquiry })
+                  }
                 >
                   <div className="rb-between mb-8">
                     <strong className="rb-small">

@@ -157,7 +157,11 @@ test("rematchAll: 保管中の物品を再埋め込みし、当時見つから�
   expect((await store.listNotifications()).length).toBe(1);
 
   // 保管中でない物品は対象外
-  const returned = await store.createItem({ status: "returned", category: "鍵", embedding: embed("鍵") });
+  const returned = await store.createItem({
+    status: "returned",
+    category: "鍵",
+    embedding: embed("鍵"),
+  });
   const outcome2 = await rematchAll(store, ai, 0.5);
   expect(outcome2.itemsChecked).toBe(1); // returned は数えない
   expect(outcome2.matchesFound).toBe(0); // 既知の組み合わせなので再通知しない

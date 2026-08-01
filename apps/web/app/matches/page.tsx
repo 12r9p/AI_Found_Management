@@ -33,7 +33,9 @@ export default function MatchesPage() {
       .finally(() => setLoading(false));
   }, [status]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // 通知などから ?open=<matchId> で直接ダイアログを開く。
   // 現在の表示フィルタ（status）に一致しない場合でも開けるよう、絞り込みなしで別途取得する。
@@ -68,7 +70,9 @@ export default function MatchesPage() {
           {(id) => (
             <Select id={id} value={status} onChange={(e) => setStatus(e.target.value)}>
               {FILTERS.map((f) => (
-                <option key={f.id} value={f.id}>{f.label}</option>
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
               ))}
             </Select>
           )}
@@ -112,7 +116,9 @@ export default function MatchesPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="rb-between mb-8">
                       <strong>
-                        {[m.item?.color, m.item?.brand, m.item?.category].filter(Boolean).join(" ") || "物品"}
+                        {[m.item?.color, m.item?.brand, m.item?.category]
+                          .filter(Boolean)
+                          .join(" ") || "物品"}
                         <span className="muted-text">　↔　</span>
                         受付No: {m.inquiry?.reference_no || "—"}
                       </strong>

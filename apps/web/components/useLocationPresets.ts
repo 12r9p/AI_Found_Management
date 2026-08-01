@@ -6,7 +6,10 @@ import type { LocationPreset } from "../lib/types";
 export function useLocationPresets(): LocationPreset[] {
   const [presets, setPresets] = useState<LocationPreset[]>([]);
   useEffect(() => {
-    api.getLocationPresets().then(setPresets).catch(() => {});
+    api
+      .getLocationPresets()
+      .then(setPresets)
+      .catch(() => {});
   }, []);
   return presets;
 }

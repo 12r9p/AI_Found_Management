@@ -138,7 +138,11 @@ async function scoreInquiries(
 }
 
 function label(x: Item): string {
-  return [x.color, x.brand, x.category].filter(Boolean).join(" ") || x.ai_description.slice(0, 20) || "物品";
+  return (
+    [x.color, x.brand, x.category].filter(Boolean).join(" ") ||
+    x.ai_description.slice(0, 20) ||
+    "物品"
+  );
 }
 
 export interface RematchOutcome {

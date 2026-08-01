@@ -40,8 +40,7 @@ export interface Config {
 export function resolveConfig(env: Env = {} as Env): Config {
   // Workers では env、Bun では process.env をマージ
   const p = (globalThis as any).process?.env ?? {};
-  const get = (k: keyof Env): string | undefined =>
-    (env[k] as string | undefined) ?? p[k];
+  const get = (k: keyof Env): string | undefined => (env[k] as string | undefined) ?? p[k];
 
   return {
     d1: env.DB ?? null,

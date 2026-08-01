@@ -3,7 +3,18 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "../../../components/AppShell";
-import { Button, Card, Field, Input, Select, Textarea, Badge, useToast, useConfirm, MetaOptionList } from "../../../components/ui";
+import {
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+  Textarea,
+  Badge,
+  useToast,
+  useConfirm,
+  MetaOptionList,
+} from "../../../components/ui";
 import { useMeta } from "../../../components/useMeta";
 import { MapPicker, findRegionAt, type Pin } from "../../../components/MapPicker";
 import { useLocationPresets } from "../../../components/useLocationPresets";
@@ -29,29 +40,40 @@ export default function ItemDetailPage() {
   const [analyzing, setAnalyzing] = useState(false);
 
   const load = () =>
-    api.getItem(id).then(async ({ item, matches }) => {
-      setItem(item);
-      setForm({ ...item, tagsText: item.tags.join("、") });
-      setImageKeys(item.image_keys);
-      setDirty(false);
-      // 個々の match には inquiry が付いてこないため、突き合わせ確認ポップアップ用に取得しておく
-      const enriched = await Promise.all(
-        matches.map(async (m) => {
-          try {
-            const { inquiry } = await api.getInquiry(m.inquiry_id);
-            return { ...m, item, inquiry };
-          } catch {
-            return { ...m, item };
-          }
-        }),
-      );
-      setMatches(enriched);
-    }).catch((e) => toast(`読込失敗: ${e.message}`, "error"));
+    api
+      .getItem(id)
+      .then(async ({ item, matches }) => {
+        setItem(item);
+        setForm({ ...item, tagsText: item.tags.join("、") });
+        setImageKeys(item.image_keys);
+        setDirty(false);
+        // 個々の match には inquiry が付いてこないため、突き合わせ確認ポップアップ用に取得しておく
+        const enriched = await Promise.all(
+          matches.map(async (m) => {
+            try {
+              const { inquiry } = await api.getInquiry(m.inquiry_id);
+              return { ...m, item, inquiry };
+            } catch {
+              return { ...m, item };
+            }
+          }),
+        );
+        setMatches(enriched);
+      })
+      .catch((e) => toast(`読込失敗: ${e.message}`, "error"));
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+  useEffect(() => {
+    load(); /* eslint-disable-next-line */
+  }, [id]);
 
-  const set = (k: string, v: any) => { setForm((f) => ({ ...f, [k]: v })); setDirty(true); };
-  const setImages = (keys: string[]) => { setImageKeys(keys); setDirty(true); };
+  const set = (k: string, v: any) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setDirty(true);
+  };
+  const setImages = (keys: string[]) => {
+    setImageKeys(keys);
+    setDirty(true);
+  };
 
   /** 追加した写真からAIで特徴を解析し、特徴文・タグを更新する。 */
   const analyze = async () => {
@@ -89,7 +111,10 @@ export default function ItemDetailPage() {
         found_y: form.found_y ?? null,
         image_keys: imageKeys,
         ai_description: form.ai_description,
-        tags: (form.tagsText ?? "").split(/[、,]/).map((t) => t.trim()).filter(Boolean),
+        tags: (form.tagsText ?? "")
+          .split(/[、,]/)
+          .map((t) => t.trim())
+          .filter(Boolean),
         notes: form.notes,
       });
       toast("保存しました", "success");
@@ -108,7 +133,12 @@ export default function ItemDetailPage() {
   };
 
   const del = async () => {
-    const ok = await confirm({ title: "削除の確認", body: "この物品を削除します。元に戻せません。", danger: true, okLabel: "削除する" });
+    const ok = await confirm({
+      title: "削除の確認",
+      body: "この物品を削除します。元に戻せません。",
+      danger: true,
+      okLabel: "削除する",
+    });
     if (!ok) return;
     await api.deleteItem(id);
     toast("削除しました", "success");
@@ -116,7 +146,11 @@ export default function ItemDetailPage() {
   };
 
   if (!item) {
-    return <AppShell><p className="rb-mono">読込中…</p></AppShell>;
+    return (
+      <AppShell>
+        <p className="rb-mono">読込中…</p>
+      </AppShell>
+    );
   }
 
   const dt = form.found_at ? new Date(form.found_at).toISOString().slice(0, 16) : "";
@@ -160,7 +194,9 @@ export default function ItemDetailPage() {
 
           <Card variant="bordered">
             <div className="rb-between mb-8">
-              <div className="rb-label" style={{ margin: 0 }}>拾得場所（エリアをタップで修正）</div>
+              <div className="rb-label" style={{ margin: 0 }}>
+                拾得場所（エリアをタップで修正）
+              </div>
               {form.found_location && <Badge tone="success">{form.found_location}</Badge>}
             </div>
             <MapPicker
@@ -174,7 +210,7 @@ export default function ItemDetailPage() {
               onChange={(pin: Pin | null) => {
                 set("found_x", pin ? pin.x : null);
                 set("found_y", pin ? pin.y : null);
-                set("found_location", pin ? findRegionAt(presets, pin)?.name ?? "" : "");
+                set("found_location", pin ? (findRegionAt(presets, pin)?.name ?? "") : "");
               }}
             />
           </Card>
@@ -182,8 +218,10 @@ export default function ItemDetailPage() {
           <Card variant="muted">
             <div className="rb-eyebrow mb-8">メタ情報</div>
             <div className="rb-mono rb-small">
-              登録: {new Date(item.created_at).toLocaleString("ja-JP")}<br />
-              更新: {new Date(item.updated_at).toLocaleString("ja-JP")}<br />
+              登録: {new Date(item.created_at).toLocaleString("ja-JP")}
+              <br />
+              更新: {new Date(item.updated_at).toLocaleString("ja-JP")}
+              <br />
               タグ: {item.tags.join(" / ") || "—"}
             </div>
           </Card>
@@ -197,21 +235,23 @@ export default function ItemDetailPage() {
                 {matches.map((m) => {
                   const pct = Math.round(m.score * 100);
                   return (
-                    <button
-                      key={m.id}
-                      className="rb-listrow"
-                      onClick={() => setReviewing(m)}
-                    >
+                    <button key={m.id} className="rb-listrow" onClick={() => setReviewing(m)}>
                       <div className="rb-thumbs">
                         {m.item?.image_keys?.[0] ? (
-                          <img src={imageUrl(m.item.image_keys[0])} alt="" className="rb-thumb-sm" />
+                          <img
+                            src={imageUrl(m.item.image_keys[0])}
+                            alt=""
+                            className="rb-thumb-sm"
+                          />
                         ) : (
                           <span className="rb-thumb-sm rb-thumb-sm--empty">無</span>
                         )}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="rb-between mb-8">
-                          <strong className="rb-small">受付No: {m.inquiry?.reference_no || "—"}</strong>
+                          <strong className="rb-small">
+                            受付No: {m.inquiry?.reference_no || "—"}
+                          </strong>
                           <span className="rb-row" style={{ gap: 6 }}>
                             <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
                             <Badge>{STATUS_LABEL[m.status]}</Badge>
@@ -232,19 +272,29 @@ export default function ItemDetailPage() {
         <Card variant="bordered">
           <div className="rb-between mb-8">
             <div className="rb-label">編集（DB直接編集）</div>
-            <Badge tone={item.status === "stored" ? "success" : "info"}>{STATUS_LABEL[item.status]}</Badge>
+            <Badge tone={item.status === "stored" ? "success" : "info"}>
+              {STATUS_LABEL[item.status]}
+            </Badge>
           </div>
           <div className="rb-grid rb-grid--2">
             <Field label="状態">
               {(id) => (
                 <Select id={id} value={form.status} onChange={(e) => set("status", e.target.value)}>
-                  {meta.itemStatuses.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                  {meta.itemStatuses.map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_LABEL[s]}
+                    </option>
+                  ))}
                 </Select>
               )}
             </Field>
             <Field label="種別">
               {(id) => (
-                <Select id={id} value={form.category} onChange={(e) => set("category", e.target.value)}>
+                <Select
+                  id={id}
+                  value={form.category}
+                  onChange={(e) => set("category", e.target.value)}
+                >
                   <MetaOptionList options={meta.categories} />
                 </Select>
               )}
@@ -258,24 +308,61 @@ export default function ItemDetailPage() {
               )}
             </Field>
             <Field label="ブランド/型番">
-              {(id) => <Input id={id} value={form.brand ?? ""} onChange={(e) => set("brand", e.target.value)} />}
+              {(id) => (
+                <Input
+                  id={id}
+                  value={form.brand ?? ""}
+                  onChange={(e) => set("brand", e.target.value)}
+                />
+              )}
             </Field>
             <Field label="拾得日時">
-              {(id) => <Input id={id} type="datetime-local" value={dt} onChange={(e) => set("found_at", e.target.value ? new Date(e.target.value).toISOString() : null)} />}
+              {(id) => (
+                <Input
+                  id={id}
+                  type="datetime-local"
+                  value={dt}
+                  onChange={(e) =>
+                    set("found_at", e.target.value ? new Date(e.target.value).toISOString() : null)
+                  }
+                />
+              )}
             </Field>
           </div>
           <Field label="AI特徴文">
-            {(id) => <Textarea id={id} value={form.ai_description ?? ""} onChange={(e) => set("ai_description", e.target.value)} />}
+            {(id) => (
+              <Textarea
+                id={id}
+                value={form.ai_description ?? ""}
+                onChange={(e) => set("ai_description", e.target.value)}
+              />
+            )}
           </Field>
           <Field label="タグ" hint="読点/カンマ区切り。保存時に再ベクトル化されます">
-            {(id) => <Input id={id} value={form.tagsText ?? ""} onChange={(e) => set("tagsText", e.target.value)} />}
+            {(id) => (
+              <Input
+                id={id}
+                value={form.tagsText ?? ""}
+                onChange={(e) => set("tagsText", e.target.value)}
+              />
+            )}
           </Field>
           <Field label="メモ" hint="個人情報は入力しないでください">
-            {(id) => <Textarea id={id} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />}
+            {(id) => (
+              <Textarea
+                id={id}
+                value={form.notes ?? ""}
+                onChange={(e) => set("notes", e.target.value)}
+              />
+            )}
           </Field>
           <div className="rb-row">
-            <Button onClick={save} disabled={saving}>{saving ? "保存中…" : "保存"}</Button>
-            <Button variant="destructive" onClick={del}>削除</Button>
+            <Button onClick={save} disabled={saving}>
+              {saving ? "保存中…" : "保存"}
+            </Button>
+            <Button variant="destructive" onClick={del}>
+              削除
+            </Button>
           </div>
         </Card>
       </div>

@@ -30,9 +30,7 @@ export interface AIProvider {
   /** テキストを埋め込みベクトルへ。 */
   embed(text: string): Promise<number[]>;
   /** スタッフ補助チャット（RAG 済みコンテキストを与えて回答）。 */
-  chat(
-    messages: { role: "system" | "user" | "assistant"; content: string }[],
-  ): Promise<string>;
+  chat(messages: { role: "system" | "user" | "assistant"; content: string }[]): Promise<string>;
 }
 
 export function createAIProvider(cfg: Config): AIProvider {
@@ -76,11 +74,15 @@ class OpenAICompatProvider implements AIProvider {
     const sys =
       "あなたは遺失物管理システムの特徴抽出器です。画像から遺失物の客観的特徴のみを抽出します。" +
       "人物・顔・氏名・連絡先など個人を特定しうる情報は一切記述しないこと。" +
-      "出力は必ず次のJSON: {\"description\":string,\"tags\":string[],\"category\":string,\"color\":string,\"brand\":string}。" +
+      '出力は必ず次のJSON: {"description":string,"tags":string[],"category":string,"color":string,"brand":string}。' +
       "description は検索照合用の日本語の特徴文（80〜160字）。tags は色・種別・素材・形状・特徴を短い日本語語で。" +
-      categoryLine + colorLine;
+      categoryLine +
+      colorLine;
     const content: any[] = [
-      { type: "text", text: opts?.hint ? `補足メモ: ${opts.hint}` : "画像から特徴を抽出してください。" },
+      {
+        type: "text",
+        text: opts?.hint ? `補足メモ: ${opts.hint}` : "画像から特徴を抽出してください。",
+      },
       ...images.map((im) => ({ type: "image_url", image_url: { url: im.url } })),
     ];
     const data = await this.post("/chat/completions", {
@@ -104,7 +106,9 @@ class OpenAICompatProvider implements AIProvider {
     return data.data?.[0]?.embedding ?? [];
   }
 
-  async chat(messages: { role: "system" | "user" | "assistant"; content: string }[]): Promise<string> {
+  async chat(
+    messages: { role: "system" | "user" | "assistant"; content: string }[],
+  ): Promise<string> {
     const data = await this.post("/chat/completions", {
       model: this.cfg.ai.visionModel,
       reasoning_effort: this.cfg.ai.effort,
@@ -126,8 +130,12 @@ class MockProvider implements AIProvider {
     // 設定の選択肢が渡されていれば、本番同様そこから選ぶ（表記ゆれ確認用）。
     const hint = opts?.hint;
     const seed = (hint ?? "") + images.map((i) => i.url.slice(-64)).join("");
-    const palette = opts?.colors?.length ? opts.colors : ["黒", "白", "紺", "赤", "茶", "灰", "青", "緑"];
-    const kinds = opts?.categories?.length ? opts.categories : ["財布", "傘", "スマートフォン", "鍵", "水筒", "眼鏡", "帽子", "イヤホン"];
+    const palette = opts?.colors?.length
+      ? opts.colors
+      : ["黒", "白", "紺", "赤", "茶", "灰", "青", "緑"];
+    const kinds = opts?.categories?.length
+      ? opts.categories
+      : ["財布", "傘", "スマートフォン", "鍵", "水筒", "眼鏡", "帽子", "イヤホン"];
     const materials = ["革", "布", "金属", "プラスチック", "ナイロン"];
     const h = hash(seed);
     // `>>` は符号付きシフトのため h>=2^31 だと負数化し、配列アクセスが undefined になる。
@@ -136,7 +144,13 @@ class MockProvider implements AIProvider {
     const category = kinds[(h >>> 3) % kinds.length];
     const material = materials[(h >>> 6) % materials.length];
     const tags = [color, category, material, "特徴あり"];
-    if (hint) tags.push(...hint.split(/[\s,、]+/).filter(Boolean).slice(0, 3));
+    if (hint)
+      tags.push(
+        ...hint
+          .split(/[\s,、]+/)
+          .filter(Boolean)
+          .slice(0, 3),
+      );
     const description =
       `${color}色の${category}。素材は${material}とみられる。` +
       `${hint ? `補足: ${hint}。` : ""}目立った装飾や汚れの有無を確認のこと。`;
@@ -229,7 +243,10 @@ function snapToList(value: string, list?: string[]): string {
 
 function normalizeDescribe(o: any, opts?: DescribeOptions): DescribeResult {
   const tags = Array.isArray(o.tags)
-    ? o.tags.map((t: any) => String(t).trim()).filter(Boolean).slice(0, 12)
+    ? o.tags
+        .map((t: any) => String(t).trim())
+        .filter(Boolean)
+        .slice(0, 12)
     : [];
   return {
     description: String(o.description ?? "").trim(),

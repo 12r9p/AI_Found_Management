@@ -1,7 +1,15 @@
-import type { Item, Inquiry, Match, Notification, Meta, MetaOption, IdRule, LocationPreset } from "./types";
+import type {
+  Item,
+  Inquiry,
+  Match,
+  Notification,
+  Meta,
+  MetaOption,
+  IdRule,
+  LocationPreset,
+} from "./types";
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -31,7 +39,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export const imageUrl = (key: string) => `${API_BASE}/api/images/${key}`;
 
 export const api = {
-  health: () => req<{ ok: boolean; store: string; ai: string; matchThreshold: number }>("/api/health"),
+  health: () =>
+    req<{ ok: boolean; store: string; ai: string; matchThreshold: number }>("/api/health"),
   meta: () => req<Meta>("/api/meta"),
   getIdRule: () => req<{ rule: IdRule; preview: string }>("/api/id-rule"),
   updateIdRule: (rule: IdRule) =>
@@ -61,10 +70,16 @@ export const api = {
   // search
   // degraded: true は埋め込み(AI)に失敗し、フィルタのみの結果にフォールバックしたことを示す。
   search: (body: Record<string, unknown>) =>
-    req<{ items: Item[]; degraded?: boolean }>("/api/search", { method: "POST", body: JSON.stringify(body) }),
+    req<{ items: Item[]; degraded?: boolean }>("/api/search", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   // 保管中の全物品を未解決の問い合わせと一括で再照合する（管理画面の手動トリガー）
-  rematchAll: () => req<{ itemsChecked: number; matchesFound: number; failed: number }>("/api/rematch", { method: "POST" }),
+  rematchAll: () =>
+    req<{ itemsChecked: number; matchesFound: number; failed: number }>("/api/rematch", {
+      method: "POST",
+    }),
 
   // uploads / analyze
   upload: (files: File[]) => {
@@ -85,7 +100,9 @@ export const api = {
     if (status) p.set("status", status);
     if (withMatches) p.set("withMatches", "1");
     const qs = p.toString();
-    return req<{ inquiries: Inquiry[] }>(`/api/inquiries${qs ? `?${qs}` : ""}`).then((r) => r.inquiries);
+    return req<{ inquiries: Inquiry[] }>(`/api/inquiries${qs ? `?${qs}` : ""}`).then(
+      (r) => r.inquiries,
+    );
   },
   getInquiry: (id: string) => req<{ inquiry: Inquiry; matches: Match[] }>(`/api/inquiries/${id}`),
   createInquiry: (body: Partial<Inquiry>) =>
@@ -94,20 +111,32 @@ export const api = {
       body: JSON.stringify(body),
     }),
   updateInquiry: (id: string, patch: Partial<Inquiry>) =>
-    req<{ inquiry: Inquiry }>(`/api/inquiries/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
-  deleteInquiry: (id: string) => req<{ deleted: boolean }>(`/api/inquiries/${id}`, { method: "DELETE" }),
+    req<{ inquiry: Inquiry }>(`/api/inquiries/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteInquiry: (id: string) =>
+    req<{ deleted: boolean }>(`/api/inquiries/${id}`, { method: "DELETE" }),
 
   // matches
   listMatches: (status?: string) =>
-    req<{ matches: Match[] }>(`/api/matches${status ? `?status=${status}` : ""}`).then((r) => r.matches),
+    req<{ matches: Match[] }>(`/api/matches${status ? `?status=${status}` : ""}`).then(
+      (r) => r.matches,
+    ),
   updateMatch: (id: string, status: string) =>
-    req<{ match: Match }>(`/api/matches/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    req<{ match: Match }>(`/api/matches/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
 
   // notifications
   notifications: (unread = false) =>
-    req<{ notifications: Notification[] }>(`/api/notifications${unread ? "?unread=1" : ""}`).then((r) => r.notifications),
+    req<{ notifications: Notification[] }>(`/api/notifications${unread ? "?unread=1" : ""}`).then(
+      (r) => r.notifications,
+    ),
   unreadCount: () => req<{ count: number }>("/api/notifications/unread-count").then((r) => r.count),
-  markRead: (id: string) => req<{ ok: boolean }>(`/api/notifications/${id}/read`, { method: "POST" }),
+  markRead: (id: string) =>
+    req<{ ok: boolean }>(`/api/notifications/${id}/read`, { method: "POST" }),
 
   // map (拾得場所の地図)
   getMap: () => req<{ key: string }>("/api/map").then((r) => r.key),
@@ -126,5 +155,6 @@ export const api = {
       body: JSON.stringify({ presets }),
     }).then((r) => r.presets),
 
-  csvUrl: (q: Record<string, string> = {}) => `${API_BASE}/api/export/items.csv?${new URLSearchParams(q)}`,
+  csvUrl: (q: Record<string, string> = {}) =>
+    `${API_BASE}/api/export/items.csv?${new URLSearchParams(q)}`,
 };

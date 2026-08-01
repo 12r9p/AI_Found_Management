@@ -53,8 +53,12 @@ export function ItemLookupModal({
       onClose={onClose}
       footer={
         <>
-          <Button variant="outline" onClick={onClose} disabled={busy}>閉じる</Button>
-          <Button variant="outline" onClick={() => onEdit(item)} disabled={busy}>編集</Button>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            閉じる
+          </Button>
+          <Button variant="outline" onClick={() => onEdit(item)} disabled={busy}>
+            編集
+          </Button>
           <Button onClick={markReturned} disabled={busy || already}>
             {already ? STATUS_LABEL[item.status] : busy ? "処理中…" : "返却済みにする"}
           </Button>
@@ -87,10 +91,16 @@ export function ItemLookupModal({
           {/* 窓口での本人確認に使う情報を大きめに並べる */}
           <Card variant="muted">
             <div className="rb-label mb-8">特徴</div>
-            <p className="rb-small" style={{ margin: 0 }}>{item.ai_description || "—"}</p>
+            <p className="rb-small" style={{ margin: 0 }}>
+              {item.ai_description || "—"}
+            </p>
             {item.tags.length > 0 && (
               <div className="rb-chips mt-16">
-                {item.tags.map((t) => <span key={t} className="rb-chip">{t}</span>)}
+                {item.tags.map((t) => (
+                  <span key={t} className="rb-chip">
+                    {t}
+                  </span>
+                ))}
               </div>
             )}
           </Card>
@@ -116,7 +126,8 @@ export function ItemLookupModal({
 
       {already && (
         <p className="rb-tiny muted-text mt-16" style={{ marginBottom: 0 }}>
-          この物品は既に「{STATUS_LABEL[item.status]}」です。状態を戻す場合は編集から変更してください。
+          この物品は既に「{STATUS_LABEL[item.status]}
+          」です。状態を戻す場合は編集から変更してください。
         </p>
       )}
     </Modal>
