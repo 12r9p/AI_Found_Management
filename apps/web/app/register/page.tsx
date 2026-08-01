@@ -9,6 +9,7 @@ import { useLocationPresets } from "../../components/useLocationPresets";
 import { ItemEditModal } from "../../components/ItemEditModal";
 import { RegisteredModal } from "../../components/RegisteredModal";
 import { api, imageUrl } from "../../lib/api";
+import { formatMinutesAgoForDateTimeLocal, parseDateTimeLocalToIso } from "../../lib/datetime";
 import { normalizeImageFiles } from "../../lib/image";
 import type { Item } from "../../lib/types";
 
@@ -19,13 +20,6 @@ const QUICK_TIMES = [
   { label: "30分前", min: 30 },
   { label: "1時間前", min: 60 },
 ];
-
-/** n分前を datetime-local 用のローカル時刻文字列で返す。 */
-function minutesAgoLocal(min: number): string {
-  const d = new Date(Date.now() - min * 60_000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
 
 // 種別・色・特徴文・タグはAIが自動で埋める。人間の入力は拾得日時（必須）とメモのみ。
 const EMPTY = {
@@ -123,14 +117,16 @@ export default function RegisterPage() {
 
   const submit = async () => {
     if (uploading) return; // 送信中の写真がある場合はアップロード完了を待つ
-    if (!form.found_at) {
-      toast("拾得日時は必須です", "error");
-      return;
-    }
     setSaving(true);
     try {
+      const foundAt = parseDateTimeLocalToIso(form.found_at);
+      if (!foundAt) {
+        toast("拾得日時は必須です", "error");
+        return;
+      }
+
       const item = await api.createItem({
-        found_at: new Date(form.found_at).toISOString(),
+        found_at: foundAt,
         found_location: foundLocation,
         found_x: pin?.x ?? null,
         found_y: pin?.y ?? null,
@@ -243,7 +239,7 @@ export default function RegisterPage() {
                     key={qt.label}
                     variant="outline"
                     size="sm"
-                    onClick={() => set("found_at", minutesAgoLocal(qt.min))}
+                    onClick={() => set("found_at", formatMinutesAgoForDateTimeLocal(qt.min))}
                   >
                     {qt.label}
                   </Button>
