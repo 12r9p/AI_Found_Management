@@ -17,6 +17,7 @@ import {
 } from "./store.ts";
 import { applyItemFilters } from "./memory.ts";
 import { cosineSimilarity } from "../lib/vector.ts";
+import { mapDisplayIdWriteError } from "./errors.ts";
 
 /**
  * D1 + Vectorize 実装。D1 = 行データの永続化(source of truth)、
@@ -40,35 +41,40 @@ export class D1VectorizeStore implements Store {
   async createItem(d: NewItem): Promise<Item> {
     const id = newId();
     const created_at = nowIso();
-    const row = await this.db
-      .prepare(
-        `INSERT INTO items
+    let row: any;
+    try {
+      row = await this.db
+        .prepare(
+          `INSERT INTO items
           (id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y,
            image_keys, ai_description, tags, notes, ai_status, created_at, updated_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          RETURNING ${ITEM_COLS}`,
-      )
-      .bind(
-        id,
-        d.display_id ?? "",
-        d.status ?? "stored",
-        d.category ?? "",
-        d.color ?? "",
-        d.brand ?? "",
-        d.found_location ?? "",
-        d.found_at ?? null,
-        d.map_key ?? "",
-        d.found_x ?? null,
-        d.found_y ?? null,
-        JSON.stringify(d.image_keys ?? []),
-        d.ai_description ?? "",
-        JSON.stringify(d.tags ?? []),
-        d.notes ?? "",
-        d.ai_status ?? "ready",
-        created_at,
-        created_at,
-      )
-      .first();
+        )
+        .bind(
+          id,
+          d.display_id ?? "",
+          d.status ?? "stored",
+          d.category ?? "",
+          d.color ?? "",
+          d.brand ?? "",
+          d.found_location ?? "",
+          d.found_at ?? null,
+          d.map_key ?? "",
+          d.found_x ?? null,
+          d.found_y ?? null,
+          JSON.stringify(d.image_keys ?? []),
+          d.ai_description ?? "",
+          JSON.stringify(d.tags ?? []),
+          d.notes ?? "",
+          d.ai_status ?? "ready",
+          created_at,
+          created_at,
+        )
+        .first();
+    } catch (error) {
+      throw mapDisplayIdWriteError(error);
+    }
     if (d.embedding && d.embedding.length) {
       try {
         await this.vectorizeItems.upsert([
@@ -110,10 +116,14 @@ export class D1VectorizeStore implements Store {
     if (!set) {
       row = await this.db.prepare(`SELECT ${ITEM_COLS} FROM items WHERE id=?`).bind(id).first();
     } else {
-      row = await this.db
-        .prepare(`UPDATE items SET ${set}, updated_at=? WHERE id=? RETURNING ${ITEM_COLS}`)
-        .bind(...params, nowIso(), id)
-        .first();
+      try {
+        row = await this.db
+          .prepare(`UPDATE items SET ${set}, updated_at=? WHERE id=? RETURNING ${ITEM_COLS}`)
+          .bind(...params, nowIso(), id)
+          .first();
+      } catch (error) {
+        throw mapDisplayIdWriteError(error);
+      }
     }
     if (!row) return null;
     if (patch.embedding && patch.embedding.length) {

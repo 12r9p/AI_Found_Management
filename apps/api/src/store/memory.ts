@@ -16,6 +16,7 @@ import {
   nowIso,
   newId,
 } from "./store.ts";
+import { DuplicateDisplayIdError } from "./errors.ts";
 
 /**
  * インメモリ実装。D1/Vectorize バインディング未設定時の既定。
@@ -101,6 +102,7 @@ export class MemoryStore implements Store {
   // --- items ---
   async createItem(data: NewItem): Promise<Item> {
     const item = { ...blankItem(), ...clean(data), id: newId() } as Item;
+    this.assertDisplayIdAvailable(item.display_id);
     item.created_at = nowIso();
     item.updated_at = item.created_at;
     this.items.unshift(item);
@@ -116,6 +118,9 @@ export class MemoryStore implements Store {
   async updateItem(id: string, patch: Partial<Item>): Promise<Item | null> {
     const it = this.items.find((i) => i.id === id);
     if (!it) return null;
+    if (patch.display_id !== undefined) {
+      this.assertDisplayIdAvailable(patch.display_id, id);
+    }
     Object.assign(it, clean(patch), { id, updated_at: nowIso() });
     this.persist();
     return it;
@@ -125,6 +130,16 @@ export class MemoryStore implements Store {
     this.items = this.items.filter((i) => i.id !== id);
     this.persist();
     return this.items.length < n;
+  }
+
+  /** 空でない管理番号はSQLite既定と同じ完全一致で比較する。 */
+  private assertDisplayIdAvailable(displayId: string, currentId?: string): void {
+    if (
+      displayId !== "" &&
+      this.items.some((item) => item.id !== currentId && item.display_id === displayId)
+    ) {
+      throw new DuplicateDisplayIdError();
+    }
   }
   async searchItems(embedding: number[], filters: SearchFilters): Promise<ScoredItem[]> {
     const base = applyItemFilters(this.items, filters);
