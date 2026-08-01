@@ -50,7 +50,7 @@ export default function MatchesPage() {
       })
       .catch(() => {})
       .finally(() => history.replaceState(null, "", "/matches"));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const pendingCount = matches.filter((m) => m.status === "pending").length;
 

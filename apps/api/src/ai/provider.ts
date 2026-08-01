@@ -189,7 +189,7 @@ function hash(s: string): number {
  * スペース無しの文でも類似度が出るようにする（実モデルの代替）。
  */
 export function deterministicEmbed(text: string, dim: number): number[] {
-  const v = new Array(dim).fill(0);
+  const v = Array.from({ length: dim }, () => 0);
   const bump = (feat: string, w: number) => {
     const idx = hash(feat) % dim;
     v[idx] += w;
@@ -198,12 +198,12 @@ export function deterministicEmbed(text: string, dim: number): number[] {
   // 単語トークン（英数・タグはスペース区切りで効く）
   const tokens = (text || " ")
     .toLowerCase()
-    .split(/[\s,、。・/()\[\]「」]+/)
+    .split(/[\s,、。・/()[\]「」]+/)
     .filter(Boolean);
   for (const tok of tokens) bump(`w:${tok}`, 1.0);
 
   // 文字 n-gram（日本語の主特徴）。記号・空白を除いた連続文字列に対して。
-  const chars = (text || "").toLowerCase().replace(/[\s,、。・/()\[\]「」]+/g, "");
+  const chars = (text || "").toLowerCase().replace(/[\s,、。・/()[\]「」]+/g, "");
   for (let i = 0; i < chars.length; i++) {
     bump(`u:${chars[i]}`, 0.6); // unigram
     if (i + 2 <= chars.length) bump(`b:${chars.slice(i, i + 2)}`, 1.0); // bigram

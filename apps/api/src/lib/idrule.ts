@@ -23,7 +23,7 @@ const RULE_KEY = "id_rule";
 const COUNTER_KEY = "id_counter"; // {"period":"20260729","next":5}
 
 export function normalizeRule(input: any): IdRule {
-  const r = { ...DEFAULT_ID_RULE, ...(input ?? {}) };
+  const r = { ...DEFAULT_ID_RULE, ...input };
   const formats = ["none", "YYYYMMDD", "YYMMDD", "YYYYMM"];
   const resets = ["never", "daily", "monthly", "yearly"];
   return {
