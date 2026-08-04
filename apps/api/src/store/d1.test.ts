@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { createApp } from "../app.ts";
 import { resolveConfig } from "../config.ts";
 import type { AppContext } from "../context.ts";
@@ -112,6 +112,7 @@ class RecordingVectorize implements Pick<
   getByIdsCalls = 0;
   upsertCalls = 0;
   failUpserts = 0;
+  failUpsertsFor = new Map<string, number>();
   beforeUpsertApply?: (vectors: VectorizeVector[], call: number) => Promise<void>;
 
   async query(
@@ -125,6 +126,12 @@ class RecordingVectorize implements Pick<
     const call = ++this.upsertCalls;
     const copied = vectors.map(copyVector);
     this.upserts.push(copied);
+    const id = copied[0]?.id;
+    const failuresForId = id ? (this.failUpsertsFor.get(id) ?? 0) : 0;
+    if (failuresForId > 0) {
+      this.failUpsertsFor.set(id!, failuresForId - 1);
+      throw new Error("一時的なVectorize障害");
+    }
     if (this.failUpserts > 0) {
       this.failUpserts--;
       throw new Error("一時的なVectorize障害");
@@ -329,6 +336,76 @@ test("問い合わせのmetadata変更時にvectorがなければ新規作成し
   expect(inquiries.getByIdsCalls).toBe(1);
   expect(inquiries.upsertCalls).toBe(0);
   expect(inquiries.vectors.size).toBe(0);
+});
+
+test("bulkのD1確定後に一部のmetadata同期が失敗しても全matchを返す", async () => {
+  const db = new RecordingD1();
+  db.inquiries.set("inquiry-1", inquiryRow({ id: "inquiry-1", status: "matched" }));
+  db.inquiries.set("inquiry-2", inquiryRow({ id: "inquiry-2", status: "matched" }));
+  const items = new RecordingVectorize();
+  const inquiries = new RecordingVectorize();
+  inquiries.vectors.set("inquiry-1", { id: "inquiry-1", values: [1, 0] });
+  inquiries.vectors.set("inquiry-2", { id: "inquiry-2", values: [0, 1] });
+  inquiries.failUpsertsFor.set("inquiry-1", 3);
+  const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+
+  try {
+    const matches = await createStore(db, items, inquiries).createMatchesBulk([
+      {
+        match: {
+          item_id: "item-1",
+          inquiry_id: "inquiry-1",
+          score: 0.9,
+          status: "pending",
+          direction: "item_to_inquiry",
+        },
+        inquiryStatusUpdate: { id: "inquiry-1", status: "matched" },
+        notification: {
+          type: "match_found",
+          title: "候補1",
+          body: "確認してください",
+          ref_item_id: "item-1",
+          ref_inquiry_id: "inquiry-1",
+        },
+      },
+      {
+        match: {
+          item_id: "item-2",
+          inquiry_id: "inquiry-2",
+          score: 0.8,
+          status: "pending",
+          direction: "item_to_inquiry",
+        },
+        inquiryStatusUpdate: { id: "inquiry-2", status: "matched" },
+        notification: {
+          type: "match_found",
+          title: "候補2",
+          body: "確認してください",
+          ref_item_id: "item-2",
+          ref_inquiry_id: "inquiry-2",
+        },
+      },
+    ]);
+
+    expect(matches).toHaveLength(2);
+    expect(inquiries.upsertCalls).toBe(4);
+    expect(inquiries.vectors.get("inquiry-2")?.metadata).toEqual({
+      category: "財布",
+      status: "matched",
+    });
+    expect(
+      errorSpy.mock.calls.some(([message]) => {
+        const log = JSON.parse(String(message));
+        return (
+          log.event === "vector_metadata_bulk_sync_partial" &&
+          log.applied === true &&
+          log.entityIds.includes("inquiry-1")
+        );
+      }),
+    ).toBe(true);
+  } finally {
+    errorSpy.mockRestore();
+  }
 });
 
 test("metadata同期が3回失敗すると503で適用済みを返し、同値PATCHから再試行できる", async () => {

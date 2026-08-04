@@ -513,10 +513,22 @@ export class D1VectorizeStore implements Store {
         await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, id);
       }),
     );
-    const failedSync = syncResults.find(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
+    const failedEntityIds = inquiryIds.filter(
+      (_, index) => syncResults[index]?.status === "rejected",
     );
-    if (failedSync) throw failedSync.reason;
+    if (failedEntityIds.length > 0) {
+      // D1のbatchはすでに確定しているため、metadata同期障害でmatch作成全体を
+      // 失敗扱いにしない。個別の同期失敗はrunAppliedVectorSyncが記録しており、
+      // D1を正本として同値PATCHまたは再照合から修復できる。
+      console.error(
+        JSON.stringify({
+          event: "vector_metadata_bulk_sync_partial",
+          entity: "inquiry",
+          entityIds: failedEntityIds,
+          applied: true,
+        }),
+      );
+    }
     return matches;
   }
 
