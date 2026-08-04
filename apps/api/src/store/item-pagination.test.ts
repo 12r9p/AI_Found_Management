@@ -10,39 +10,32 @@ import {
   InvalidItemCursorError,
   InvalidItemLimitError,
   MAX_ITEM_PAGE_LIMIT,
-  decodeItemCursor,
-  encodeItemCursor,
+  itemCursorFromItem,
   normalizeItemPageLimit,
+  parseItemCursor,
   parseItemPageLimit,
+  type ItemCursorPosition,
 } from "./item-pagination.ts";
 
 const SAME_CREATED_AT = "2026-08-01T09:00:00.000Z";
 
 describe("物品一覧カーソル", () => {
-  test("version付きbase64urlカーソルを往復変換する", () => {
-    const cursor = encodeItemCursor({ created_at: SAME_CREATED_AT, id: "item-001" });
+  test("作成日時とIDをそのまま読めるカーソルとして返す", () => {
+    const cursor = itemCursorFromItem({ created_at: SAME_CREATED_AT, id: "item-001" });
 
-    expect(cursor).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(decodeItemCursor(cursor)).toEqual({ createdAt: SAME_CREATED_AT, id: "item-001" });
+    expect(cursor).toEqual({ createdAt: SAME_CREATED_AT, id: "item-001" });
+    expect(parseItemCursor(cursor)).toEqual(cursor);
   });
 
-  test("壊れたカーソルと未対応versionを拒否する", () => {
-    const unsupported = btoa(JSON.stringify({ v: 2, createdAt: SAME_CREATED_AT, id: "item-001" }))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/u, "");
-
-    expect(() => decodeItemCursor("not-a-cursor")).toThrow(InvalidItemCursorError);
-    expect(() => decodeItemCursor(unsupported)).toThrow(InvalidItemCursorError);
+  test("文字列と片方の値しかないカーソルを拒否する", () => {
+    expect(() => parseItemCursor("not-a-cursor")).toThrow(InvalidItemCursorError);
+    expect(() => parseItemCursor({ createdAt: SAME_CREATED_AT })).toThrow(InvalidItemCursorError);
   });
 
   test("非正規の日時表現を含むカーソルを拒否する", () => {
-    const nonCanonical = btoa(JSON.stringify({ v: 1, createdAt: "2026-08-01", id: "item-001" }))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/u, "");
-
-    expect(() => decodeItemCursor(nonCanonical)).toThrow(InvalidItemCursorError);
+    expect(() => parseItemCursor({ createdAt: "2026-08-01", id: "item-001" })).toThrow(
+      InvalidItemCursorError,
+    );
   });
 
   test("limitの既定値と最大値を適用し不正値を拒否する", () => {
@@ -67,7 +60,7 @@ describe("MemoryStoreの物品ページング", () => {
 
     const actualIds: string[] = [];
     const pageSizes: number[] = [];
-    let cursor: string | undefined;
+    let cursor: ItemCursorPosition | undefined;
     do {
       const page = await store.listItems({}, { cursor });
       actualIds.push(...page.items.map((item) => item.id));
@@ -127,7 +120,9 @@ describe("MemoryStoreの物品ページング", () => {
   test("不正なカーソルを拒否する", async () => {
     const store = new MemoryStore();
 
-    expect(store.listItems({}, { cursor: "%%%" })).rejects.toBeInstanceOf(InvalidItemCursorError);
+    expect(
+      store.listItems({}, { cursor: { createdAt: "2026-08-01", id: "item-001" } }),
+    ).rejects.toBeInstanceOf(InvalidItemCursorError);
   });
 });
 
@@ -166,11 +161,26 @@ describe("D1Storeの物品ページング", () => {
 test("GET /api/itemsは不正カーソルを400で返す", async () => {
   setEnv({} as Env);
   const response = await createApp().handle(
-    new Request("http://localhost/api/items?cursor=not-a-cursor"),
+    new Request(`http://localhost/api/items?cursorCreatedAt=${SAME_CREATED_AT}`),
   );
 
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({ error: "invalid_cursor" });
+});
+
+test("GET /api/itemsは作成日時とIDをquery parameterで受け取る", async () => {
+  setEnv({} as Env);
+  const query = new URLSearchParams({
+    cursorCreatedAt: SAME_CREATED_AT,
+    cursorId: "item-001",
+  });
+  const response = await createApp().handle(
+    new Request(`http://localhost/api/items?${query.toString()}`),
+  );
+
+  expect(response.status).toBe(200);
+  const page = (await response.json()) as { nextCursor: unknown };
+  expect(page.nextCursor === null || typeof page.nextCursor === "object").toBe(true);
 });
 
 test("GET /api/itemsは不正limitを400で返す", async () => {

@@ -19,7 +19,7 @@ import { applyItemFilters } from "./memory.ts";
 import { cosineSimilarity } from "../lib/vector.ts";
 import { mapDisplayIdWriteError } from "./errors.ts";
 import {
-  decodeItemCursor,
+  parseItemCursor,
   normalizeItemPageLimit,
   toItemPage,
   type ItemListOptions,
@@ -111,7 +111,7 @@ export class D1VectorizeStore implements Store {
   }
   async listItems(f: SearchFilters, options: ItemListOptions = {}): Promise<ItemPage> {
     const limit = normalizeItemPageLimit(options.limit);
-    const cursor = options.cursor ? decodeItemCursor(options.cursor) : null;
+    const cursor = options.cursor ? parseItemCursor(options.cursor) : null;
     const { where, params } = buildItemWhere(f, cursor);
     const { results } = await this.db
       .prepare(`SELECT ${ITEM_COLS} FROM items ${where} ORDER BY created_at DESC, id DESC LIMIT ?`)

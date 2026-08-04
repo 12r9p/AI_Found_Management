@@ -11,7 +11,12 @@ import type {
 
 export interface ItemPage {
   items: Item[];
-  nextCursor: string | null;
+  nextCursor: ItemCursor | null;
+}
+
+export interface ItemCursor {
+  createdAt: string;
+  id: string;
 }
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";

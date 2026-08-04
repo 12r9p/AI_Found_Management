@@ -35,7 +35,7 @@ describe("管理番号の一意性", () => {
     await store.createItem({ display_id: "fd-0001" });
     await store.createItem({ display_id: " FD-0001 " });
 
-    expect(await store.listItems({})).toHaveLength(5);
+    expect((await store.listItems({})).items).toHaveLength(5);
   });
 
   test("D1の管理番号一意制約だけを共通エラーへ変換する", () => {

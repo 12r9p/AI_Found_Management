@@ -19,7 +19,7 @@ import {
 import { DuplicateDisplayIdError } from "./errors.ts";
 import {
   compareItemsNewestFirst,
-  decodeItemCursor,
+  parseItemCursor,
   isItemAfterCursor,
   normalizeItemPageLimit,
   toItemPage,
@@ -123,7 +123,7 @@ export class MemoryStore implements Store {
   }
   async listItems(filters: SearchFilters, options: ItemListOptions = {}): Promise<ItemPage> {
     const limit = normalizeItemPageLimit(options.limit);
-    const cursor = options.cursor ? decodeItemCursor(options.cursor) : null;
+    const cursor = options.cursor ? parseItemCursor(options.cursor) : null;
     const items = applyItemFilters(this.items, filters).sort(compareItemsNewestFirst);
     const remaining = cursor ? items.filter((item) => isItemAfterCursor(item, cursor)) : items;
     return toItemPage(remaining.slice(0, limit + 1), limit);

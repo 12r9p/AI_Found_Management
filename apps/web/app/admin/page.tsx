@@ -8,7 +8,7 @@ import { usePersistentState } from "../../components/usePersistentState";
 import { ItemsTable } from "../../components/ItemsTable";
 import { InquiriesTab } from "../../components/admin/InquiriesTab";
 import { SettingsTab } from "../../components/admin/SettingsTab";
-import { api } from "../../lib/api";
+import { api, type ItemCursor } from "../../lib/api";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
 type Tab = "items" | "inquiries" | "settings";
@@ -29,9 +29,9 @@ export default function AdminPage() {
     location: "",
   });
   const [items, setItems] = useState<Item[]>([]);
-  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null]);
+  const [cursorHistory, setCursorHistory] = useState<(ItemCursor | null)[]>([null]);
   const [pageIndex, setPageIndex] = useState(0);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<ItemCursor | null>(null);
   const [itemsLoading, setItemsLoading] = useState(false);
   const loadRequest = useRef(0);
   const currentCursor = cursorHistory[pageIndex] ?? null;
@@ -41,7 +41,10 @@ export default function AdminPage() {
     if (filters.category) q.category = filters.category;
     if (filters.status) q.status = filters.status;
     if (filters.location) q.location = filters.location;
-    if (currentCursor) q.cursor = currentCursor;
+    if (currentCursor) {
+      q.cursorCreatedAt = currentCursor.createdAt;
+      q.cursorId = currentCursor.id;
+    }
     q.limit = String(ITEM_PAGE_SIZE);
     const requestId = ++loadRequest.current;
     setNextCursor(null);

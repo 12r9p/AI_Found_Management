@@ -4,13 +4,13 @@ export const DEFAULT_ITEM_PAGE_LIMIT = 100;
 export const MAX_ITEM_PAGE_LIMIT = 200;
 
 export interface ItemListOptions {
-  cursor?: string;
+  cursor?: ItemCursorPosition;
   limit?: number;
 }
 
 export interface ItemPage {
   items: Item[];
-  nextCursor: string | null;
+  nextCursor: ItemCursorPosition | null;
 }
 
 export interface ItemCursorPosition {
@@ -48,38 +48,24 @@ export function parseItemPageLimit(value: unknown): number | undefined {
   return normalizeItemPageLimit(limit);
 }
 
-export function encodeItemCursor(item: Pick<Item, "created_at" | "id">): string {
-  const payload = JSON.stringify({ v: 1, createdAt: item.created_at, id: item.id });
-  return btoa(payload).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
+export function itemCursorFromItem(item: Pick<Item, "created_at" | "id">): ItemCursorPosition {
+  return { createdAt: item.created_at, id: item.id };
 }
 
-export function decodeItemCursor(cursor: string): ItemCursorPosition {
-  try {
-    if (!cursor || !/^[A-Za-z0-9_-]+$/.test(cursor) || cursor.length % 4 === 1) {
-      throw new InvalidItemCursorError();
-    }
-    const base64 = cursor.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-    const parsed = JSON.parse(atob(padded)) as unknown;
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      (parsed as { v?: unknown }).v !== 1 ||
-      typeof (parsed as { createdAt?: unknown }).createdAt !== "string" ||
-      !isCanonicalCursorDate((parsed as { createdAt: string }).createdAt) ||
-      typeof (parsed as { id?: unknown }).id !== "string" ||
-      !(parsed as { id: string }).id
-    ) {
-      throw new InvalidItemCursorError();
-    }
-    return {
-      createdAt: (parsed as { createdAt: string }).createdAt,
-      id: (parsed as { id: string }).id,
-    };
-  } catch (error) {
-    if (error instanceof InvalidItemCursorError) throw error;
-    throw new InvalidItemCursorError();
-  }
+export function isItemCursorPosition(value: unknown): value is ItemCursorPosition {
+  if (!value || typeof value !== "object") return false;
+  const cursor = value as Record<string, unknown>;
+  return (
+    typeof cursor.createdAt === "string" &&
+    isCanonicalCursorDate(cursor.createdAt) &&
+    typeof cursor.id === "string" &&
+    cursor.id.length > 0
+  );
+}
+
+export function parseItemCursor(value: unknown): ItemCursorPosition {
+  if (!isItemCursorPosition(value)) throw new InvalidItemCursorError();
+  return { createdAt: value.createdAt, id: value.id };
 }
 
 function isCanonicalCursorDate(value: string): boolean {
@@ -114,6 +100,6 @@ export function toItemPage(items: Item[], limit: number): ItemPage {
   const pageItems = hasNextPage ? items.slice(0, limit) : items;
   return {
     items: pageItems,
-    nextCursor: hasNextPage ? encodeItemCursor(pageItems[pageItems.length - 1]!) : null,
+    nextCursor: hasNextPage ? itemCursorFromItem(pageItems[pageItems.length - 1]!) : null,
   };
 }

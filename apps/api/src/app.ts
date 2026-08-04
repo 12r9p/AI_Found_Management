@@ -26,6 +26,7 @@ import {
   InvalidItemCursorError,
   InvalidItemLimitError,
   MAX_ITEM_PAGE_LIMIT,
+  parseItemCursor,
   parseItemPageLimit,
   type ItemListOptions,
 } from "./store/item-pagination.ts";
@@ -55,12 +56,16 @@ function parseFilters(q: Record<string, any>): SearchFilters {
 }
 
 function parseItemListOptions(q: Record<string, unknown>): ItemListOptions {
-  const cursor = q.cursor;
-  if (cursor !== undefined && (typeof cursor !== "string" || !cursor)) {
+  const createdAt = q.cursorCreatedAt;
+  const id = q.cursorId;
+  if (createdAt === undefined && id === undefined) {
+    return { limit: parseItemPageLimit(q.limit) };
+  }
+  if (createdAt === undefined || id === undefined) {
     throw new InvalidItemCursorError();
   }
   return {
-    cursor: cursor as string | undefined,
+    cursor: parseItemCursor({ createdAt, id }),
     limit: parseItemPageLimit(q.limit),
   };
 }
