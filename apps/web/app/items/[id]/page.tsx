@@ -19,7 +19,7 @@ import { MapPicker, findRegionAt, type Pin } from "../../../components/MapPicker
 import { useLocationPresets } from "../../../components/useLocationPresets";
 import { ImageEditor } from "../../../components/ImageEditor";
 import { MatchReviewModal } from "../../../components/MatchReviewModal";
-import { api, imageUrl } from "../../../lib/api";
+import { api, imageUrl, isAppliedApiError } from "../../../lib/api";
 import { formatIsoForDateTimeLocal, parseDateTimeLocalToIso } from "../../../lib/datetime";
 import { STATUS_LABEL, type Item, type Match } from "../../../lib/types";
 
@@ -120,6 +120,11 @@ export default function ItemDetailPage() {
       toast("保存しました", "success");
       load();
     } catch (e) {
+      if (isAppliedApiError(e)) {
+        toast("保存内容は反映済みです。検索データの同期は保留中です", "success");
+        await load();
+        return;
+      }
       toast(`保存失敗: ${(e as Error).message}`, "error");
     } finally {
       setSaving(false);

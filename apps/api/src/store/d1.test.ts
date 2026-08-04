@@ -408,7 +408,7 @@ test("bulkのD1確定後に一部のmetadata同期が失敗しても全matchを�
   }
 });
 
-test("metadata同期が3回失敗すると503で適用済みを返し、同値PATCHから再試行できる", async () => {
+test("埋め込み同期が3回失敗しても同値PATCHで古いvector値を修復できる", async () => {
   const db = new RecordingD1();
   db.items.set("item-1", itemRow({ id: "item-1" }));
   const vectorize = new RecordingVectorize();
@@ -434,25 +434,73 @@ test("metadata同期が3回失敗すると503で適用済みを返し、同値PA
     new Request("http://localhost/api/items/item-1", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ category: "カードケース" }),
+      body: JSON.stringify({ color: "茶" }),
     });
 
   const failed = await app.fetch(request());
   expect(failed.status).toBe(503);
   expect(await failed.json()).toEqual({ error: "vector_metadata_sync_failed", applied: true });
   expect(vectorize.upsertCalls).toBe(3);
-  expect(db.items.get("item-1")?.category).toBe("カードケース");
-  expect(embedCalls).toBe(0);
+  expect(db.items.get("item-1")?.color).toBe("茶");
+  expect(embedCalls).toBe(1);
 
   const retried = await app.fetch(request());
   expect(retried.status).toBe(200);
   expect(vectorize.upsertCalls).toBe(4);
-  expect(vectorize.vectors.get("item-1")?.values).toEqual([1, 0]);
+  expect(vectorize.vectors.get("item-1")?.values).toEqual([9, 9]);
   expect(vectorize.vectors.get("item-1")?.metadata).toEqual({
-    category: "カードケース",
+    category: "財布",
     status: "stored",
   });
-  expect(embedCalls).toBe(0);
+  expect(embedCalls).toBe(2);
+});
+
+test("category変更は物品と問い合わせのsemantic embeddingも更新する", async () => {
+  const db = new RecordingD1();
+  db.items.set("item-1", itemRow({ id: "item-1" }));
+  db.inquiries.set("inquiry-1", inquiryRow({ id: "inquiry-1" }));
+  const items = new RecordingVectorize();
+  const inquiries = new RecordingVectorize();
+  items.vectors.set("item-1", { id: "item-1", values: [1, 0] });
+  inquiries.vectors.set("inquiry-1", { id: "inquiry-1", values: [0, 1] });
+  const embedTexts: string[] = [];
+  const ai: AIProvider = {
+    name: "recording",
+    async describeImages() {
+      throw new Error("このテストでは使用しない");
+    },
+    async embed(text) {
+      embedTexts.push(text);
+      return embedTexts.length === 1 ? [9, 1] : [1, 9];
+    },
+    async chat() {
+      return "";
+    },
+  };
+  const app = createApp(async () => contextFor(createStore(db, items, inquiries), ai));
+
+  const itemResponse = await app.fetch(
+    new Request("http://localhost/api/items/item-1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ category: "カードケース" }),
+    }),
+  );
+  const inquiryResponse = await app.fetch(
+    new Request("http://localhost/api/inquiries/inquiry-1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ category: "かばん" }),
+    }),
+  );
+
+  expect(itemResponse.status).toBe(200);
+  expect(inquiryResponse.status).toBe(200);
+  expect(embedTexts).toHaveLength(2);
+  expect(embedTexts[0]).toContain("カードケース");
+  expect(embedTexts[1]).toContain("かばん");
+  expect(items.vectors.get("item-1")?.values).toEqual([9, 1]);
+  expect(inquiries.vectors.get("inquiry-1")?.values).toEqual([1, 9]);
 });
 
 test("Vectorizeの古い検索候補をD1の現在状態で再検証する", async () => {

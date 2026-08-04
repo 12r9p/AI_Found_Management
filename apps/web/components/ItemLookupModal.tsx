@@ -1,7 +1,7 @@
 "use client";
 import { Badge, Button, Card, Modal, useToast } from "./ui";
 import { MapPicker } from "./MapPicker";
-import { api, imageUrl } from "../lib/api";
+import { api, imageUrl, isAppliedApiError } from "../lib/api";
 import { STATUS_LABEL, type Item } from "../lib/types";
 import { useState } from "react";
 
@@ -36,6 +36,16 @@ export function ItemLookupModal({
       onReturned(item, prev);
       onClose();
     } catch (e) {
+      if (isAppliedApiError(e)) {
+        const updated = await api
+          .getItem(item.id)
+          .then((result) => result.item)
+          .catch(() => ({ ...item, status: "returned" }) as Item);
+        toast("返却処理は反映済みです。検索データの同期は保留中です", "success");
+        onReturned(updated, prev);
+        onClose();
+        return;
+      }
       toast(`更新に失敗しました: ${(e as Error).message}`, "error");
     } finally {
       setBusy(false);

@@ -141,24 +141,9 @@ function parseItemListOptions(q: Record<string, unknown>): ItemListOptions {
   };
 }
 
-/** PATCHが実際に特徴量を変える場合だけ再埋め込みする。同値の配列も内容で比較する。 */
-function changesAnyField(
-  current: object,
-  patch: Record<string, unknown>,
-  fields: readonly string[],
-): boolean {
-  const values = current as Record<string, unknown>;
-  return fields.some((field) => {
-    if (!(field in patch)) return false;
-    const before = values[field];
-    const after = patch[field];
-    if (Array.isArray(before) && Array.isArray(after)) {
-      return (
-        before.length !== after.length || before.some((value, index) => value !== after[index])
-      );
-    }
-    return before !== after;
-  });
+/** 同値PATCHをVectorize同期失敗後の再試行にも使えるよう、指定項目の有無で判定する。 */
+function touchesAnyField(patch: Record<string, unknown>, fields: readonly string[]): boolean {
+  return fields.some((field) => field in patch);
 }
 
 async function defaultContext(): Promise<AppContext> {
@@ -487,12 +472,13 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       const patch = { ...(body as any) };
       delete patch.id;
       delete patch.embedding; // 埋め込みは派生値。手編集させない
-      // 特徴に関わる項目が実際に変わったら再埋め込み。
-      // category/status は検索metadataとして既存vectorへ同期し、それだけの変更では
-      // AIを呼ばない。同値PATCHもmetadata同期の再試行経路として残す。
+      // 埋め込み対象の項目を含むPATCHは、同値でも再埋め込みする。
+      // D1更新後にVectorize upsertが失敗した場合、同じPATCHを再送して古いvector値を
+      // 修復できる必要がある。categoryは埋め込み本文とmetadataの両方に含まれる。
       // 埋め込みが失敗しても、他のフィールドの編集（状態変更など）まで巻き込んで
       // 失敗にしない — 埋め込みだけ古いまま保持し、ai_status で要再解析を示す。
-      const touchesFeatures = changesAnyField(existing, patch, [
+      const touchesFeatures = touchesAnyField(patch, [
+        "category",
         "color",
         "brand",
         "ai_description",
@@ -675,8 +661,8 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       const patch = { ...(body as any) };
       delete patch.id;
       delete patch.embedding;
-      // category/statusだけの変更は既存vectorのmetadata同期で処理し、AIを呼ばない。
-      const touches = changesAnyField(existing, patch, ["color", "description", "tags", "notes"]);
+      // categoryは埋め込み本文にも含まれるため、同値の再試行を含めて再埋め込みする。
+      const touches = touchesAnyField(patch, ["category", "color", "description", "tags", "notes"]);
       let embedding: number[] | undefined;
       if (touches) {
         // 失敗しても他フィールドの編集は保存する（埋め込みだけ古いまま据え置く）。

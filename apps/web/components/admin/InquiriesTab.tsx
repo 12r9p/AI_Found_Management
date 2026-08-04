@@ -17,7 +17,7 @@ import {
 import { MatchReviewModal } from "../MatchReviewModal";
 import { useMeta } from "../useMeta";
 import { usePersistentState } from "../usePersistentState";
-import { api, imageUrl, itemCursorsEqual, type ItemCursor } from "../../lib/api";
+import { api, imageUrl, isAppliedApiError, itemCursorsEqual, type ItemCursor } from "../../lib/api";
 import { STATUS_LABEL, type Inquiry, type Match } from "../../lib/types";
 
 const STATUS_FILTERS = [
@@ -311,6 +311,12 @@ function InquiryDetailModal({
       setEdit(false);
       onChanged();
     } catch (e) {
+      if (isAppliedApiError(e)) {
+        toast("保存内容は反映済みです。検索データの同期は保留中です", "success");
+        setEdit(false);
+        onChanged();
+        return;
+      }
       toast(`保存に失敗しました: ${(e as Error).message}`, "error");
     } finally {
       setSaving(false);

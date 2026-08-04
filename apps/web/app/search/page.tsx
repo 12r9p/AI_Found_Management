@@ -20,7 +20,7 @@ import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
 import { ItemLookupModal } from "../../components/ItemLookupModal";
 import { ItemEditModal } from "../../components/ItemEditModal";
-import { api, imageUrl } from "../../lib/api";
+import { api, imageUrl, isAppliedApiError } from "../../lib/api";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
 const EMPTY_FILTERS = { category: "", color: "", status: "", location: "", from: "", to: "" };
@@ -90,6 +90,15 @@ export default function SearchPage() {
             patchLocal(reverted);
             toast("返却を取り消しました", "success");
           } catch (e) {
+            if (isAppliedApiError(e)) {
+              const reverted = await api
+                .getItem(item.id)
+                .then((result) => result.item)
+                .catch(() => ({ ...item, status: prevStatus }) as Item);
+              patchLocal(reverted);
+              toast("返却の取り消しは反映済みです。検索データの同期は保留中です", "success");
+              return;
+            }
             toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
           }
         },
