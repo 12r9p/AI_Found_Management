@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently -n api,web -c cyan,magenta \"bun run dev:api\" \"bun run dev:web\"",
+    "dev": "concurrently -n api,web -c cyan,magenta \"bun run cf-dev:api\" \"bun run dev:web\"",
     "dev:api": "bun run --cwd apps/api dev",
     "dev:web": "bun run --cwd apps/web dev",
     "build": "bun run --cwd apps/api build && bun run --cwd apps/web cf:build",
