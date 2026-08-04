@@ -9,7 +9,7 @@
     "start": "bun run src/index.ts",
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
-    "cf-dev": "wrangler dev --experimental-vectorize-bind-to-prod",
+    "cf-dev": "wrangler dev",
     "seed": "bun run src/scripts/seed.ts",
     "migrate": "bun run src/scripts/migrate.ts",
     "migrate:local": "wrangler d1 migrations apply found-db --local",
@@ -26,6 +26,6 @@
     "@cloudflare/workers-types": "^4.20241127.0",
     "@types/bun": "^1.1.14",
     "typescript": "6.0.3",
-    "wrangler": "4.114.0"
+    "wrangler": "4.118.0"
   }
 }
