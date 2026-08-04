@@ -19,7 +19,8 @@ import { MapPicker, findRegionAt, type Pin } from "../../../components/MapPicker
 import { useLocationPresets } from "../../../components/useLocationPresets";
 import { ImageEditor } from "../../../components/ImageEditor";
 import { MatchReviewModal } from "../../../components/MatchReviewModal";
-import { api, imageUrl, isAppliedApiError } from "../../../lib/api";
+import { FoundImage } from "../../../components/FoundImage";
+import { api, isAppliedApiError } from "../../../lib/api";
 import { formatIsoForDateTimeLocal, parseDateTimeLocalToIso } from "../../../lib/datetime";
 import { STATUS_LABEL, type Item, type Match } from "../../../lib/types";
 
@@ -244,11 +245,10 @@ export default function ItemDetailPage() {
                     <button key={m.id} className="rb-listrow" onClick={() => setReviewing(m)}>
                       <div className="rb-thumbs">
                         {m.item?.image_keys?.[0] ? (
-                          <img
-                            src={imageUrl(m.item.image_keys[0], "thumb")}
+                          <FoundImage
+                            imageKey={m.item.image_keys[0]}
+                            variant="thumb"
                             alt=""
-                            loading="lazy"
-                            decoding="async"
                             className="rb-thumb-sm"
                           />
                         ) : (

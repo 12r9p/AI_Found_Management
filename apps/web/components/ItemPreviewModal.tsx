@@ -1,6 +1,7 @@
 "use client";
 import { Badge, Button, Card, Modal } from "./ui";
 import { MapPicker } from "./MapPicker";
+import { FoundImage } from "./FoundImage";
 import { imageUrl } from "../lib/api";
 import { STATUS_LABEL, type Item } from "../lib/types";
 
@@ -44,12 +45,11 @@ export function ItemPreviewModal({
             <div className="rb-grid rb-grid--2">
               {item.image_keys.map((k) => (
                 <a key={k} href={imageUrl(k, "original")} target="_blank" rel="noreferrer">
-                  <img
-                    src={imageUrl(k, "preview")}
+                  <FoundImage
+                    imageKey={k}
+                    variant="preview"
                     alt="拾得物"
-                    loading="eager"
                     fetchPriority="high"
-                    decoding="async"
                     className="thumb"
                   />
                 </a>

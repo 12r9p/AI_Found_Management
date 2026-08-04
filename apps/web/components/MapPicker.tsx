@@ -1,8 +1,9 @@
 "use client";
 import { Button as BaseButton } from "@base-ui/react/button";
 import { useEffect, useId, useRef, useState } from "react";
-import { api, imageUrl } from "../lib/api";
+import { api } from "../lib/api";
 import { Button } from "./ui";
+import { FoundImage } from "./FoundImage";
 
 export interface Pin {
   x: number; // 0..1
@@ -141,12 +142,11 @@ export function MapPicker({
 
   const mapLayers = (
     <>
-      <img
-        src={imageUrl(mapKey, "original")}
+      <FoundImage
+        imageKey={mapKey}
+        variant="original"
         alt="会場地図"
-        loading="eager"
         fetchPriority="high"
-        decoding="async"
         className="map-img"
         draggable={false}
       />

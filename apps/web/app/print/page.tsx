@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, imageUrl } from "../../lib/api";
+import { FoundImage } from "../../components/FoundImage";
+import { api } from "../../lib/api";
 import { fetchAllItems } from "../../lib/item-pages";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
@@ -135,11 +136,11 @@ export default function PrintPage() {
               <td style={{ ...cell, width: 60 }}>
                 {/* 現物照合できるよう印刷物にも写真を載せる */}
                 {it.image_keys[0] ? (
-                  <img
-                    src={imageUrl(it.image_keys[0], "thumb")}
+                  <FoundImage
+                    imageKey={it.image_keys[0]}
+                    variant="thumb"
                     alt=""
                     loading="eager"
-                    decoding="async"
                     style={{
                       width: 54,
                       height: 54,
