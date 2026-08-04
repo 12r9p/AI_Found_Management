@@ -106,9 +106,9 @@ export async function matchNewInquiry(
       ref_item_id: it.id,
       ref_inquiry_id: inquiry.id,
     },
+    inquiryStatusUpdate: { id: inquiry.id, status: "matched" },
   }));
   const matches = await store.createMatchesBulk(entries);
-  await store.updateInquiry(inquiry.id, { status: "matched" });
   return { matches, topScore: scored[0]?.score ?? 0 };
 }
 
@@ -184,7 +184,13 @@ export async function rematchPage(
       matchesFound += outcome.matches.length;
     } catch (e) {
       failed++;
-      console.error("[rematchPage] failed for item", item.id, e);
+      console.error(
+        JSON.stringify({
+          event: "rematch_item_failed",
+          itemId: item.id,
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
       await store.updateItem(item.id, { ai_status: "error" }).catch(() => {});
     }
   }

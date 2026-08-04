@@ -16,7 +16,7 @@ import { MapPicker, findRegionAt, type Pin } from "./MapPicker";
 import { ImageEditor } from "./ImageEditor";
 import { useMeta } from "./useMeta";
 import { useLocationPresets } from "./useLocationPresets";
-import { api } from "../lib/api";
+import { api, isAppliedApiError } from "../lib/api";
 import { formatIsoForDateTimeLocal, parseDateTimeLocalToIso } from "../lib/datetime";
 import { STATUS_LABEL, type Item } from "../lib/types";
 
@@ -114,6 +114,18 @@ export function ItemEditModal({
       onSaved?.(updated);
       onClose();
     } catch (e) {
+      if (isAppliedApiError(e)) {
+        try {
+          const { item: updated } = await api.getItem(item.id);
+          toast("保存内容は反映済みです。検索データの同期は保留中です", "success");
+          onSaved?.(updated);
+          onClose();
+        } catch {
+          toast("保存内容は反映済みです。最新状態を再読み込みしてください", "success");
+          onClose();
+        }
+        return;
+      }
       toast(`保存に失敗しました: ${(e as Error).message}`, "error");
     } finally {
       setSaving(false);

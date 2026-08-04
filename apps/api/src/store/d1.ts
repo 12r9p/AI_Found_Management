@@ -12,6 +12,9 @@ import {
   type ScoredItem,
   type ScoredInquiry,
   type MatchBulkEntry,
+  type MatchDecision,
+  type MatchDecisionResult,
+  VectorMetadataSyncError,
   nowIso,
   newId,
 } from "./store.ts";
@@ -26,6 +29,46 @@ import {
   type ItemPage,
 } from "./item-pagination.ts";
 
+const VECTORIZE_SYNC_DELAYS_MS = [0, 100, 300] as const;
+const VECTOR_METADATA_CONVERGENCE_WRITES = 3;
+type StoreDatabase = Pick<D1Database, "prepare" | "batch">;
+type StoreVectorize = Pick<Vectorize, "query" | "upsert" | "deleteByIds" | "getByIds">;
+
+async function retryVectorizeSync(operation: () => Promise<unknown>): Promise<void> {
+  let lastError: unknown;
+  for (const delayMs of VECTORIZE_SYNC_DELAYS_MS) {
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    try {
+      await operation();
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error("Vectorize synchronization failed");
+}
+
+function vectorMetadata(row: { category?: unknown; status?: unknown }): Record<string, string> {
+  return {
+    category: String(row.category ?? ""),
+    status: String(row.status ?? ""),
+  };
+}
+
+function sameVectorMetadata(left: Record<string, string>, right: Record<string, string>): boolean {
+  return left.category === right.category && left.status === right.status;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isConfirmationConflictError(error: unknown): boolean {
+  return /UNIQUE constraint failed:\s*matches\.(?:id\b|item_id\s*,\s*matches\.inquiry_id\b)/i.test(
+    errorMessage(error),
+  );
+}
+
 /**
  * D1 + Vectorize 実装。D1 = 行データの永続化(source of truth)、
  * Vectorize = 埋め込みベクトルの近似最近傍検索専用(id と vector のみ保持)。
@@ -35,9 +78,9 @@ import {
 export class D1VectorizeStore implements Store {
   readonly kind = "d1" as const;
   constructor(
-    private db: D1Database,
-    private vectorizeItems: Vectorize,
-    private vectorizeInquiries: Vectorize,
+    private db: StoreDatabase,
+    private vectorizeItems: StoreVectorize,
+    private vectorizeInquiries: StoreVectorize,
   ) {}
 
   async init(): Promise<void> {
@@ -82,15 +125,18 @@ export class D1VectorizeStore implements Store {
     } catch (error) {
       throw mapDisplayIdWriteError(error);
     }
-    if (d.embedding && d.embedding.length) {
+    const embedding = d.embedding;
+    if (embedding && embedding.length) {
       try {
-        await this.vectorizeItems.upsert([
-          {
-            id,
-            values: d.embedding,
-            metadata: { category: d.category ?? "", status: d.status ?? "stored" },
-          },
-        ]);
+        await retryVectorizeSync(() =>
+          this.vectorizeItems.upsert([
+            {
+              id,
+              values: embedding,
+              metadata: { category: d.category ?? "", status: d.status ?? "stored" },
+            },
+          ]),
+        );
       } catch (e) {
         // Vectorize への反映が失敗した状態でD1側だけ行が残ると、検索に絶対ヒットしない
         // 「幽霊データ」になる（クライアントにはエラーが返るのに実は登録済み、という不整合）。
@@ -139,13 +185,15 @@ export class D1VectorizeStore implements Store {
       // metadata は upsert のたびに丸ごと差し替わるため、patch の断片ではなく
       // 更新後の行全体(row)から現在値を組み立てる(そうしないと今回patchに
       // 含まれなかった方のフィールドのメタデータが消えてしまう)。
-      await this.vectorizeItems.upsert([
-        {
-          id,
-          values: patch.embedding,
-          metadata: { category: String(row.category ?? ""), status: String(row.status ?? "") },
-        },
-      ]);
+      await this.upsertAppliedVector(
+        "item",
+        this.vectorizeItems,
+        id,
+        patch.embedding,
+        vectorMetadata(row),
+      );
+    } else if (patch.status !== undefined || patch.category !== undefined) {
+      await this.syncAppliedVectorMetadata("item", this.vectorizeItems, id);
     }
     return rowToItem(row);
   }
@@ -235,15 +283,18 @@ export class D1VectorizeStore implements Store {
         created_at,
       )
       .first();
-    if (d.embedding && d.embedding.length) {
+    const embedding = d.embedding;
+    if (embedding && embedding.length) {
       try {
-        await this.vectorizeInquiries.upsert([
-          {
-            id,
-            values: d.embedding,
-            metadata: { category: d.category ?? "", status: d.status ?? "open" },
-          },
-        ]);
+        await retryVectorizeSync(() =>
+          this.vectorizeInquiries.upsert([
+            {
+              id,
+              values: embedding,
+              metadata: { category: d.category ?? "", status: d.status ?? "open" },
+            },
+          ]),
+        );
       } catch (e) {
         // createItem と同様、ベクトル未反映の幽霊データを残さないようD1側もロールバックする。
         await this.db
@@ -285,13 +336,15 @@ export class D1VectorizeStore implements Store {
     }
     if (!row) return null;
     if (patch.embedding && patch.embedding.length) {
-      await this.vectorizeInquiries.upsert([
-        {
-          id,
-          values: patch.embedding,
-          metadata: { category: String(row.category ?? ""), status: String(row.status ?? "") },
-        },
-      ]);
+      await this.upsertAppliedVector(
+        "inquiry",
+        this.vectorizeInquiries,
+        id,
+        patch.embedding,
+        vectorMetadata(row),
+      );
+    } else if (patch.status !== undefined || patch.category !== undefined) {
+      await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, id);
     }
     return rowToInquiry(row);
   }
@@ -336,8 +389,12 @@ export class D1VectorizeStore implements Store {
       .prepare(`SELECT ${INQ_COLS} FROM inquiries WHERE id IN (${ids.map(() => "?").join(",")})`)
       .bind(...ids)
       .all();
+    const currentStatuses = filters?.status?.length ? new Set(filters.status) : null;
     const scored = (results as any[])
       .map(rowToInquiry)
+      // Vectorize の metadata は反映待ちや同期失敗で古い可能性があるため、
+      // 最終的な状態判定は正本である D1 の行に対してもう一度行う。
+      .filter((inquiry) => !currentStatuses || currentStatuses.has(inquiry.status))
       .map((it) => ({ ...it, score: scoreById.get(it.id) ?? 0 }))
       .sort((a, b) => b.score - a.score);
     return scored.slice(0, Math.max(1, Math.min(200, lim)));
@@ -374,21 +431,84 @@ export class D1VectorizeStore implements Store {
       .first();
     return row ? rowToMatch(row) : null;
   }
-  async updateMatch(id: string, patch: Partial<Match>): Promise<Match | null> {
-    const { set, params } = buildSet(patch, ["status"]);
-    if (!set) {
-      const row = await this.db
-        .prepare(`SELECT ${MATCH_COLS} FROM matches WHERE id=?`)
-        .bind(id)
-        .first();
-      return row ? rowToMatch(row) : null;
+  async decideMatch(id: string, decision: MatchDecision): Promise<MatchDecisionResult> {
+    const current = await this.getMatch(id);
+    if (!current) return { ok: false, reason: "not_found" };
+
+    const updated_at = nowIso();
+    let results: D1Result[];
+    try {
+      results = await this.db.batch([
+        // D1のバッチ処理は1つのトランザクションとして実行される。別の照合候補の確定があれば
+        // 同じ主キーの挿入を意図的に発生させ、後続更新も含めて全体をロールバックする。
+        this.db
+          .prepare(
+            `INSERT INTO matches (id, item_id, inquiry_id, score, status, direction, created_at)
+             SELECT target.id, target.item_id, target.inquiry_id, target.score,
+                    target.status, target.direction, target.created_at
+             FROM matches AS target
+             WHERE target.id=? AND ?='confirmed'
+               AND EXISTS (
+                 SELECT 1 FROM matches AS other
+                 WHERE other.inquiry_id=target.inquiry_id
+                   AND other.id<>target.id
+                   AND other.status='confirmed'
+               )`,
+          )
+          .bind(id, decision),
+        this.db
+          .prepare(
+            `UPDATE matches SET status=?
+             WHERE id=?
+               AND EXISTS (SELECT 1 FROM inquiries WHERE id=matches.inquiry_id)
+             RETURNING ${MATCH_COLS}`,
+          )
+          .bind(decision, id),
+        this.db
+          .prepare(
+            `UPDATE inquiries
+             SET status=CASE
+                   WHEN status='closed' THEN 'closed'
+                   WHEN EXISTS (
+                     SELECT 1 FROM matches
+                     WHERE inquiry_id=inquiries.id AND status='confirmed'
+                   ) THEN 'resolved'
+                   WHEN EXISTS (
+                     SELECT 1 FROM matches
+                     WHERE inquiry_id=inquiries.id AND status='pending'
+                   ) THEN 'matched'
+                   ELSE 'open'
+                 END,
+                 matched_item_id=(
+                   SELECT item_id FROM matches
+                   WHERE inquiry_id=inquiries.id AND status='confirmed'
+                   ORDER BY created_at ASC, id ASC
+                   LIMIT 1
+                 ),
+                 updated_at=?
+             WHERE id=?
+             RETURNING ${INQ_COLS}`,
+          )
+          .bind(updated_at, current.inquiry_id),
+      ]);
+    } catch (error) {
+      if (decision === "confirmed" && isConfirmationConflictError(error)) {
+        return { ok: false, reason: "confirmation_conflict" };
+      }
+      throw error;
     }
-    const row = await this.db
-      .prepare(`UPDATE matches SET ${set} WHERE id=? RETURNING ${MATCH_COLS}`)
-      .bind(...params, id)
-      .first();
-    return row ? rowToMatch(row) : null;
+
+    const matchRow = results[1]?.results?.[0];
+    const inquiryRow = results[2]?.results?.[0];
+    if (!matchRow) return { ok: false, reason: "not_found" };
+    if (!inquiryRow) throw new Error(`照合 ${id} の問い合わせが見つかりません`);
+
+    const match = rowToMatch(matchRow);
+    const inquiry = rowToInquiry(inquiryRow);
+    await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, inquiry.id);
+    return { ok: true, match, inquiry };
   }
+
   async findMatch(itemId: string, inquiryId: string): Promise<Match | null> {
     const row = await this.db
       .prepare(`SELECT ${MATCH_COLS} FROM matches WHERE item_id=? AND inquiry_id=?`)
@@ -448,7 +568,114 @@ export class D1VectorizeStore implements Store {
     }
     // 件数分の直列ラウンドトリップを避け、1回の db.batch() にまとめる。
     await this.db.batch(stmts);
+
+    // batch 内の問い合わせ状態更新は updateInquiry を通らないため、D1 確定後に
+    // Vectorize metadata も同期する。全件を試してから最初の失敗を返すことで、
+    // 一部の失敗が残りの問い合わせの修復を妨げないようにする。
+    const inquiryIds = [
+      ...new Set(
+        entries
+          .map((entry) => entry.inquiryStatusUpdate?.id)
+          .filter((id): id is string => id !== undefined),
+      ),
+    ];
+    const syncResults = await Promise.allSettled(
+      inquiryIds.map(async (id) => {
+        await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, id);
+      }),
+    );
+    const failedEntityIds = inquiryIds.filter(
+      (_, index) => syncResults[index]?.status === "rejected",
+    );
+    if (failedEntityIds.length > 0) {
+      // D1のbatchはすでに確定しているため、metadata同期障害でmatch作成全体を
+      // 失敗扱いにしない。個別の同期失敗はrunAppliedVectorSyncが記録しており、
+      // D1を正本として同値PATCHまたは再照合から修復できる。
+      console.error(
+        JSON.stringify({
+          event: "vector_metadata_bulk_sync_partial",
+          entity: "inquiry",
+          entityIds: failedEntityIds,
+          applied: true,
+        }),
+      );
+    }
     return matches;
+  }
+
+  /** D1へ適用済みの埋め込み更新を、完全なmetadata付きでVectorizeへ反映する。 */
+  private async upsertAppliedVector(
+    entity: "item" | "inquiry",
+    index: StoreVectorize,
+    id: string,
+    values: number[],
+    metadata: Record<string, string>,
+  ): Promise<void> {
+    await this.runAppliedVectorSync(entity, id, () => index.upsert([{ id, values, metadata }]));
+  }
+
+  /** 既存vectorの値を再利用し、書き込み後もD1現在値へ収束するまでmetadataを同期する。 */
+  private async syncAppliedVectorMetadata(
+    entity: "item" | "inquiry",
+    index: StoreVectorize,
+    id: string,
+  ): Promise<void> {
+    await this.runAppliedVectorSync(entity, id, async () => {
+      for (let write = 0; write < VECTOR_METADATA_CONVERGENCE_WRITES; write++) {
+        const metadata = await this.readCurrentVectorMetadata(entity, id);
+        if (!metadata) return;
+
+        const vectors = await index.getByIds([id]);
+        const current = vectors.find((vector) => vector.id === id);
+        // vectorがない行は新規作成しない。再照合など明示的な再埋め込み経路に委ねる。
+        if (!current) return;
+        await index.upsert([
+          {
+            id,
+            values: current.values,
+            ...(current.namespace ? { namespace: current.namespace } : {}),
+            metadata,
+          },
+        ]);
+
+        // 別リクエストの古いupsertが新しい同期より後に完了しても、正本であるD1を
+        // 書き込み後に再読し、変化していれば同じ試行内で最新値を再度反映する。
+        const latest = await this.readCurrentVectorMetadata(entity, id);
+        if (!latest || sameVectorMetadata(metadata, latest)) return;
+      }
+
+      throw new Error("Vectorize同期中にD1 metadataが継続して変更されました");
+    });
+  }
+
+  private async readCurrentVectorMetadata(
+    entity: "item" | "inquiry",
+    id: string,
+  ): Promise<Record<string, string> | null> {
+    const row = entity === "item" ? await this.getItem(id) : await this.getInquiry(id);
+    return row ? vectorMetadata(row) : null;
+  }
+
+  private async runAppliedVectorSync(
+    entity: "item" | "inquiry",
+    id: string,
+    operation: () => Promise<unknown>,
+  ): Promise<void> {
+    try {
+      await retryVectorizeSync(operation);
+    } catch (cause) {
+      console.error(
+        JSON.stringify({
+          event: "vector_metadata_sync_failed",
+          entity,
+          entityId: id,
+          attempts: VECTORIZE_SYNC_DELAYS_MS.length,
+          applied: true,
+          error: errorMessage(cause),
+        }),
+      );
+      throw new VectorMetadataSyncError(entity, id, VECTORIZE_SYNC_DELAYS_MS.length, cause);
+    }
   }
 
   // --- notifications ---

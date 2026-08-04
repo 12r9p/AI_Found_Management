@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, Modal, useConfirm, useToast } from "./ui";
 import { MapPicker } from "./MapPicker";
-import { api, imageUrl } from "../lib/api";
+import { api, imageUrl, isAppliedApiError } from "../lib/api";
 import { STATUS_LABEL, type Match } from "../lib/types";
 
 /**
@@ -49,6 +49,17 @@ export function MatchReviewModal({
       onDecided();
       onClose();
     } catch (e) {
+      if (isAppliedApiError(e)) {
+        toast(
+          status === "confirmed"
+            ? "一致の判断は反映済みです。検索データの同期は保留中です"
+            : "不一致の判断は反映済みです。検索データの同期は保留中です",
+          "success",
+        );
+        onDecided();
+        onClose();
+        return;
+      }
       toast(`更新に失敗しました: ${(e as Error).message}`, "error");
     } finally {
       setBusy(false);

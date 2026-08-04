@@ -37,6 +37,32 @@ export function itemCursorsEqual(
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
 
+export type ApiErrorPayload = {
+  error?: string;
+  applied?: boolean;
+  [key: string]: unknown;
+};
+
+export class ApiError extends Error {
+  readonly name = "ApiError";
+
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly payload: ApiErrorPayload,
+  ) {
+    super(message);
+  }
+
+  get applied(): boolean {
+    return this.payload.applied === true;
+  }
+}
+
+export function isAppliedApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.applied;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -50,13 +76,17 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     let msg = `${res.status}`;
+    let payload: ApiErrorPayload = {};
     try {
-      const j = await res.json();
-      msg = (j as any).error ?? msg;
+      const body: unknown = await res.json();
+      if (body && typeof body === "object" && !Array.isArray(body)) {
+        payload = body as ApiErrorPayload;
+        if (typeof payload.error === "string") msg = payload.error;
+      }
     } catch {
       /* noop */
     }
-    throw new Error(msg);
+    throw new ApiError(msg, res.status, payload);
   }
   const ct = res.headers.get("content-type") ?? "";
   return (ct.includes("json") ? res.json() : (res.text() as any)) as Promise<T>;
@@ -158,8 +188,8 @@ export const api = {
     req<{ matches: Match[] }>(`/api/matches${status ? `?status=${status}` : ""}`).then(
       (r) => r.matches,
     ),
-  updateMatch: (id: string, status: string) =>
-    req<{ match: Match }>(`/api/matches/${id}`, {
+  updateMatch: (id: string, status: Exclude<Match["status"], "pending">) =>
+    req<{ match: Match; inquiry: Inquiry }>(`/api/matches/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),

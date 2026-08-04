@@ -27,7 +27,7 @@ import {
 } from "./lib/meta.ts";
 import { createItemsCsvStream } from "./lib/items-csv.ts";
 import type { SearchFilters } from "./types.ts";
-import { DuplicateDisplayIdError } from "./store/index.ts";
+import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
 import {
   InvalidItemCursorError,
   InvalidItemLimitError,
@@ -141,7 +141,12 @@ function parseItemListOptions(q: Record<string, unknown>): ItemListOptions {
   };
 }
 
-async function ctx(): Promise<AppContext> {
+/** 同値PATCHをVectorize同期失敗後の再試行にも使えるよう、指定項目の有無で判定する。 */
+function touchesAnyField(patch: Record<string, unknown>, fields: readonly string[]): boolean {
+  return fields.some((field) => field in patch);
+}
+
+async function defaultContext(): Promise<AppContext> {
   return buildContext(getEnv());
 }
 
@@ -157,7 +162,8 @@ async function safeEmbed(ai: AppContext["ai"], text: string): Promise<number[]> 
   }
 }
 
-export function createApp() {
+export function createApp(resolveContext: () => Promise<AppContext> = defaultContext) {
+  const ctx = resolveContext;
   // aot(実行時コード生成)は Cloudflare Workers のサンドボックスで禁止されているため無効化。
   const app = new Elysia({ aot: false })
     .onError(({ error, code, set }) => {
@@ -165,10 +171,18 @@ export function createApp() {
         set.status = 409;
         return { error: error.code };
       }
-      const status = code === "NOT_FOUND" ? 404 : 500;
-      set.status = status;
-      console.error("[api error]", code, (error as Error)?.message);
-      return { error: (error as Error)?.message ?? "internal error", code };
+      if (error instanceof VectorMetadataSyncError) {
+        set.status = 503;
+        return { error: error.code, applied: error.applied };
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(JSON.stringify({ event: "api_error", code, error: message }));
+      if (code === "NOT_FOUND") {
+        set.status = 404;
+        return { error: "not_found" };
+      }
+      set.status = 500;
+      return { error: "internal_error" };
     })
     .use(
       cors({
@@ -462,10 +476,12 @@ export function createApp() {
       const patch = { ...(body as any) };
       delete patch.id;
       delete patch.embedding; // 埋め込みは派生値。手編集させない
-      // 特徴に関わる項目が変わったら再埋め込み。
+      // 埋め込み対象の項目を含むPATCHは、同値でも再埋め込みする。
+      // D1更新後にVectorize upsertが失敗した場合、同じPATCHを再送して古いvector値を
+      // 修復できる必要がある。categoryは埋め込み本文とmetadataの両方に含まれる。
       // 埋め込みが失敗しても、他のフィールドの編集（状態変更など）まで巻き込んで
       // 失敗にしない — 埋め込みだけ古いまま保持し、ai_status で要再解析を示す。
-      const touchesFeatures = [
+      const touchesFeatures = touchesAnyField(patch, [
         "category",
         "color",
         "brand",
@@ -473,7 +489,7 @@ export function createApp() {
         "tags",
         "found_location",
         "notes",
-      ].some((k) => k in patch);
+      ]);
       let embedding: number[] | undefined;
       let ai_status: typeof existing.ai_status | undefined;
       if (touchesFeatures) {
@@ -649,7 +665,8 @@ export function createApp() {
       const patch = { ...(body as any) };
       delete patch.id;
       delete patch.embedding;
-      const touches = ["category", "color", "description", "tags", "notes"].some((k) => k in patch);
+      // categoryは埋め込み本文にも含まれるため、同値の再試行を含めて再埋め込みする。
+      const touches = touchesAnyField(patch, ["category", "color", "description", "tags", "notes"]);
       let embedding: number[] | undefined;
       if (touches) {
         // 失敗しても他フィールドの編集は保存する（埋め込みだけ古いまま据え置く）。
@@ -683,29 +700,22 @@ export function createApp() {
     })
     .patch("/api/matches/:id", async ({ params, body, set }) => {
       const c = await ctx();
-      const m = await c.store.getMatch(params.id);
-      if (!m) {
+      const status = (body as any)?.status;
+      if (status !== "confirmed" && status !== "rejected") {
+        set.status = 400;
+        return { error: "invalid_match_status" };
+      }
+
+      const result = await c.store.decideMatch(params.id, status);
+      if (!result.ok && result.reason === "not_found") {
         set.status = 404;
         return { error: "not found" };
       }
-      const status = (body as any)?.status;
-      const updated = await c.store.updateMatch(params.id, { status });
-      if (status === "confirmed") {
-        // 一致確定：問い合わせを解決に、遺失物は返却手続きへ（保管中→返却は現場判断）
-        await c.store.updateInquiry(m.inquiry_id, {
-          status: "resolved",
-          matched_item_id: m.item_id,
-        });
-      } else if (status === "rejected") {
-        const inq = await c.store.getInquiry(m.inquiry_id);
-        if (inq && inq.status === "matched") {
-          const others = (await c.store.listMatches()).filter(
-            (x) => x.inquiry_id === m.inquiry_id && x.id !== m.id && x.status === "pending",
-          );
-          if (others.length === 0) await c.store.updateInquiry(m.inquiry_id, { status: "open" });
-        }
+      if (!result.ok) {
+        set.status = 409;
+        return { error: "match_confirmation_conflict" };
       }
-      return { match: updated };
+      return { match: result.match, inquiry: result.inquiry };
     })
 
     // ---- notifications ----
