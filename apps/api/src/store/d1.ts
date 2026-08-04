@@ -546,7 +546,7 @@ export class D1VectorizeStore implements Store {
              )
            )`;
     const statement = this.db.prepare(
-       `WITH target(item_id) AS (VALUES (?))
+      `WITH target(item_id) AS (VALUES (?))
        UPDATE inquiries
        SET status=CASE
              WHEN status='closed' THEN 'closed'

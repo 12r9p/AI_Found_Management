@@ -47,6 +47,7 @@ WHERE ref_match_id IS NOT NULL
 -- 孤児参照の影響を受けた問い合わせだけを、残っている照合から再計算する。
 UPDATE inquiries
 SET status = CASE
+      WHEN status = 'closed' THEN 'closed'
       WHEN EXISTS (
         SELECT 1 FROM matches
         WHERE matches.inquiry_id = inquiries.id

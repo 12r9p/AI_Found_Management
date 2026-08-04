@@ -196,6 +196,14 @@ test("孤児照合の除去後に残存する照合から問い合わせ状態�
     insertInquiry(sqlite, "inquiry-open", "item-missing");
     insertMatch(sqlite, "match-only-orphan", "item-missing", "inquiry-open", "confirmed");
     insertInquiry(sqlite, "inquiry-closed", null, "closed");
+    insertInquiry(sqlite, "inquiry-closed-affected", "item-missing", "closed");
+    insertMatch(
+      sqlite,
+      "match-closed-orphan",
+      "item-missing",
+      "inquiry-closed-affected",
+      "confirmed",
+    );
 
     applyReferentialIntegrityMigration(sqlite);
 
@@ -204,12 +212,18 @@ test("孤児照合の除去後に残存する照合から問い合わせ状態�
         .query(
           `SELECT id, status, matched_item_id
            FROM inquiries
-           WHERE id IN ('inquiry-closed', 'inquiry-open', 'inquiry-pending')
+           WHERE id IN (
+             'inquiry-closed',
+             'inquiry-closed-affected',
+             'inquiry-open',
+             'inquiry-pending'
+           )
            ORDER BY id`,
         )
         .all(),
     ).toEqual([
       { id: "inquiry-closed", status: "closed", matched_item_id: null },
+      { id: "inquiry-closed-affected", status: "closed", matched_item_id: null },
       { id: "inquiry-open", status: "open", matched_item_id: null },
       { id: "inquiry-pending", status: "matched", matched_item_id: null },
     ]);
@@ -437,39 +451,39 @@ async function seedDeletionScenario(store: Store) {
   const confirmedItem = await store.createItem({ display_id: "FD-confirmed" });
   const pendingItem = await store.createItem({ display_id: "FD-pending" });
 
-  const resolvedInquiry = await store.createInquiry({
+  const inquiryWithRemainingConfirmedMatch = await store.createInquiry({
     status: "matched",
     matched_item_id: targetItem.id,
   });
-  const resolvedTargetMatch = await store.createMatch({
+  const targetPendingMatch = await store.createMatch({
     item_id: targetItem.id,
-    inquiry_id: resolvedInquiry.id,
+    inquiry_id: inquiryWithRemainingConfirmedMatch.id,
     score: 0.8,
     status: "pending",
     direction: "item_to_inquiry",
   });
   await store.createMatch({
     item_id: confirmedItem.id,
-    inquiry_id: resolvedInquiry.id,
+    inquiry_id: inquiryWithRemainingConfirmedMatch.id,
     score: 0.9,
     status: "confirmed",
     direction: "item_to_inquiry",
   });
 
-  const matchedInquiry = await store.createInquiry({
+  const inquiryWithRemainingPendingMatch = await store.createInquiry({
     status: "resolved",
     matched_item_id: targetItem.id,
   });
-  const matchedTargetMatch = await store.createMatch({
+  const targetConfirmedMatch = await store.createMatch({
     item_id: targetItem.id,
-    inquiry_id: matchedInquiry.id,
+    inquiry_id: inquiryWithRemainingPendingMatch.id,
     score: 0.9,
     status: "confirmed",
     direction: "item_to_inquiry",
   });
   const remainingPendingMatch = await store.createMatch({
     item_id: pendingItem.id,
-    inquiry_id: matchedInquiry.id,
+    inquiry_id: inquiryWithRemainingPendingMatch.id,
     score: 0.7,
     status: "pending",
     direction: "item_to_inquiry",
@@ -493,17 +507,17 @@ async function seedDeletionScenario(store: Store) {
     title: "照合候補",
     body: "確認してください",
     ref_item_id: targetItem.id,
-    ref_inquiry_id: resolvedInquiry.id,
-    ref_match_id: resolvedTargetMatch.id,
+    ref_inquiry_id: inquiryWithRemainingConfirmedMatch.id,
+    ref_match_id: targetPendingMatch.id,
   });
 
   return {
     targetItem,
     confirmedItem,
     pendingItem,
-    resolvedInquiry,
-    matchedInquiry,
-    matchedTargetMatch,
+    inquiryWithRemainingConfirmedMatch,
+    inquiryWithRemainingPendingMatch,
+    targetConfirmedMatch,
     remainingPendingMatch,
     openInquiry,
     directReferenceInquiry,
@@ -526,11 +540,15 @@ for (const [storeName, createStore] of storeFactories) {
             (match) => match.item_id === scenario.targetItem.id,
           ),
         ).toBe(false);
-        expect(await fixture.store.getInquiry(scenario.resolvedInquiry.id)).toMatchObject({
+        expect(
+          await fixture.store.getInquiry(scenario.inquiryWithRemainingConfirmedMatch.id),
+        ).toMatchObject({
           status: "resolved",
           matched_item_id: scenario.confirmedItem.id,
         });
-        expect(await fixture.store.getInquiry(scenario.matchedInquiry.id)).toMatchObject({
+        expect(
+          await fixture.store.getInquiry(scenario.inquiryWithRemainingPendingMatch.id),
+        ).toMatchObject({
           status: "matched",
           matched_item_id: null,
         });
@@ -548,7 +566,7 @@ for (const [storeName, createStore] of storeFactories) {
           ),
         ).toMatchObject({
           ref_item_id: null,
-          ref_inquiry_id: scenario.resolvedInquiry.id,
+          ref_inquiry_id: scenario.inquiryWithRemainingConfirmedMatch.id,
           ref_match_id: null,
         });
 
@@ -557,12 +575,18 @@ for (const [storeName, createStore] of storeFactories) {
           title: "残存候補",
           body: "確認してください",
           ref_item_id: scenario.pendingItem.id,
-          ref_inquiry_id: scenario.matchedInquiry.id,
+          ref_inquiry_id: scenario.inquiryWithRemainingPendingMatch.id,
           ref_match_id: scenario.remainingPendingMatch.id,
         });
-        expect(await fixture.store.deleteInquiry(scenario.matchedInquiry.id)).toBe(true);
-        expect(await fixture.store.deleteInquiry(scenario.matchedInquiry.id)).toBe(false);
-        expect(await fixture.store.getInquiry(scenario.matchedInquiry.id)).toBeNull();
+        expect(
+          await fixture.store.deleteInquiry(scenario.inquiryWithRemainingPendingMatch.id),
+        ).toBe(true);
+        expect(
+          await fixture.store.deleteInquiry(scenario.inquiryWithRemainingPendingMatch.id),
+        ).toBe(false);
+        expect(
+          await fixture.store.getInquiry(scenario.inquiryWithRemainingPendingMatch.id),
+        ).toBeNull();
         expect(await fixture.store.getMatch(scenario.remainingPendingMatch.id)).toBeNull();
         expect(
           (await fixture.store.listNotifications()).find(
@@ -572,6 +596,32 @@ for (const [storeName, createStore] of storeFactories) {
           ref_item_id: scenario.pendingItem.id,
           ref_inquiry_id: null,
           ref_match_id: null,
+        });
+      } finally {
+        fixture.close();
+      }
+    });
+
+    test("closed問い合わせの物品削除後もstatusをclosedに維持する", async () => {
+      const fixture = createStore();
+      try {
+        const item = await fixture.store.createItem({ display_id: "FD-closed" });
+        const inquiry = await fixture.store.createInquiry({
+          status: "closed",
+          matched_item_id: item.id,
+        });
+        await fixture.store.createMatch({
+          item_id: item.id,
+          inquiry_id: inquiry.id,
+          score: 0.8,
+          status: "pending",
+          direction: "item_to_inquiry",
+        });
+
+        expect(await fixture.store.deleteItem(item.id)).toBe(true);
+        expect(await fixture.store.getInquiry(inquiry.id)).toMatchObject({
+          status: "closed",
+          matched_item_id: null,
         });
       } finally {
         fixture.close();
@@ -596,11 +646,13 @@ test("D1の物品削除が失敗すると同じバッチの問い合わせ再計
       "物品削除を拒否",
     );
     expect(await fixture.store.getItem(scenario.targetItem.id)).not.toBeNull();
-    expect(await fixture.store.getInquiry(scenario.matchedInquiry.id)).toMatchObject({
+    expect(
+      await fixture.store.getInquiry(scenario.inquiryWithRemainingPendingMatch.id),
+    ).toMatchObject({
       status: "resolved",
       matched_item_id: scenario.targetItem.id,
     });
-    expect(await fixture.store.getMatch(scenario.matchedTargetMatch.id)).not.toBeNull();
+    expect(await fixture.store.getMatch(scenario.targetConfirmedMatch.id)).not.toBeNull();
   } finally {
     fixture.close();
   }
@@ -612,8 +664,8 @@ test("Vectorize削除に失敗してもD1削除を維持し残りの問い合わ
   try {
     const scenario = await seedDeletionScenario(fixture.store);
     fixture.itemsVectorize!.failDeletes = 1;
-    fixture.inquiriesVectorize!.vectors.set(scenario.matchedInquiry.id, {
-      id: scenario.matchedInquiry.id,
+    fixture.inquiriesVectorize!.vectors.set(scenario.inquiryWithRemainingPendingMatch.id, {
+      id: scenario.inquiryWithRemainingPendingMatch.id,
       values: [0.25, 0.75],
       metadata: { category: "", status: "resolved" },
     });
