@@ -6,6 +6,7 @@ import { createApp } from "../app.ts";
 import { resolveConfig } from "../config.ts";
 import type { AppContext } from "../context.ts";
 import type { ImageStorage } from "../storage/images.ts";
+import type { Item } from "../types.ts";
 import { D1VectorizeStore } from "./d1.ts";
 import { MemoryStore } from "./memory.ts";
 import type { Store } from "./store.ts";
@@ -375,14 +376,17 @@ class RecordingVectorize implements Pick<
   readonly deletedIds: string[][] = [];
   readonly upserts: VectorizeVector[][] = [];
   failDeletes = 0;
+  beforeUpsertApply?: (vectors: VectorizeVector[]) => Promise<void>;
 
   async query(): Promise<VectorizeMatches> {
     return { count: 0, matches: [] };
   }
 
   async upsert(vectors: VectorizeVector[]): Promise<VectorizeAsyncMutation> {
-    this.upserts.push(vectors.map(copyVector));
-    for (const vector of vectors) this.vectors.set(vector.id, copyVector(vector));
+    const copied = vectors.map(copyVector);
+    this.upserts.push(copied);
+    await this.beforeUpsertApply?.(copied);
+    for (const vector of copied) this.vectors.set(vector.id, vector);
     return { mutationId: `upsert-${this.upserts.length}` };
   }
 
@@ -411,6 +415,14 @@ function copyVector(vector: VectorizeVector): VectorizeVector {
     ...(vector.namespace ? { namespace: vector.namespace } : {}),
     ...(vector.metadata ? { metadata: structuredClone(vector.metadata) } : {}),
   };
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve = () => {};
+  const promise = new Promise<void>((fulfill) => {
+    resolve = fulfill;
+  });
+  return { promise, resolve };
 }
 
 type StoreFixture = {
@@ -532,8 +544,10 @@ for (const [storeName, createStore] of storeFactories) {
       try {
         const scenario = await seedDeletionScenario(fixture.store);
 
-        expect(await fixture.store.deleteItem(scenario.targetItem.id)).toBe(true);
-        expect(await fixture.store.deleteItem(scenario.targetItem.id)).toBe(false);
+        expect(await fixture.store.deleteItem(scenario.targetItem.id)).toMatchObject({
+          id: scenario.targetItem.id,
+        });
+        expect(await fixture.store.deleteItem(scenario.targetItem.id)).toBeNull();
         expect(await fixture.store.getItem(scenario.targetItem.id)).toBeNull();
         expect(
           (await fixture.store.listMatches()).some(
@@ -618,7 +632,7 @@ for (const [storeName, createStore] of storeFactories) {
           direction: "item_to_inquiry",
         });
 
-        expect(await fixture.store.deleteItem(item.id)).toBe(true);
+        expect(await fixture.store.deleteItem(item.id)).toMatchObject({ id: item.id });
         expect(await fixture.store.getInquiry(inquiry.id)).toMatchObject({
           status: "closed",
           matched_item_id: null,
@@ -670,7 +684,9 @@ test("Vectorize削除に失敗してもD1削除を維持し残りの問い合わ
       metadata: { category: "", status: "resolved" },
     });
 
-    expect(await fixture.store.deleteItem(scenario.targetItem.id)).toBe(true);
+    expect(await fixture.store.deleteItem(scenario.targetItem.id)).toMatchObject({
+      id: scenario.targetItem.id,
+    });
 
     expect(await fixture.store.getItem(scenario.targetItem.id)).toBeNull();
     expect(fixture.itemsVectorize!.deletedIds).toContainEqual([scenario.targetItem.id]);
@@ -704,6 +720,40 @@ test("Vectorize削除に失敗してもD1削除を維持し残りの問い合わ
     ).toBe(true);
   } finally {
     errorSpy.mockRestore();
+    fixture.close();
+  }
+});
+
+test("問い合わせ削除とmetadata upsertが競合しても削除済みvectorを復活させない", async () => {
+  const fixture = storeFactories[1][1]();
+  try {
+    const scenario = await seedDeletionScenario(fixture.store);
+    const inquiryId = scenario.inquiryWithRemainingPendingMatch.id;
+    fixture.inquiriesVectorize!.vectors.set(inquiryId, {
+      id: inquiryId,
+      values: [0.25, 0.75],
+      metadata: { category: "", status: "resolved" },
+    });
+    const upsertStarted = deferred();
+    const releaseUpsert = deferred();
+    fixture.inquiriesVectorize!.beforeUpsertApply = async ([vector]) => {
+      if (vector?.id !== inquiryId) return;
+      upsertStarted.resolve();
+      await releaseUpsert.promise;
+    };
+
+    const deletingItem = fixture.store.deleteItem(scenario.targetItem.id);
+    await upsertStarted.promise;
+    expect(await fixture.store.deleteInquiry(inquiryId)).toBe(true);
+    releaseUpsert.resolve();
+    await deletingItem;
+
+    expect(await fixture.store.getInquiry(inquiryId)).toBeNull();
+    expect(fixture.inquiriesVectorize!.vectors.has(inquiryId)).toBe(false);
+    expect(
+      fixture.inquiriesVectorize!.deletedIds.filter((ids) => ids.includes(inquiryId)),
+    ).toHaveLength(2);
+  } finally {
     fixture.close();
   }
 });
@@ -757,4 +807,42 @@ test("R2画像削除に失敗しても物品削除を維持し全画像の後処
       .map((log) => log.objectKey),
   ).toEqual(["first.jpg", "second.jpg"]);
   errorSpy.mockRestore();
+});
+
+test("削除と画像更新が競合してもD1が削除した行の全R2画像を後処理する", async () => {
+  class InterleavingMemoryStore extends MemoryStore {
+    override async deleteItem(id: string): Promise<Item | null> {
+      const current = await this.getItem(id);
+      if (current) {
+        await this.updateItem(id, { image_keys: [...current.image_keys, "concurrent.jpg"] });
+      }
+      return super.deleteItem(id);
+    }
+  }
+
+  const store = new InterleavingMemoryStore();
+  const item = await store.createItem({
+    display_id: "FD-concurrent-images",
+    image_keys: ["initial.jpg"],
+  });
+  const deletedKeys: string[] = [];
+  const images: ImageStorage = {
+    async put() {},
+    async get() {
+      return null;
+    },
+    async delete(key) {
+      deletedKeys.push(key);
+    },
+  };
+  const context: AppContext = { cfg: resolveConfig({}), store, ai, images };
+  const app = createApp(async () => context);
+
+  const response = await app.fetch(
+    new Request(`http://localhost/api/items/${item.id}`, { method: "DELETE" }),
+  );
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ deleted: true });
+  expect(deletedKeys).toEqual(["initial.jpg", "concurrent.jpg"]);
 });

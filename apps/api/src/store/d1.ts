@@ -197,12 +197,13 @@ export class D1VectorizeStore implements Store {
     }
     return rowToItem(row);
   }
-  async deleteItem(id: string): Promise<boolean> {
+  async deleteItem(id: string): Promise<Item | null> {
     const results = await this.db.batch([
       this.prepareInquiryStateUpdate({ kind: "deleted_item", id }, nowIso()),
-      this.db.prepare(`DELETE FROM items WHERE id=? RETURNING id`).bind(id),
+      this.db.prepare(`DELETE FROM items WHERE id=? RETURNING ${ITEM_COLS}`).bind(id),
     ]);
-    if (!results[1]?.results?.[0]) return false;
+    const deletedRow = results[1]?.results?.[0];
+    if (!deletedRow) return null;
 
     const inquiries = (results[0]?.results ?? []).map(rowToInquiry);
     const cleanupTargets = [
@@ -232,7 +233,7 @@ export class D1VectorizeStore implements Store {
         }),
       );
     });
-    return true;
+    return rowToItem(deletedRow);
   }
   async searchItems(embedding: number[], f: SearchFilters): Promise<ScoredItem[]> {
     // Vectorize のスコアは近似(quantization 由来の誤差があり閾値ぎりぎりの判定がぶれうる)。
@@ -716,7 +717,13 @@ export class D1VectorizeStore implements Store {
         // 別リクエストの古いupsertが新しい同期より後に完了しても、正本であるD1を
         // 書き込み後に再読し、変化していれば同じ試行内で最新値を再度反映する。
         const latest = await this.readCurrentVectorMetadata(entity, id);
-        if (!latest || sameVectorMetadata(metadata, latest)) return;
+        if (!latest) {
+          // upsert待機中にD1行が削除された場合、その削除処理のdeleteByIdsより後に
+          // 古いvectorが着地し得る。D1を再読して行消失を検知した側で再削除する。
+          await index.deleteByIds([id]);
+          return;
+        }
+        if (sameVectorMetadata(metadata, latest)) return;
       }
 
       throw new Error("Vectorize同期中にD1 metadataが継続して変更されました");

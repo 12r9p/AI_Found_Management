@@ -140,8 +140,9 @@ export class MemoryStore implements Store {
     this.persist();
     return it;
   }
-  async deleteItem(id: string): Promise<boolean> {
-    if (!this.items.some((item) => item.id === id)) return false;
+  async deleteItem(id: string): Promise<Item | null> {
+    const deletedItem = this.items.find((item) => item.id === id);
+    if (!deletedItem) return null;
     const removedMatchIds = new Set(
       this.matches.filter((match) => match.item_id === id).map((match) => match.id),
     );
@@ -166,7 +167,7 @@ export class MemoryStore implements Store {
       if (inquiry) this.recomputeInquiryState(inquiry, updatedAt);
     }
     this.persist();
-    return true;
+    return structuredClone(deletedItem);
   }
 
   /** 空でない管理番号はSQLite既定と同じ完全一致で比較する。 */
