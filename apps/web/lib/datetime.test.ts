@@ -28,6 +28,12 @@ test("UTCとの日付境界を越えてもローカル日付を使う", () => {
   if (isTokyo) expect(iso).toBe("2026-01-15T16:30:00.000Z");
 });
 
+test("既存のUTC ISOをローカルなdatetime-local値へ表示する", () => {
+  const iso = "2026-08-04T05:28:00.000Z";
+
+  expect(formatIsoForDateTimeLocal(iso)).toBe(isTokyo ? "2026-08-04T14:28" : "2026-08-04T05:28");
+});
+
 test("不正な日時を拒否する", () => {
   expect(() => parseDateTimeLocalToIso("2026-02-30T15:00")).toThrow("拾得日時が不正です");
   expect(() => parseDateTimeLocalToIso("not-a-date")).toThrow("拾得日時が不正です");
