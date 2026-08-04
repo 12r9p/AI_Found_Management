@@ -409,10 +409,15 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         throw error;
       }
     })
-    .post("/api/items", async ({ body }) => {
+    .post("/api/items", async ({ body, set }) => {
       const c = await ctx();
       const b = (body as any) ?? {};
       const keys: string[] = Array.isArray(b.image_keys) ? b.image_keys : [];
+      // 画像なしの登録は現場での照合に使えないため必須化。
+      if (keys.length === 0) {
+        set.status = 400;
+        return { error: "image_required" };
+      }
       const draft = {
         status: b.status ?? "stored",
         category: b.category ?? "",
@@ -440,7 +445,7 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         return { item, matches: [], topScore: 0 };
       }
 
-      // 画像なし、または呼び出し側が特徴文を渡し済み → 従来通り即時処理。
+      // 呼び出し側が特徴文を渡し済み → 従来通り即時処理。
       // 埋め込みが失敗しても登録自体は必ず成立させる（AI障害で登録がブロックされないように）。
       const embedding = await safeEmbed(c.ai, itemEmbedText(draft));
       const item = await c.store.createItem({

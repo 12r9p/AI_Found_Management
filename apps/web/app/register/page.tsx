@@ -119,6 +119,11 @@ export default function RegisterPage() {
     if (uploading) return; // 送信中の写真がある場合はアップロード完了を待つ
     setSaving(true);
     try {
+      if (keys.length === 0) {
+        toast("画像は必須です", "error");
+        return;
+      }
+
       const foundAt = parseDateTimeLocalToIso(form.found_at);
       if (!foundAt) {
         toast("拾得日時は必須です", "error");
@@ -157,7 +162,12 @@ export default function RegisterPage() {
       </div>
 
       <Card variant="bordered" className="mb-16">
-        <div className="rb-label mb-8">画像（最大2枚）</div>
+        <div className="rb-label mb-8">
+          画像（最大2枚）
+          <span className="req" aria-hidden>
+            *
+          </span>
+        </div>
 
         {uploading && (
           <output className="rb-busy mb-16" aria-live="polite">
