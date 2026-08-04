@@ -1,5 +1,9 @@
 import type { Store } from "../store/index.ts";
-import { MAX_ITEM_PAGE_LIMIT } from "../store/item-pagination.ts";
+import {
+  itemCursorsEqual,
+  MAX_ITEM_PAGE_LIMIT,
+  type ItemCursorPosition,
+} from "../store/item-pagination.ts";
 import type { Item, SearchFilters } from "../types.ts";
 
 const CSV_HEADER = [
@@ -47,7 +51,7 @@ export function createItemsCsvStream(
   filters: SearchFilters,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
-  let cursor: string | undefined;
+  let cursor: ItemCursorPosition | undefined;
   let cancelled = false;
 
   return new ReadableStream<Uint8Array>({
@@ -61,7 +65,7 @@ export function createItemsCsvStream(
           limit: MAX_ITEM_PAGE_LIMIT,
         });
         if (cancelled) return;
-        if (page.nextCursor && page.nextCursor === cursor) {
+        if (page.nextCursor && itemCursorsEqual(page.nextCursor, cursor)) {
           controller.error(new Error("item_pagination_stalled"));
           return;
         }

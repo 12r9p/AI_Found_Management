@@ -1,5 +1,5 @@
 import type { Item } from "./types";
-import type { ItemPage } from "./api";
+import { itemCursorsEqual, type ItemCursor, type ItemPage } from "./api";
 
 const ALL_ITEMS_PAGE_LIMIT = 200;
 
@@ -12,20 +12,25 @@ export async function fetchAllItems(
 ): Promise<Item[]> {
   const filters = { ...query };
   delete filters.cursor;
+  delete filters.cursorCreatedAt;
+  delete filters.cursorId;
   delete filters.limit;
 
   const items: Item[] = [];
-  let cursor: string | undefined;
+  let cursor: ItemCursor | undefined;
   do {
     const pageQuery: Record<string, string> = {
       ...filters,
       limit: String(ALL_ITEMS_PAGE_LIMIT),
     };
-    if (cursor) pageQuery.cursor = cursor;
+    if (cursor) {
+      pageQuery.cursorCreatedAt = cursor.createdAt;
+      pageQuery.cursorId = cursor.id;
+    }
     const page = await loadPage(pageQuery);
     items.push(...page.items);
     onProgress?.(items.length);
-    if (page.nextCursor && page.nextCursor === cursor) {
+    if (page.nextCursor && itemCursorsEqual(page.nextCursor, cursor)) {
       throw new Error("item_pagination_stalled");
     }
     cursor = page.nextCursor ?? undefined;

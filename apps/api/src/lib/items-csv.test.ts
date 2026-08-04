@@ -25,7 +25,10 @@ class StalledMemoryStore extends MemoryStore {
 
   override async listItems(_filters: SearchFilters, _options?: ItemListOptions): Promise<ItemPage> {
     this.listCalls++;
-    return { items: [this.item], nextCursor: "stalled-cursor" };
+    return {
+      items: [this.item],
+      nextCursor: { createdAt: this.item.created_at, id: this.item.id },
+    };
   }
 }
 

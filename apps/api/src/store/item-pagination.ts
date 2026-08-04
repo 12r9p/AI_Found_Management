@@ -87,6 +87,14 @@ export function isItemAfterCursor(
   );
 }
 
+export function itemCursorsEqual(
+  left: ItemCursorPosition | null | undefined,
+  right: ItemCursorPosition | null | undefined,
+): boolean {
+  if (!left || !right) return left === right;
+  return left.createdAt === right.createdAt && left.id === right.id;
+}
+
 export function compareItemsNewestFirst(
   a: Pick<Item, "created_at" | "id">,
   b: Pick<Item, "created_at" | "id">,

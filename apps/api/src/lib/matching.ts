@@ -1,4 +1,5 @@
 import type { Store, MatchBulkEntry } from "../store/index.ts";
+import type { ItemCursorPosition } from "../store/item-pagination.ts";
 import type { Item, Inquiry, Match } from "../types.ts";
 import type { AIProvider } from "../ai/provider.ts";
 import { itemEmbedText } from "./embed-text.ts";
@@ -151,7 +152,7 @@ export interface RematchPageOutcome {
   itemsChecked: number;
   matchesFound: number;
   failed: number;
-  nextCursor: string | null;
+  nextCursor: ItemCursorPosition | null;
   done: boolean;
 }
 
@@ -169,7 +170,7 @@ export async function rematchPage(
   store: Store,
   ai: AIProvider,
   threshold: number,
-  cursor?: string,
+  cursor?: ItemCursorPosition,
 ): Promise<RematchPageOutcome> {
   const page = await store.listItems({ status: "stored" }, { cursor, limit: REMATCH_PAGE_SIZE });
   let matchesFound = 0;

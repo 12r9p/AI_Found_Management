@@ -23,8 +23,16 @@ export interface RematchPage {
   itemsChecked: number;
   matchesFound: number;
   failed: number;
-  nextCursor: string | null;
+  nextCursor: ItemCursor | null;
   done: boolean;
+}
+
+export function itemCursorsEqual(
+  left: ItemCursor | null | undefined,
+  right: ItemCursor | null | undefined,
+): boolean {
+  if (!left || !right) return left === right;
+  return left.createdAt === right.createdAt && left.id === right.id;
 }
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
@@ -94,7 +102,7 @@ export const api = {
     }),
 
   // 保管中の物品を100件ずつ再照合し、管理画面側で終端まで順に呼び出す。
-  rematchPage: (cursor?: string, runId?: string) =>
+  rematchPage: (cursor?: ItemCursor, runId?: string) =>
     req<RematchPage>("/api/rematch", {
       method: "POST",
       body: JSON.stringify({

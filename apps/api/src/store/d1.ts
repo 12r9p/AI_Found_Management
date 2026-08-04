@@ -19,8 +19,8 @@ import { applyItemFilters } from "./memory.ts";
 import { cosineSimilarity } from "../lib/vector.ts";
 import { mapDisplayIdWriteError } from "./errors.ts";
 import {
-  parseItemCursor,
   normalizeItemPageLimit,
+  parseItemCursor,
   toItemPage,
   type ItemListOptions,
   type ItemPage,

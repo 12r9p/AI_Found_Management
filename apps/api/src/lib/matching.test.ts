@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { MemoryStore } from "../store/memory.ts";
+import type { ItemCursorPosition } from "../store/item-pagination.ts";
 import { deterministicEmbed } from "../ai/provider.ts";
 import { matchNewItem, matchNewInquiry, rematchPage } from "./matching.ts";
 import type { AIProvider } from "../ai/provider.ts";
@@ -211,7 +212,7 @@ test("再照合ページは同じ作成日時の1,001件を100件以下ずつ終
     await store.updateItem(item.id, { created_at: createdAt });
   }
 
-  let cursor: string | undefined;
+  let cursor: ItemCursorPosition | undefined;
   let itemsChecked = 0;
   let pages = 0;
   do {

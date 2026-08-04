@@ -31,8 +31,10 @@ import { DuplicateDisplayIdError } from "./store/index.ts";
 import {
   InvalidItemCursorError,
   InvalidItemLimitError,
+  isItemCursorPosition,
   parseItemCursor,
   parseItemPageLimit,
+  type ItemCursorPosition,
   type ItemListOptions,
 } from "./store/item-pagination.ts";
 
@@ -64,7 +66,7 @@ function isRematchPageOutcome(value: unknown): value is RematchPageOutcome {
     typeof page.itemsChecked === "number" &&
     typeof page.matchesFound === "number" &&
     typeof page.failed === "number" &&
-    (page.nextCursor === null || typeof page.nextCursor === "string") &&
+    (page.nextCursor === null || isItemCursorPosition(page.nextCursor)) &&
     typeof page.done === "boolean"
   );
 }
@@ -99,8 +101,8 @@ async function readRematchPageCache(
   }
 }
 
-function rematchPageCacheKey(cursor: string | undefined): string {
-  return cursor ?? "";
+function rematchPageCacheKey(cursor: ItemCursorPosition | undefined): string {
+  return JSON.stringify(cursor ?? null);
 }
 
 /**
@@ -526,8 +528,10 @@ export function createApp() {
     // 管理画面がカーソルを引き継ぎ、100件ずつ終端まで順番に呼び出す。
     .post("/api/rematch", async ({ body, set }) => {
       const payload = (body as { cursor?: unknown; runId?: unknown } | undefined) ?? {};
-      const cursor = payload.cursor;
-      if (cursor !== undefined && (typeof cursor !== "string" || !cursor)) {
+      let cursor: ItemCursorPosition | undefined;
+      try {
+        cursor = payload.cursor === undefined ? undefined : parseItemCursor(payload.cursor);
+      } catch {
         set.status = 400;
         return { error: "invalid_cursor" };
       }

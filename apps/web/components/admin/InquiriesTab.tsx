@@ -17,7 +17,7 @@ import {
 import { MatchReviewModal } from "../MatchReviewModal";
 import { useMeta } from "../useMeta";
 import { usePersistentState } from "../usePersistentState";
-import { api, imageUrl } from "../../lib/api";
+import { api, imageUrl, itemCursorsEqual, type ItemCursor } from "../../lib/api";
 import { STATUS_LABEL, type Inquiry, type Match } from "../../lib/types";
 
 const STATUS_FILTERS = [
@@ -33,7 +33,7 @@ interface RematchProgress {
   itemsChecked: number;
   matchesFound: number;
   failed: number;
-  resumeCursor: string | null;
+  resumeCursor: ItemCursor | null;
   done: boolean;
   interrupted: boolean;
 }
@@ -104,7 +104,9 @@ export function InquiriesTab() {
           await api.finishRematch(runId).catch(() => {});
           break;
         }
-        if (!cursor || cursor === requestedCursor) throw new Error("rematch_pagination_stalled");
+        if (!cursor || itemCursorsEqual(cursor, requestedCursor)) {
+          throw new Error("rematch_pagination_stalled");
+        }
       }
       const failedNote = totals.failed > 0 ? `(${totals.failed}件は失敗)` : "";
       toast(
