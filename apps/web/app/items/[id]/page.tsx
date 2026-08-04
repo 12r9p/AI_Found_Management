@@ -20,6 +20,7 @@ import { useLocationPresets } from "../../../components/useLocationPresets";
 import { ImageEditor } from "../../../components/ImageEditor";
 import { MatchReviewModal } from "../../../components/MatchReviewModal";
 import { api, imageUrl } from "../../../lib/api";
+import { formatIsoForDateTimeLocal, parseDateTimeLocalToIso } from "../../../lib/datetime";
 import { STATUS_LABEL, type Item, type Match } from "../../../lib/types";
 
 export default function ItemDetailPage() {
@@ -152,7 +153,7 @@ export default function ItemDetailPage() {
     );
   }
 
-  const dt = form.found_at ? new Date(form.found_at).toISOString().slice(0, 16) : "";
+  const dt = formatIsoForDateTimeLocal(form.found_at);
 
   return (
     <AppShell>
@@ -321,9 +322,13 @@ export default function ItemDetailPage() {
                   id={id}
                   type="datetime-local"
                   value={dt}
-                  onChange={(e) =>
-                    set("found_at", e.target.value ? new Date(e.target.value).toISOString() : null)
-                  }
+                  onChange={(e) => {
+                    try {
+                      set("found_at", parseDateTimeLocalToIso(e.target.value));
+                    } catch (error) {
+                      toast((error as Error).message, "error");
+                    }
+                  }}
                 />
               )}
             </Field>

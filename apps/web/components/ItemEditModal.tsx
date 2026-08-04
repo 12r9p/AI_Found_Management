@@ -17,6 +17,7 @@ import { ImageEditor } from "./ImageEditor";
 import { useMeta } from "./useMeta";
 import { useLocationPresets } from "./useLocationPresets";
 import { api } from "../lib/api";
+import { formatIsoForDateTimeLocal, parseDateTimeLocalToIso } from "../lib/datetime";
 import { STATUS_LABEL, type Item } from "../lib/types";
 
 /**
@@ -60,7 +61,7 @@ export function ItemEditModal({
 
   if (!item) return null;
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
-  const dt = form.found_at ? toLocalInput(form.found_at) : "";
+  const dt = formatIsoForDateTimeLocal(form.found_at);
 
   /** 追加した写真からAIで特徴を解析し、特徴文・タグを更新する。 */
   const analyze = async () => {
@@ -261,9 +262,13 @@ export function ItemEditModal({
                   id={id}
                   type="datetime-local"
                   value={dt}
-                  onChange={(e) =>
-                    set("found_at", e.target.value ? new Date(e.target.value).toISOString() : null)
-                  }
+                  onChange={(e) => {
+                    try {
+                      set("found_at", parseDateTimeLocalToIso(e.target.value));
+                    } catch (error) {
+                      toast((error as Error).message, "error");
+                    }
+                  }}
                 />
               )}
             </Field>
@@ -299,11 +304,4 @@ export function ItemEditModal({
       </div>
     </Modal>
   );
-}
-
-/** ISO文字列を datetime-local 入力用のローカル時刻文字列に変換。 */
-export function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
