@@ -245,11 +245,13 @@ export class MemoryStore implements Store {
     match.status = decision;
     const related = this.matches.filter((candidate) => candidate.inquiry_id === inquiry.id);
     const confirmed = related.find((candidate) => candidate.status === "confirmed");
-    inquiry.status = confirmed
-      ? "resolved"
-      : related.some((candidate) => candidate.status === "pending")
-        ? "matched"
-        : "open";
+    if (inquiry.status !== "closed") {
+      inquiry.status = confirmed
+        ? "resolved"
+        : related.some((candidate) => candidate.status === "pending")
+          ? "matched"
+          : "open";
+    }
     inquiry.matched_item_id = confirmed?.item_id ?? null;
     inquiry.updated_at = nowIso();
     this.persist();

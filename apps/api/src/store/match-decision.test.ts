@@ -13,6 +13,7 @@ import type { Store } from "./store.ts";
 /** 実際のSQLiteトランザクションでD1のバッチ処理の原子性を再現するテスト用アダプター。 */
 class SqliteD1 implements Pick<D1Database, "prepare" | "batch"> {
   readonly sqlite = new Database(":memory:");
+  batchError: Error | null = null;
 
   constructor() {
     this.sqlite.exec(`
@@ -68,6 +69,7 @@ class SqliteD1 implements Pick<D1Database, "prepare" | "batch"> {
   }
 
   async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
+    if (this.batchError) throw this.batchError;
     const execute = this.sqlite.transaction((pending: D1PreparedStatement[]) =>
       pending.map((statement) => (statement as SqliteD1Statement).execute<T>()),
     );
@@ -193,6 +195,7 @@ function copyVector(vector: VectorizeVector): VectorizeVector {
 
 type TestStore = {
   store: Store;
+  db?: SqliteD1;
   inquiriesVectorize?: TestVectorize;
   close(): void;
 };
@@ -212,6 +215,7 @@ const storeFactories: [string, () => TestStore][] = [
       const inquiriesVectorize = new TestVectorize();
       return {
         store: new D1VectorizeStore(db, new TestVectorize(), inquiriesVectorize),
+        db,
         inquiriesVectorize,
         close: () => db.close(),
       };
@@ -350,6 +354,24 @@ for (const [storeName, createStore] of storeFactories) {
           (await store.listMatches()).filter((match) => match.status === "confirmed"),
         ).toHaveLength(1);
         expect(await store.getInquiry(inquiry.id)).toMatchObject({ status: "resolved" });
+      } finally {
+        fixture.close();
+      }
+    });
+
+    test("closed問い合わせの判断後もstatusをclosedに維持する", async () => {
+      const fixture = createStore();
+      try {
+        const { store } = fixture;
+        const { firstItem, inquiry, firstMatch } = await seedDecisionScenario(store);
+        await store.updateInquiry(inquiry.id, { status: "closed", matched_item_id: null });
+
+        const result = await store.decideMatch(firstMatch.id, "confirmed");
+
+        expect(result).toMatchObject({
+          ok: true,
+          inquiry: { status: "closed", matched_item_id: firstItem.id },
+        });
       } finally {
         fixture.close();
       }
@@ -493,6 +515,23 @@ test("D1判断後のベクトル同期失敗は適用済み503とし、同じ判
       category: "財布",
       status: "resolved",
     });
+  } finally {
+    fixture.close();
+  }
+});
+
+test("D1の非競合batch障害はconfirmation_conflictへ変換しない", async () => {
+  const fixture = storeFactories[1][1]();
+  try {
+    const { store, db } = fixture;
+    const { firstMatch, secondMatch } = await seedDecisionScenario(store);
+    await store.decideMatch(firstMatch.id, "confirmed");
+    db!.batchError = new Error("database unavailable");
+
+    await expect(store.decideMatch(secondMatch.id, "confirmed")).rejects.toThrow(
+      "database unavailable",
+    );
+    expect(await store.getMatch(secondMatch.id)).toMatchObject({ status: "pending" });
   } finally {
     fixture.close();
   }

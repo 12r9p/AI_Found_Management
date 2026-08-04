@@ -63,6 +63,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isConfirmationConflictError(error: unknown): boolean {
+  return /UNIQUE constraint failed:\s*matches\.(?:id\b|item_id\s*,\s*matches\.inquiry_id\b)/i.test(
+    errorMessage(error),
+  );
+}
+
 /**
  * D1 + Vectorize 実装。D1 = 行データの永続化(source of truth)、
  * Vectorize = 埋め込みベクトルの近似最近傍検索専用(id と vector のみ保持)。
@@ -462,6 +468,7 @@ export class D1VectorizeStore implements Store {
           .prepare(
             `UPDATE inquiries
              SET status=CASE
+                   WHEN status='closed' THEN 'closed'
                    WHEN EXISTS (
                      SELECT 1 FROM matches
                      WHERE inquiry_id=inquiries.id AND status='confirmed'
@@ -485,7 +492,7 @@ export class D1VectorizeStore implements Store {
           .bind(updated_at, current.inquiry_id),
       ]);
     } catch (error) {
-      if (decision === "confirmed" && (await this.hasConfirmedMatchOtherThan(current))) {
+      if (decision === "confirmed" && isConfirmationConflictError(error)) {
         return { ok: false, reason: "confirmation_conflict" };
       }
       throw error;
@@ -502,17 +509,6 @@ export class D1VectorizeStore implements Store {
     return { ok: true, match, inquiry };
   }
 
-  private async hasConfirmedMatchOtherThan(match: Match): Promise<boolean> {
-    const row = await this.db
-      .prepare(
-        `SELECT id FROM matches
-         WHERE inquiry_id=? AND id<>? AND status='confirmed'
-         LIMIT 1`,
-      )
-      .bind(match.inquiry_id, match.id)
-      .first();
-    return row !== null;
-  }
   async findMatch(itemId: string, inquiryId: string): Promise<Match | null> {
     const row = await this.db
       .prepare(`SELECT ${MATCH_COLS} FROM matches WHERE item_id=? AND inquiry_id=?`)
