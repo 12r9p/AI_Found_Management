@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-  IMAGE_CACHE_TTL_SECONDS,
-  IMAGE_VARIANTS,
-  handleImageRequest,
-  parseImageRequest,
-} from "./index.ts";
+import { handleImageRequest, parseImageRequest } from "./index.ts";
+import { IMAGE_CACHE_TTL_SECONDS, IMAGE_VARIANTS } from "./variants.ts";
 
 const key = "img_123e4567-e89b-12d3-a456-426614174000.jpg";
 const svgKey = "map_123e4567-e89b-12d3-a456-426614174000.svg";

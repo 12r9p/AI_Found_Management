@@ -17,6 +17,12 @@ zone_name = "s-t.work"
 binding = "IMAGES"
 bucket_name = "found-images"
 
+# ローカルのmulti-worker開発では、APIの画像routeを専用画像Workerへ渡す。
+# 本番の同一ホストrouteでは、より具体的なfound-images routeが直接処理する。
+[[services]]
+binding = "IMAGE_WORKER"
+service = "found-images"
+
 # D1（リレーショナルデータ本体）。`wrangler d1 create found-db` で作成し、database_id を反映。
 [[d1_databases]]
 binding = "DB"

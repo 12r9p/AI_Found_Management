@@ -9,7 +9,7 @@
     "start": "bun run src/index.ts",
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
-    "cf-dev": "wrangler dev",
+    "cf-dev": "wrangler dev --config wrangler.toml --config ../images/wrangler.toml",
     "seed": "bun run src/scripts/seed.ts",
     "migrate": "bun run src/scripts/migrate.ts",
     "migrate:local": "wrangler d1 migrations apply found-db --local",

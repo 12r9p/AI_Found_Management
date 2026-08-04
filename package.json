@@ -28,7 +28,7 @@
     "deploy:web": "bun run --cwd apps/web cf:deploy",
     "build:image": "bun run --cwd apps/images build",
     "deploy:image": "bun run --cwd apps/images deploy",
-    "deploy": "bun run deploy:api && bun run deploy:image && bun run deploy:web"
+    "deploy": "bun run deploy:image && bun run deploy:api && bun run deploy:web"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

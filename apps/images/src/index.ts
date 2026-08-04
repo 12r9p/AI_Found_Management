@@ -1,22 +1,11 @@
-export const IMAGE_CACHE_TTL_SECONDS = 604_800;
+import { IMAGE_CACHE_TTL_SECONDS, IMAGE_VARIANTS, type ImageVariant } from "./variants.ts";
+
+export type { ImageVariant } from "./variants.ts";
+
 const IMAGE_PATH_PREFIX = "/api/images/";
 const IMAGE_KEY_PATTERN =
   /^(?:img|map)_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|jpeg|png|webp|gif|heic|avif|svg|pdf|bin)$/i;
 const TRANSFORMABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);
-
-export type ImageVariant = "thumb" | "preview" | "original";
-
-type TransformVariant = {
-  width: number;
-  height?: number;
-  fit: "cover" | "scale-down";
-  quality: number;
-};
-
-export const IMAGE_VARIANTS: Record<Exclude<ImageVariant, "original">, TransformVariant> = {
-  thumb: { width: 256, height: 256, fit: "cover", quality: 78 },
-  preview: { width: 960, height: 960, fit: "scale-down", quality: 84 },
-};
 
 export interface ImageRequest {
   key: string;

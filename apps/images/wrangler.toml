@@ -1,6 +1,6 @@
 name = "found-images"
 main = "src/index.ts"
-compatibility_date = "2026-08-05"
+compatibility_date = "2026-08-04"
 
 # workers.dev からの迂回を許可せず、Accessで保護した同一ホストのrouteだけを公開する。
 workers_dev = false

@@ -382,6 +382,18 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       return { keys };
     })
     .get("/api/images/:key", async ({ params, set, request }) => {
+      // 本番はCloudflare Routeが画像Workerへ直接振り分けるが、ローカルの
+      // multi-worker開発ではAPI WorkerがService Binding経由で同じWorkerへ渡す。
+      const imageWorker = getEnv().IMAGE_WORKER;
+      if (imageWorker) {
+        try {
+          return await imageWorker.fetch(request);
+        } catch (error) {
+          // 画像Workerを単独起動した場合も既存のR2フォールバックで開発を続けられるようにする。
+          console.warn(`[image-worker] proxy unavailable, using API fallback: ${String(error)}`);
+        }
+      }
+
       // 画像キーは crypto.randomUUID() ベースで不変（同じキーの中身が変わることはない）。
       // Cloudflare のエッジキャッシュに直接載せることで、R2/Worker を経由せず
       // colo からそのまま返せるようにする（Bunローカル開発には caches が無いので素通し）。
