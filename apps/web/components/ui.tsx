@@ -1,6 +1,7 @@
 "use client";
 import { Button as BaseButton } from "@base-ui/react/button";
 import { Dialog } from "@base-ui/react/dialog";
+import { useTheme } from "next-themes";
 import React, {
   createContext,
   useCallback,
@@ -341,20 +342,15 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 
 // ---------------- Theme toggle ----------------
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const saved = (localStorage.getItem("rb-theme") as "light" | "dark") || null;
-    if (saved) {
-      document.documentElement.setAttribute("data-theme", saved);
-      setTheme(saved);
-    } else {
-      setTheme(matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    }
+    setMounted(true);
   }, []);
+
+  const theme = mounted ? resolvedTheme : null;
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("rb-theme", next);
     setTheme(next);
   };
   return (
