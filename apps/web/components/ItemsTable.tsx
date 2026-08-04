@@ -77,7 +77,13 @@ export function ItemsTable({
                         onClick={() => setPreview(it)}
                         aria-label={`${it.display_id || "物品"}の画像${index + 1}を表示`}
                       >
-                        <img src={imageUrl(k)} alt="" className="rb-cell-thumb" />
+                        <img
+                          src={imageUrl(k, "thumb")}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="rb-cell-thumb"
+                        />
                       </BaseButton>
                     ))
                   ) : (

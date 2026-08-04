@@ -108,7 +108,13 @@ export default function MatchesPage() {
                 <button key={m.id} className="rb-listrow" onClick={() => setSelected(m)}>
                   <div className="rb-thumbs">
                     {m.item?.image_keys?.[0] ? (
-                      <img src={imageUrl(m.item.image_keys[0])} alt="" className="rb-thumb-sm" />
+                      <img
+                        src={imageUrl(m.item.image_keys[0], "thumb")}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="rb-thumb-sm"
+                      />
                     ) : (
                       <span className="rb-thumb-sm rb-thumb-sm--empty">無</span>
                     )}

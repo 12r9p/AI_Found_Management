@@ -136,8 +136,10 @@ export default function PrintPage() {
                 {/* 現物照合できるよう印刷物にも写真を載せる */}
                 {it.image_keys[0] ? (
                   <img
-                    src={imageUrl(it.image_keys[0])}
+                    src={imageUrl(it.image_keys[0], "thumb")}
                     alt=""
+                    loading="eager"
+                    decoding="async"
                     style={{
                       width: 54,
                       height: 54,

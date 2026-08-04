@@ -219,8 +219,10 @@ export function InquiriesTab() {
                     m.item?.image_keys?.[0] ? (
                       <img
                         key={m.id}
-                        src={imageUrl(m.item.image_keys[0])}
+                        src={imageUrl(m.item.image_keys[0], "thumb")}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         className="rb-thumb-sm"
                       />
                     ) : (
@@ -516,7 +518,13 @@ function InquiryDetailModal({
                     <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
                   </span>
                   {m.item?.image_keys?.[0] ? (
-                    <img src={imageUrl(m.item.image_keys[0])} alt="" className="thumb mb-8" />
+                    <img
+                      src={imageUrl(m.item.image_keys[0], "preview")}
+                      alt=""
+                      loading="eager"
+                      decoding="async"
+                      className="thumb mb-8"
+                    />
                   ) : (
                     <span className="thumb thumb--empty mb-8">画像なし</span>
                   )}

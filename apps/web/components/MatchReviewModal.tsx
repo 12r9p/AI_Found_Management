@@ -112,8 +112,15 @@ export function MatchReviewModal({
           {item?.image_keys?.length ? (
             <div className="rb-grid rb-grid--2 mb-8">
               {item.image_keys.map((k) => (
-                <a key={k} href={imageUrl(k)} target="_blank" rel="noreferrer">
-                  <img src={imageUrl(k)} alt="遺失物" className="thumb" />
+                <a key={k} href={imageUrl(k, "original")} target="_blank" rel="noreferrer">
+                  <img
+                    src={imageUrl(k, "preview")}
+                    alt="遺失物"
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    className="thumb"
+                  />
                 </a>
               ))}
             </div>

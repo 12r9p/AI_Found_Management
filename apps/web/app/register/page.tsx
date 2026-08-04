@@ -198,7 +198,14 @@ export default function RegisterPage() {
         <div className="rb-grid rb-grid--2 mb-16">
           {keys.map((k) => (
             <div key={k}>
-              <img src={imageUrl(k)} alt="拾得物" className="thumb" />
+              <img
+                src={imageUrl(k, "preview")}
+                alt="拾得物"
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
+                className="thumb"
+              />
               <Button
                 variant="destructive"
                 size="sm"

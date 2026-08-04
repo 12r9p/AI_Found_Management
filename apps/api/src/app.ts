@@ -400,7 +400,12 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       const res = new Response(new Uint8Array(obj.body), {
         headers: {
           "content-type": obj.contentType,
-          "cache-control": "public, max-age=31536000, immutable",
+          "cache-control": "public, max-age=604800, s-maxage=604800",
+          "cdn-cache-control": "public, max-age=604800",
+          "content-length": String(obj.body.byteLength),
+          // The legacy storage interface does not expose the R2 etag. The key is
+          // immutable, so this weak validator remains stable for the fallback route.
+          etag: `W/"${params.key}"`,
         },
       });
       if (edgeCache && cacheKey) waitUntil(edgeCache.put(cacheKey, res.clone()));

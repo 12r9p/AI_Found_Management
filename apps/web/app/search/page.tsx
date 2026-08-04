@@ -327,7 +327,13 @@ export default function SearchPage() {
                         </span>
                       )}
                       {it.image_keys[0] ? (
-                        <img src={imageUrl(it.image_keys[0])} alt="" className="thumb mb-8" />
+                        <img
+                          src={imageUrl(it.image_keys[0], "thumb")}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="thumb mb-8"
+                        />
                       ) : (
                         <span className="thumb thumb--empty mb-8">画像なし</span>
                       )}

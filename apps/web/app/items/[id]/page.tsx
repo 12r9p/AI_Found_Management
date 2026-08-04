@@ -245,8 +245,10 @@ export default function ItemDetailPage() {
                       <div className="rb-thumbs">
                         {m.item?.image_keys?.[0] ? (
                           <img
-                            src={imageUrl(m.item.image_keys[0])}
+                            src={imageUrl(m.item.image_keys[0], "thumb")}
                             alt=""
+                            loading="lazy"
+                            decoding="async"
                             className="rb-thumb-sm"
                           />
                         ) : (

@@ -51,7 +51,15 @@ export function RegisteredModal({
           {item.image_keys.length > 0 ? (
             <div className="rb-grid rb-grid--2">
               {item.image_keys.map((k) => (
-                <img key={k} src={imageUrl(k)} alt="拾得物" className="thumb" />
+                <img
+                  key={k}
+                  src={imageUrl(k, "preview")}
+                  alt="拾得物"
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                  className="thumb"
+                />
               ))}
             </div>
           ) : (

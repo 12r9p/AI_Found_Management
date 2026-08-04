@@ -141,7 +141,15 @@ export function MapPicker({
 
   const mapLayers = (
     <>
-      <img src={imageUrl(mapKey)} alt="会場地図" className="map-img" draggable={false} />
+      <img
+        src={imageUrl(mapKey, "original")}
+        alt="会場地図"
+        loading="eager"
+        fetchPriority="high"
+        decoding="async"
+        className="map-img"
+        draggable={false}
+      />
 
       {/* 塗りつぶし自体は元の座標系に忠実に描ければよいので SVG のまま（none で歪んでも
           図形としては正しい）。ただしテキスト・頂点の丸は歪むと文字が横伸びして見えるため、
