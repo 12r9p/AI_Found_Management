@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { UIProvider } from "../components/ui";
 
@@ -12,9 +13,6 @@ export const viewport: Viewport = {
   initialScale: 1,
   themeColor: "#000000",
 };
-
-// 描画前にテーマを適用（ちらつき防止）
-const themeScript = `(function(){try{var t=localStorage.getItem('rb-theme');if(t){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
 // history.pushState/replaceState を差し替える外部スクリプト（Cloudflare の RUM ビーコン等）から
 // アプリを守る。ビーコンは本物を呼ぶ前に計測用XHRを同期的に投げるが、iOS Safari の
@@ -30,15 +28,22 @@ const historyGuardScript = `(function(){try{var p=History.prototype;["pushState"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja">
+    <html lang="ja" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: historyGuardScript }} />
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <div className="root">
-          <UIProvider>{children}</UIProvider>
-        </div>
+        <ThemeProvider
+          attribute="data-theme"
+          storageKey="rb-theme"
+          defaultTheme="system"
+          enableSystem
+          enableColorScheme={false}
+        >
+          <div className="root">
+            <UIProvider>{children}</UIProvider>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );
