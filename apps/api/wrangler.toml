@@ -30,10 +30,12 @@ migrations_dir = "migrations"
 [[vectorize]]
 binding = "VECTORIZE_ITEMS"
 index_name = "found-items"
+remote = true
 
 [[vectorize]]
 binding = "VECTORIZE_INQUIRIES"
 index_name = "found-inquiries"
+remote = true
 
 [vars]
 WEB_ORIGIN = "https://found.s-t.work"
