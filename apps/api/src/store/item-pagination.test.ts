@@ -44,6 +44,9 @@ describe("物品一覧カーソル", () => {
     expect(parseItemPageLimit("200")).toBe(200);
     expect(() => parseItemPageLimit("0")).toThrow(InvalidItemLimitError);
     expect(() => parseItemPageLimit("1.5")).toThrow(InvalidItemLimitError);
+    expect(() => parseItemPageLimit(String(MAX_ITEM_PAGE_LIMIT + 1))).toThrow(
+      InvalidItemLimitError,
+    );
   });
 });
 
@@ -186,6 +189,16 @@ test("GET /api/itemsは作成日時とIDをquery parameterで受け取る", asyn
 test("GET /api/itemsは不正limitを400で返す", async () => {
   setEnv({} as Env);
   const response = await createApp().handle(new Request("http://localhost/api/items?limit=0"));
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_limit" });
+});
+
+test("GET /api/itemsは上限超過limitを400で返す", async () => {
+  setEnv({} as Env);
+  const response = await createApp().handle(
+    new Request(`http://localhost/api/items?limit=${MAX_ITEM_PAGE_LIMIT + 1}`),
+  );
 
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({ error: "invalid_limit" });

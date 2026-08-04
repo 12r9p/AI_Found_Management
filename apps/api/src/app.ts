@@ -3,7 +3,12 @@ import { cors } from "@elysiajs/cors";
 import { buildContext, type AppContext } from "./context.ts";
 import { getEnv, waitUntil } from "./env-holder.ts";
 import { itemEmbedText, inquiryEmbedText } from "./lib/embed-text.ts";
-import { matchNewItem, matchNewInquiry, rematchPage } from "./lib/matching.ts";
+import {
+  matchNewItem,
+  matchNewInquiry,
+  rematchPage,
+  type RematchPageOutcome,
+} from "./lib/matching.ts";
 import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
 import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
@@ -33,6 +38,70 @@ import {
 
 /** 現在有効な地図画像のキーを保持する設定キー。 */
 const ACTIVE_MAP_KEY = "active_map_key";
+
+/** 再照合の通信断再試行で、同じページを二重処理しないための結果キャッシュ。 */
+const REMATCH_CACHE_PREFIX = "rematch_page_cache:";
+const REMATCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const REMATCH_RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface RematchPageCache {
+  expiresAt: number;
+  pages: Record<string, RematchPageOutcome>;
+}
+
+function isRematchRunId(value: unknown): value is string {
+  return typeof value === "string" && REMATCH_RUN_ID_PATTERN.test(value);
+}
+
+function rematchCacheKey(runId: string): string {
+  return `${REMATCH_CACHE_PREFIX}${runId}`;
+}
+
+function isRematchPageOutcome(value: unknown): value is RematchPageOutcome {
+  if (!value || typeof value !== "object") return false;
+  const page = value as Record<string, unknown>;
+  return (
+    typeof page.itemsChecked === "number" &&
+    typeof page.matchesFound === "number" &&
+    typeof page.failed === "number" &&
+    (page.nextCursor === null || typeof page.nextCursor === "string") &&
+    typeof page.done === "boolean"
+  );
+}
+
+async function readRematchPageCache(
+  store: AppContext["store"],
+  runId: string,
+): Promise<RematchPageCache> {
+  const raw = await store.getSetting(rematchCacheKey(runId));
+  if (!raw) return { expiresAt: Date.now() + REMATCH_CACHE_TTL_MS, pages: {} };
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const pages = parsed.pages;
+    if (
+      typeof parsed.expiresAt !== "number" ||
+      parsed.expiresAt <= Date.now() ||
+      !pages ||
+      typeof pages !== "object" ||
+      Array.isArray(pages)
+    ) {
+      return { expiresAt: Date.now() + REMATCH_CACHE_TTL_MS, pages: {} };
+    }
+
+    const validPages: Record<string, RematchPageOutcome> = {};
+    for (const [key, value] of Object.entries(pages)) {
+      if (isRematchPageOutcome(value)) validPages[key] = value;
+    }
+    return { expiresAt: parsed.expiresAt, pages: validPages };
+  } catch {
+    return { expiresAt: Date.now() + REMATCH_CACHE_TTL_MS, pages: {} };
+  }
+}
+
+function rematchPageCacheKey(cursor: string | undefined): string {
+  return cursor ?? "";
+}
 
 /**
  * アップロード画像1枚あたりの上限（バイト）。
@@ -456,14 +525,36 @@ export function createApp() {
     // ---- ページ単位の全件再照合（管理画面の手動トリガー） ----
     // 管理画面がカーソルを引き継ぎ、100件ずつ終端まで順番に呼び出す。
     .post("/api/rematch", async ({ body, set }) => {
-      const cursor = (body as { cursor?: unknown } | undefined)?.cursor;
+      const payload = (body as { cursor?: unknown; runId?: unknown } | undefined) ?? {};
+      const cursor = payload.cursor;
       if (cursor !== undefined && (typeof cursor !== "string" || !cursor)) {
         set.status = 400;
         return { error: "invalid_cursor" };
       }
+      const runId =
+        payload.runId === undefined
+          ? undefined
+          : isRematchRunId(payload.runId)
+            ? payload.runId
+            : null;
+      if (runId === null) {
+        set.status = 400;
+        return { error: "invalid_run_id" };
+      }
+
       try {
         const c = await ctx();
-        return await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
+        if (!runId) return await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
+
+        const cache = await readRematchPageCache(c.store, runId);
+        const pageKey = rematchPageCacheKey(cursor);
+        const cached = cache.pages[pageKey];
+        if (cached) return cached;
+
+        const outcome = await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
+        cache.pages[pageKey] = outcome;
+        await c.store.setSetting(rematchCacheKey(runId), JSON.stringify(cache));
+        return outcome;
       } catch (error) {
         if (error instanceof InvalidItemCursorError) {
           set.status = 400;
@@ -471,6 +562,17 @@ export function createApp() {
         }
         throw error;
       }
+    })
+    .post("/api/rematch/finish", async ({ body, set }) => {
+      const runId = (body as { runId?: unknown } | undefined)?.runId;
+      if (!isRematchRunId(runId)) {
+        set.status = 400;
+        return { error: "invalid_run_id" };
+      }
+      const c = await ctx();
+      // 終了通知が失われてもTTLで回収できるよう、削除は補助的に行う。
+      await c.store.setSetting(rematchCacheKey(runId), "");
+      return { ok: true };
     })
 
     // ---- inquiries ----

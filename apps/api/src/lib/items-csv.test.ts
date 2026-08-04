@@ -16,6 +16,19 @@ class CountingMemoryStore extends MemoryStore {
   }
 }
 
+class StalledMemoryStore extends MemoryStore {
+  listCalls = 0;
+
+  constructor(private readonly item: Awaited<ReturnType<MemoryStore["createItem"]>>) {
+    super();
+  }
+
+  override async listItems(_filters: SearchFilters, _options?: ItemListOptions): Promise<ItemPage> {
+    this.listCalls++;
+    return { items: [this.item], nextCursor: "stalled-cursor" };
+  }
+}
+
 test("CSVセルはカンマ・引用符・改行を保持したままエスケープする", () => {
   expect(escapeCsvCell('改行\n"引用",値')).toBe('"改行\n""引用"",値"');
 });
@@ -61,4 +74,16 @@ test("CSVエンドポイントはストリーム用の応答ヘッダーを返�
   expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
   expect(response.headers.get("content-disposition")).toBe('attachment; filename="items.csv"');
   expect(await response.text()).toStartWith("id,status,category");
+});
+
+test("CSVストリームは停滞したcursorを検出して終了する", async () => {
+  const source = new MemoryStore();
+  const item = await source.createItem({ status: "stored", category: "傘" });
+  const store = new StalledMemoryStore(item);
+  const reader = new Response(createItemsCsvStream(store, {})).body!.getReader();
+
+  await reader.read();
+  await reader.read();
+  await expect(reader.read()).rejects.toThrow("item_pagination_stalled");
+  expect(store.listCalls).toBe(2);
 });

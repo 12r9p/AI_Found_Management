@@ -45,7 +45,8 @@ export function parseItemPageLimit(value: unknown): number | undefined {
   }
   const limit = Number(value);
   if (!Number.isSafeInteger(limit)) throw new InvalidItemLimitError();
-  return normalizeItemPageLimit(limit);
+  if (limit > MAX_ITEM_PAGE_LIMIT) throw new InvalidItemLimitError();
+  return limit;
 }
 
 export function itemCursorFromItem(item: Pick<Item, "created_at" | "id">): ItemCursorPosition {

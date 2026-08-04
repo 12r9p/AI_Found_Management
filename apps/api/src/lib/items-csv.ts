@@ -61,6 +61,10 @@ export function createItemsCsvStream(
           limit: MAX_ITEM_PAGE_LIMIT,
         });
         if (cancelled) return;
+        if (page.nextCursor && page.nextCursor === cursor) {
+          controller.error(new Error("item_pagination_stalled"));
+          return;
+        }
         if (page.items.length > 0) {
           controller.enqueue(encoder.encode(`${page.items.map(itemToCsvRow).join("\n")}\n`));
         }

@@ -281,3 +281,34 @@ test("POST /api/rematchは不正カーソルを400で返す", async () => {
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({ error: "invalid_cursor" });
 });
+
+test("POST /api/rematchは同じrunIdとcursorのページ結果を再利用する", async () => {
+  setEnv({} as Env);
+  const runId = crypto.randomUUID();
+  const request = () =>
+    createApp().handle(
+      new Request("http://localhost/api/rematch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runId }),
+      }),
+    );
+
+  const first = await request();
+  const firstBody = await first.json();
+  const second = await request();
+
+  expect(first.status).toBe(200);
+  expect(second.status).toBe(200);
+  expect(await second.json()).toEqual(firstBody);
+
+  const finished = await createApp().handle(
+    new Request("http://localhost/api/rematch/finish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ runId }),
+    }),
+  );
+  expect(finished.status).toBe(200);
+  expect(await finished.json()).toEqual({ ok: true });
+});

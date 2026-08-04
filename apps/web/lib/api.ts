@@ -94,10 +94,18 @@ export const api = {
     }),
 
   // 保管中の物品を100件ずつ再照合し、管理画面側で終端まで順に呼び出す。
-  rematchPage: (cursor?: string) =>
+  rematchPage: (cursor?: string, runId?: string) =>
     req<RematchPage>("/api/rematch", {
       method: "POST",
-      body: JSON.stringify(cursor ? { cursor } : {}),
+      body: JSON.stringify({
+        ...(cursor ? { cursor } : {}),
+        ...(runId ? { runId } : {}),
+      }),
+    }),
+  finishRematch: (runId: string) =>
+    req<{ ok: boolean }>("/api/rematch/finish", {
+      method: "POST",
+      body: JSON.stringify({ runId }),
     }),
 
   // uploads / analyze

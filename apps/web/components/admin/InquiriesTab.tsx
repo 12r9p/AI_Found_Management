@@ -29,6 +29,7 @@ const STATUS_FILTERS = [
 ];
 
 interface RematchProgress {
+  runId: string;
   itemsChecked: number;
   matchesFound: number;
   failed: number;
@@ -68,6 +69,7 @@ export function InquiriesTab() {
    * カーソルと累積件数を残して同じ位置から再開できるようにする。 */
   const runRematch = async (resume: boolean) => {
     const previous = resume ? rematchProgress : null;
+    const runId = previous?.runId ?? crypto.randomUUID();
     const totals = {
       itemsChecked: previous?.itemsChecked ?? 0,
       matchesFound: previous?.matchesFound ?? 0,
@@ -75,22 +77,33 @@ export function InquiriesTab() {
     };
     let cursor = previous?.resumeCursor ?? null;
     setRematching(true);
-    setRematchProgress({ ...totals, resumeCursor: cursor, done: false, interrupted: false });
+    setRematchProgress({
+      ...totals,
+      runId,
+      resumeCursor: cursor,
+      done: false,
+      interrupted: false,
+    });
     try {
       for (;;) {
         const requestedCursor = cursor;
-        const page = await api.rematchPage(cursor ?? undefined);
+        const page = await api.rematchPage(cursor ?? undefined, runId);
         totals.itemsChecked += page.itemsChecked;
         totals.matchesFound += page.matchesFound;
         totals.failed += page.failed;
         cursor = page.nextCursor;
         setRematchProgress({
           ...totals,
+          runId,
           resumeCursor: cursor,
           done: page.done,
           interrupted: false,
         });
-        if (page.done) break;
+        if (page.done) {
+          // キャッシュ削除に失敗しても、再照合自体は成功扱いにする。TTLで回収される。
+          await api.finishRematch(runId).catch(() => {});
+          break;
+        }
         if (!cursor || cursor === requestedCursor) throw new Error("rematch_pagination_stalled");
       }
       const failedNote = totals.failed > 0 ? `(${totals.failed}件は失敗)` : "";
@@ -104,6 +117,7 @@ export function InquiriesTab() {
     } catch (e) {
       setRematchProgress({
         ...totals,
+        runId,
         resumeCursor: cursor,
         done: false,
         interrupted: true,
