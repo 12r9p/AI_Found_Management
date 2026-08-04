@@ -61,7 +61,8 @@ export interface Store {
   getItem(id: string): Promise<Item | null>;
   listItems(filters: SearchFilters, options?: ItemListOptions): Promise<ItemPage>;
   updateItem(id: string, patch: Partial<Item>): Promise<Item | null>;
-  deleteItem(id: string): Promise<boolean>;
+  /** 削除できた行を返す。外部resource cleanupはこの確定済みsnapshotを使用する。 */
+  deleteItem(id: string): Promise<Item | null>;
   searchItems(embedding: number[], filters: SearchFilters): Promise<ScoredItem[]>;
 
   // --- inquiries ---

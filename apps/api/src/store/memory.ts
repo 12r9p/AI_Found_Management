@@ -140,11 +140,34 @@ export class MemoryStore implements Store {
     this.persist();
     return it;
   }
-  async deleteItem(id: string): Promise<boolean> {
-    const n = this.items.length;
-    this.items = this.items.filter((i) => i.id !== id);
+  async deleteItem(id: string): Promise<Item | null> {
+    const deletedItem = this.items.find((item) => item.id === id);
+    if (!deletedItem) return null;
+    const removedMatchIds = new Set(
+      this.matches.filter((match) => match.item_id === id).map((match) => match.id),
+    );
+    const affectedInquiryIds = new Set(
+      this.matches.filter((match) => match.item_id === id).map((match) => match.inquiry_id),
+    );
+    for (const inquiry of this.inquiries) {
+      if (inquiry.matched_item_id === id) affectedInquiryIds.add(inquiry.id);
+    }
+
+    this.items = this.items.filter((item) => item.id !== id);
+    this.matches = this.matches.filter((match) => match.item_id !== id);
+    for (const notification of this.notifications) {
+      if (notification.ref_item_id === id) notification.ref_item_id = null;
+      if (notification.ref_match_id && removedMatchIds.has(notification.ref_match_id)) {
+        notification.ref_match_id = null;
+      }
+    }
+    const updatedAt = nowIso();
+    for (const inquiryId of affectedInquiryIds) {
+      const inquiry = this.inquiries.find((candidate) => candidate.id === inquiryId);
+      if (inquiry) this.recomputeInquiryState(inquiry, updatedAt);
+    }
     this.persist();
-    return this.items.length < n;
+    return structuredClone(deletedItem);
   }
 
   /** 空でない管理番号はSQLite既定と同じ完全一致で比較する。 */
@@ -189,10 +212,20 @@ export class MemoryStore implements Store {
     return inq;
   }
   async deleteInquiry(id: string): Promise<boolean> {
-    const n = this.inquiries.length;
-    this.inquiries = this.inquiries.filter((i) => i.id !== id);
+    if (!this.inquiries.some((inquiry) => inquiry.id === id)) return false;
+    const removedMatchIds = new Set(
+      this.matches.filter((match) => match.inquiry_id === id).map((match) => match.id),
+    );
+    this.inquiries = this.inquiries.filter((inquiry) => inquiry.id !== id);
+    this.matches = this.matches.filter((match) => match.inquiry_id !== id);
+    for (const notification of this.notifications) {
+      if (notification.ref_inquiry_id === id) notification.ref_inquiry_id = null;
+      if (notification.ref_match_id && removedMatchIds.has(notification.ref_match_id)) {
+        notification.ref_match_id = null;
+      }
+    }
     this.persist();
-    return this.inquiries.length < n;
+    return true;
   }
   async searchInquiries(
     embedding: number[],
@@ -243,6 +276,13 @@ export class MemoryStore implements Store {
     if (!inquiry) throw new Error(`照合 ${id} の問い合わせが見つかりません`);
 
     match.status = decision;
+    this.recomputeInquiryState(inquiry, nowIso());
+    this.persist();
+    return { ok: true, match, inquiry };
+  }
+
+  /** 現在残っている照合候補だけを使い、問い合わせの派生状態を再計算する。 */
+  private recomputeInquiryState(inquiry: Inquiry, updatedAt: string): void {
     const related = this.matches.filter((candidate) => candidate.inquiry_id === inquiry.id);
     const confirmed = related.find((candidate) => candidate.status === "confirmed");
     if (inquiry.status !== "closed") {
@@ -253,9 +293,7 @@ export class MemoryStore implements Store {
           : "open";
     }
     inquiry.matched_item_id = confirmed?.item_id ?? null;
-    inquiry.updated_at = nowIso();
-    this.persist();
-    return { ok: true, match, inquiry };
+    inquiry.updated_at = updatedAt;
   }
   async findMatch(itemId: string, inquiryId: string): Promise<Match | null> {
     return this.matches.find((m) => m.item_id === itemId && m.inquiry_id === inquiryId) ?? null;
