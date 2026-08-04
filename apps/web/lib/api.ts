@@ -9,6 +9,32 @@ import type {
   LocationPreset,
 } from "./types";
 
+export interface ItemPage {
+  items: Item[];
+  nextCursor: ItemCursor | null;
+}
+
+export interface ItemCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface RematchPage {
+  itemsChecked: number;
+  matchesFound: number;
+  failed: number;
+  nextCursor: ItemCursor | null;
+  done: boolean;
+}
+
+export function itemCursorsEqual(
+  left: ItemCursor | null | undefined,
+  right: ItemCursor | null | undefined,
+): boolean {
+  if (!left || !right) return left === right;
+  return left.createdAt === right.createdAt && left.id === right.id;
+}
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8787";
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -56,7 +82,7 @@ export const api = {
 
   // items
   listItems: (q: Record<string, string> = {}) =>
-    req<{ items: Item[] }>(`/api/items?${new URLSearchParams(q)}`).then((r) => r.items),
+    req<ItemPage>(`/api/items?${new URLSearchParams(q)}`),
   getItem: (id: string) => req<{ item: Item; matches: Match[] }>(`/api/items/${id}`),
   createItem: (body: Partial<Item>) =>
     req<{ item: Item; matches: Match[]; topScore: number }>("/api/items", {
@@ -75,10 +101,19 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  // 保管中の全物品を未解決の問い合わせと一括で再照合する（管理画面の手動トリガー）
-  rematchAll: () =>
-    req<{ itemsChecked: number; matchesFound: number; failed: number }>("/api/rematch", {
+  // 保管中の物品を100件ずつ再照合し、管理画面側で終端まで順に呼び出す。
+  rematchPage: (cursor?: ItemCursor, runId?: string) =>
+    req<RematchPage>("/api/rematch", {
       method: "POST",
+      body: JSON.stringify({
+        ...(cursor ? { cursor } : {}),
+        ...(runId ? { runId } : {}),
+      }),
+    }),
+  finishRematch: (runId: string) =>
+    req<{ ok: boolean }>("/api/rematch/finish", {
+      method: "POST",
+      body: JSON.stringify({ runId }),
     }),
 
   // uploads / analyze

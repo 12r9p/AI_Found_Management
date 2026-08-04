@@ -18,6 +18,13 @@ import {
 import { applyItemFilters } from "./memory.ts";
 import { cosineSimilarity } from "../lib/vector.ts";
 import { mapDisplayIdWriteError } from "./errors.ts";
+import {
+  normalizeItemPageLimit,
+  parseItemCursor,
+  toItemPage,
+  type ItemListOptions,
+  type ItemPage,
+} from "./item-pagination.ts";
 
 /**
  * D1 + Vectorize 実装。D1 = 行データの永続化(source of truth)、
@@ -102,13 +109,15 @@ export class D1VectorizeStore implements Store {
     const row = await this.db.prepare(`SELECT ${ITEM_COLS} FROM items WHERE id=?`).bind(id).first();
     return row ? rowToItem(row) : null;
   }
-  async listItems(f: SearchFilters): Promise<Item[]> {
-    const { where, params } = buildItemWhere(f);
+  async listItems(f: SearchFilters, options: ItemListOptions = {}): Promise<ItemPage> {
+    const limit = normalizeItemPageLimit(options.limit);
+    const cursor = options.cursor ? parseItemCursor(options.cursor) : null;
+    const { where, params } = buildItemWhere(f, cursor);
     const { results } = await this.db
-      .prepare(`SELECT ${ITEM_COLS} FROM items ${where} ORDER BY created_at DESC LIMIT ?`)
-      .bind(...params, limit(f, 500))
+      .prepare(`SELECT ${ITEM_COLS} FROM items ${where} ORDER BY created_at DESC, id DESC LIMIT ?`)
+      .bind(...params, limit + 1)
       .all();
-    return (results as any[]).map(rowToItem);
+    return toItemPage((results as any[]).map(rowToItem), limit);
   }
   async updateItem(id: string, patch: Partial<Item>): Promise<Item | null> {
     const { set, params } = buildSet(patch, ITEM_FIELDS);
@@ -646,12 +655,10 @@ function rowToNotif(r: any): Notification {
   };
 }
 
-function limit(f: SearchFilters, def: number): number {
-  const n = f.limit ?? def;
-  return Math.max(1, Math.min(1000, n));
-}
-
-function buildItemWhere(f: SearchFilters): { where: string; params: any[] } {
+function buildItemWhere(
+  f: SearchFilters,
+  cursor?: { createdAt: string; id: string } | null,
+): { where: string; params: any[] } {
   const clauses: string[] = [];
   const params: any[] = [];
   if (f.category) {
@@ -677,6 +684,10 @@ function buildItemWhere(f: SearchFilters): { where: string; params: any[] } {
   if (f.to) {
     clauses.push("found_at <= ?");
     params.push(f.to);
+  }
+  if (cursor) {
+    clauses.push("(created_at < ? OR (created_at = ? AND id < ?))");
+    params.push(cursor.createdAt, cursor.createdAt, cursor.id);
   }
   return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
 }

@@ -3,7 +3,12 @@ import { cors } from "@elysiajs/cors";
 import { buildContext, type AppContext } from "./context.ts";
 import { getEnv, waitUntil } from "./env-holder.ts";
 import { itemEmbedText, inquiryEmbedText } from "./lib/embed-text.ts";
-import { matchNewItem, matchNewInquiry, rematchAll } from "./lib/matching.ts";
+import {
+  matchNewItem,
+  matchNewInquiry,
+  rematchPage,
+  type RematchPageOutcome,
+} from "./lib/matching.ts";
 import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
 import { arrayBufferToDataUrl, extFromContentType } from "./lib/img.ts";
 import { getIdRule, setIdRule, nextDisplayId, previewId, normalizeRule } from "./lib/idrule.ts";
@@ -20,11 +25,85 @@ import {
   getMetaOptions,
   normalizeMetaOptions,
 } from "./lib/meta.ts";
+import { createItemsCsvStream } from "./lib/items-csv.ts";
 import type { SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError } from "./store/index.ts";
+import {
+  InvalidItemCursorError,
+  InvalidItemLimitError,
+  isItemCursorPosition,
+  parseItemCursor,
+  parseItemPageLimit,
+  type ItemCursorPosition,
+  type ItemListOptions,
+} from "./store/item-pagination.ts";
 
 /** 現在有効な地図画像のキーを保持する設定キー。 */
 const ACTIVE_MAP_KEY = "active_map_key";
+
+/** 再照合の通信断再試行で、同じページを二重処理しないための結果キャッシュ。 */
+const REMATCH_CACHE_PREFIX = "rematch_page_cache:";
+const REMATCH_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const REMATCH_RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface RematchPageCache {
+  expiresAt: number;
+  pages: Record<string, RematchPageOutcome>;
+}
+
+function isRematchRunId(value: unknown): value is string {
+  return typeof value === "string" && REMATCH_RUN_ID_PATTERN.test(value);
+}
+
+function rematchCacheKey(runId: string): string {
+  return `${REMATCH_CACHE_PREFIX}${runId}`;
+}
+
+function isRematchPageOutcome(value: unknown): value is RematchPageOutcome {
+  if (!value || typeof value !== "object") return false;
+  const page = value as Record<string, unknown>;
+  return (
+    typeof page.itemsChecked === "number" &&
+    typeof page.matchesFound === "number" &&
+    typeof page.failed === "number" &&
+    (page.nextCursor === null || isItemCursorPosition(page.nextCursor)) &&
+    typeof page.done === "boolean"
+  );
+}
+
+async function readRematchPageCache(
+  store: AppContext["store"],
+  runId: string,
+): Promise<RematchPageCache> {
+  const raw = await store.getSetting(rematchCacheKey(runId));
+  if (!raw) return { expiresAt: Date.now() + REMATCH_CACHE_TTL_MS, pages: {} };
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const pages = parsed.pages;
+    if (
+      typeof parsed.expiresAt !== "number" ||
+      parsed.expiresAt <= Date.now() ||
+      !pages ||
+      typeof pages !== "object" ||
+      Array.isArray(pages)
+    ) {
+      return { expiresAt: Date.now() + REMATCH_CACHE_TTL_MS, pages: {} };
+    }
+
+    const validPages: Record<string, RematchPageOutcome> = {};
+    for (const [key, value] of Object.entries(pages)) {
+      if (isRematchPageOutcome(value)) validPages[key] = value;
+    }
+    return { expiresAt: parsed.expiresAt, pages: validPages };
+  } catch {
+    return { expiresAt: Date.now() + REMATCH_CACHE_TTL_MS, pages: {} };
+  }
+}
+
+function rematchPageCacheKey(cursor: ItemCursorPosition | undefined): string {
+  return JSON.stringify(cursor ?? null);
+}
 
 /**
  * アップロード画像1枚あたりの上限（バイト）。
@@ -44,6 +123,21 @@ function parseFilters(q: Record<string, any>): SearchFilters {
     from: q.from || undefined,
     to: q.to || undefined,
     limit: q.limit ? parseInt(q.limit, 10) : undefined,
+  };
+}
+
+function parseItemListOptions(q: Record<string, unknown>): ItemListOptions {
+  const createdAt = q.cursorCreatedAt;
+  const id = q.cursorId;
+  if (createdAt === undefined && id === undefined) {
+    return { limit: parseItemPageLimit(q.limit) };
+  }
+  if (createdAt === undefined || id === undefined) {
+    throw new InvalidItemCursorError();
+  }
+  return {
+    cursor: parseItemCursor({ createdAt, id }),
+    limit: parseItemPageLimit(q.limit),
   };
 }
 
@@ -286,9 +380,20 @@ export function createApp() {
     })
 
     // ---- items ----
-    .get("/api/items", async ({ query }) => {
-      const c = await ctx();
-      return { items: await c.store.listItems(parseFilters(query as any)) };
+    .get("/api/items", async ({ query, set }) => {
+      try {
+        const c = await ctx();
+        return await c.store.listItems(
+          parseFilters(query as Record<string, unknown>),
+          parseItemListOptions(query as Record<string, unknown>),
+        );
+      } catch (error) {
+        if (error instanceof InvalidItemCursorError || error instanceof InvalidItemLimitError) {
+          set.status = 400;
+          return { error: error.message };
+        }
+        throw error;
+      }
     })
     .post("/api/items", async ({ body }) => {
       const c = await ctx();
@@ -403,7 +508,8 @@ export function createApp() {
       const filters: SearchFilters = { ...parseFilters(b), limit: b.limit ?? 50 };
       if (!filters.q) {
         // クエリ無しならフィルタのみの一覧
-        return { items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })) };
+        const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
+        return { items: page.items.map((i) => ({ ...i, score: null })) };
       }
       const embedding = await safeEmbed(c.ai, filters.q);
       if (!embedding.length) {
@@ -411,21 +517,66 @@ export function createApp() {
         // （検索自体を丸ごとエラーにしない）。degraded を立てて呼び出し側に
         // 「ベクトル検索はできていない」ことを伝える（何も伝えないと検索してるのに
         // スコアが出ず、壊れているようにしか見えない）。
-        return {
-          items: (await c.store.listItems(filters)).map((i) => ({ ...i, score: null })),
-          degraded: true,
-        };
+        const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
+        return { items: page.items.map((i) => ({ ...i, score: null })), degraded: true };
       }
       const items = await c.store.searchItems(embedding, filters);
       return { items };
     })
 
-    // ---- 全件再照合（管理画面の手動トリガー） ----
-    // しきい値変更・表記修正など、既存データには自動反映されない変更を
-    // スタッフの操作で一括で追いつかせるためのメンテナンス用エンドポイント。
-    .post("/api/rematch", async () => {
+    // ---- ページ単位の全件再照合（管理画面の手動トリガー） ----
+    // 管理画面がカーソルを引き継ぎ、100件ずつ終端まで順番に呼び出す。
+    .post("/api/rematch", async ({ body, set }) => {
+      const payload = (body as { cursor?: unknown; runId?: unknown } | undefined) ?? {};
+      let cursor: ItemCursorPosition | undefined;
+      try {
+        cursor = payload.cursor === undefined ? undefined : parseItemCursor(payload.cursor);
+      } catch {
+        set.status = 400;
+        return { error: "invalid_cursor" };
+      }
+      const runId =
+        payload.runId === undefined
+          ? undefined
+          : isRematchRunId(payload.runId)
+            ? payload.runId
+            : null;
+      if (runId === null) {
+        set.status = 400;
+        return { error: "invalid_run_id" };
+      }
+
+      try {
+        const c = await ctx();
+        if (!runId) return await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
+
+        const cache = await readRematchPageCache(c.store, runId);
+        const pageKey = rematchPageCacheKey(cursor);
+        const cached = cache.pages[pageKey];
+        if (cached) return cached;
+
+        const outcome = await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
+        cache.pages[pageKey] = outcome;
+        await c.store.setSetting(rematchCacheKey(runId), JSON.stringify(cache));
+        return outcome;
+      } catch (error) {
+        if (error instanceof InvalidItemCursorError) {
+          set.status = 400;
+          return { error: error.message };
+        }
+        throw error;
+      }
+    })
+    .post("/api/rematch/finish", async ({ body, set }) => {
+      const runId = (body as { runId?: unknown } | undefined)?.runId;
+      if (!isRematchRunId(runId)) {
+        set.status = 400;
+        return { error: "invalid_run_id" };
+      }
       const c = await ctx();
-      return rematchAll(c.store, c.ai, c.cfg.matchThreshold);
+      // 終了通知が失われてもTTLで回収できるよう、削除は補助的に行う。
+      await c.store.setSetting(rematchCacheKey(runId), "");
+      return { ok: true };
     })
 
     // ---- inquiries ----
@@ -571,46 +722,15 @@ export function createApp() {
       return { ok: await c.store.markNotificationRead(params.id) };
     })
 
-    // ---- CSV export (bonus) ----
-    .get("/api/export/items.csv", async ({ query, set }) => {
+    // ---- 物品CSV出力 ----
+    .get("/api/export/items.csv", async ({ query }) => {
       const c = await ctx();
-      const items = await c.store.listItems(parseFilters(query as any));
-      const head = [
-        "id",
-        "status",
-        "category",
-        "color",
-        "brand",
-        "found_location",
-        "map_pin",
-        "found_at",
-        "ai_description",
-        "tags",
-        "created_at",
-      ];
-      const esc = (s: any) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-      const rows = items.map((i) =>
-        [
-          i.id,
-          i.status,
-          i.category,
-          i.color,
-          i.brand,
-          i.found_location,
-          i.found_x != null && i.found_y != null
-            ? `${(i.found_x * 100).toFixed(1)}%,${(i.found_y * 100).toFixed(1)}%`
-            : "",
-          i.found_at ?? "",
-          i.ai_description,
-          i.tags.join(";"),
-          i.created_at,
-        ]
-          .map(esc)
-          .join(","),
-      );
-      set.headers["content-type"] = "text/csv; charset=utf-8";
-      set.headers["content-disposition"] = 'attachment; filename="items.csv"';
-      return "﻿" + [head.join(","), ...rows].join("\n");
+      return new Response(createItemsCsvStream(c.store, parseFilters(query as any)), {
+        headers: {
+          "content-type": "text/csv; charset=utf-8",
+          "content-disposition": 'attachment; filename="items.csv"',
+        },
+      });
     });
 
   return app;

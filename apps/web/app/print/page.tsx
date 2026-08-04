@@ -1,39 +1,63 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, imageUrl } from "../../lib/api";
+import { fetchAllItems } from "../../lib/item-pages";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default function PrintPage() {
   const [items, setItems] = useState<Item[] | null>(null);
+  const [itemsLoaded, setItemsLoaded] = useState(0);
+  const [loadError, setLoadError] = useState("");
   const [printedAt] = useState(() => new Date());
 
   useEffect(() => {
     const q = Object.fromEntries(new URLSearchParams(location.search));
-    api.listItems(q as Record<string, string>).then((its) => {
-      setItems(its);
-      // 画像の読み込みが終わってから印刷ダイアログを出す（空欄で印刷されるのを防ぐ）
-      const waitImages = () => {
-        const imgs = Array.from(document.images);
-        return Promise.all(
-          imgs.map((im) =>
-            im.complete
-              ? Promise.resolve()
-              : new Promise<void>((res) => {
-                  im.addEventListener("load", () => res(), { once: true });
-                  im.addEventListener("error", () => res(), { once: true });
-                }),
-          ),
-        );
-      };
-      setTimeout(() => {
-        waitImages().then(() => window.print());
-      }, 300);
-    });
+    let cancelled = false;
+    let printTimer: ReturnType<typeof setTimeout> | undefined;
+    fetchAllItems(api.listItems, q as Record<string, string>, (count) => {
+      if (!cancelled) setItemsLoaded(count);
+    })
+      .then((loadedItems) => {
+        if (cancelled) return;
+        setItems(loadedItems);
+        // 全ページと画像の描画完了後に印刷ダイアログを出し、途中までの一覧を印刷しない。
+        printTimer = setTimeout(() => {
+          const images = Array.from(document.images);
+          Promise.all(
+            images.map((image) =>
+              image.complete
+                ? Promise.resolve()
+                : new Promise<void>((resolve) => {
+                    image.addEventListener("load", () => resolve(), { once: true });
+                    image.addEventListener("error", () => resolve(), { once: true });
+                  }),
+            ),
+          ).then(() => {
+            if (!cancelled) window.print();
+          });
+        }, 300);
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError((error as Error).message);
+      });
+    return () => {
+      cancelled = true;
+      if (printTimer) clearTimeout(printTimer);
+    };
   }, []);
 
-  if (!items) return <p style={{ fontFamily: "monospace", padding: 24 }}>読込中…</p>;
+  if (loadError) {
+    return <p style={{ fontFamily: "monospace", padding: 24 }}>読込に失敗しました: {loadError}</p>;
+  }
+  if (!items) {
+    return (
+      <p style={{ fontFamily: "monospace", padding: 24 }}>
+        読込中…{itemsLoaded > 0 ? ` ${itemsLoaded}件` : ""}
+      </p>
+    );
+  }
 
   return (
     <div style={{ padding: 24, background: "#fff", color: "#000", minHeight: "100vh" }}>

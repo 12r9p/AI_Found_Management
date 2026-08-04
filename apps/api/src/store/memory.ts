@@ -17,6 +17,15 @@ import {
   newId,
 } from "./store.ts";
 import { DuplicateDisplayIdError } from "./errors.ts";
+import {
+  compareItemsNewestFirst,
+  isItemAfterCursor,
+  normalizeItemPageLimit,
+  parseItemCursor,
+  toItemPage,
+  type ItemListOptions,
+  type ItemPage,
+} from "./item-pagination.ts";
 
 /**
  * インメモリ実装。D1/Vectorize バインディング未設定時の既定。
@@ -112,8 +121,12 @@ export class MemoryStore implements Store {
   async getItem(id: string): Promise<Item | null> {
     return this.items.find((i) => i.id === id) ?? null;
   }
-  async listItems(filters: SearchFilters): Promise<Item[]> {
-    return applyItemFilters(this.items, filters).slice(0, filters.limit ?? 500);
+  async listItems(filters: SearchFilters, options: ItemListOptions = {}): Promise<ItemPage> {
+    const limit = normalizeItemPageLimit(options.limit);
+    const cursor = options.cursor ? parseItemCursor(options.cursor) : null;
+    const items = applyItemFilters(this.items, filters).sort(compareItemsNewestFirst);
+    const remaining = cursor ? items.filter((item) => isItemAfterCursor(item, cursor)) : items;
+    return toItemPage(remaining.slice(0, limit + 1), limit);
   }
   async updateItem(id: string, patch: Partial<Item>): Promise<Item | null> {
     const it = this.items.find((i) => i.id === id);
