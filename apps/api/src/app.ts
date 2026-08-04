@@ -175,10 +175,14 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         set.status = 503;
         return { error: error.code, applied: error.applied };
       }
-      const status = code === "NOT_FOUND" ? 404 : 500;
-      set.status = status;
-      console.error("[api error]", code, (error as Error)?.message);
-      return { error: (error as Error)?.message ?? "internal error", code };
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(JSON.stringify({ event: "api_error", code, error: message }));
+      if (code === "NOT_FOUND") {
+        set.status = 404;
+        return { error: "not_found" };
+      }
+      set.status = 500;
+      return { error: "internal_error" };
     })
     .use(
       cors({

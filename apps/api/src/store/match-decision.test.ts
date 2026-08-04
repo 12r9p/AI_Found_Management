@@ -1,5 +1,5 @@
 import { Database, type SQLQueryBindings } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { AIProvider } from "../ai/provider.ts";
 import { createApp } from "../app.ts";
 import { resolveConfig } from "../config.ts";
@@ -533,6 +533,28 @@ test("D1の非競合batch障害はconfirmation_conflictへ変換しない", asyn
     );
     expect(await store.getMatch(secondMatch.id)).toMatchObject({ status: "pending" });
   } finally {
+    fixture.close();
+  }
+});
+
+test("D1の非競合batch障害はAPIの500本文へ詳細を漏らさない", async () => {
+  const fixture = storeFactories[1][1]();
+  const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const { store, db } = fixture;
+    const app = createApp(async () => contextFor(store));
+    const { firstMatch } = await seedDecisionScenario(store);
+    db!.batchError = new Error("D1_ERROR: database unavailable near UPDATE matches");
+
+    const response = await patchMatch(app, firstMatch.id, { status: "confirmed" });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "internal_error" });
+    expect(
+      errorSpy.mock.calls.some(([message]) => String(message).includes("database unavailable")),
+    ).toBe(true);
+  } finally {
+    errorSpy.mockRestore();
     fixture.close();
   }
 });
