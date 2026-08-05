@@ -557,13 +557,13 @@ for (const [storeName, createStore] of storeFactories) {
         expect(
           await fixture.store.getInquiry(scenario.inquiryWithRemainingConfirmedMatch.id),
         ).toMatchObject({
-          status: "resolved",
+          status: "contacted",
           matched_item_id: scenario.confirmedItem.id,
         });
         expect(
           await fixture.store.getInquiry(scenario.inquiryWithRemainingPendingMatch.id),
         ).toMatchObject({
-          status: "matched",
+          status: "resolved",
           matched_item_id: null,
         });
         expect(await fixture.store.getInquiry(scenario.openInquiry.id)).toMatchObject({
@@ -571,7 +571,7 @@ for (const [storeName, createStore] of storeFactories) {
           matched_item_id: null,
         });
         expect(await fixture.store.getInquiry(scenario.directReferenceInquiry.id)).toMatchObject({
-          status: "open",
+          status: "resolved",
           matched_item_id: null,
         });
         expect(
@@ -692,7 +692,7 @@ test("Vectorize削除に失敗してもD1削除を維持し残りの問い合わ
     expect(fixture.itemsVectorize!.deletedIds).toContainEqual([scenario.targetItem.id]);
     expect(fixture.inquiriesVectorize!.upserts.at(-1)?.[0]?.metadata).toEqual({
       category: "",
-      status: "matched",
+      status: "resolved",
     });
     expect(
       errorSpy.mock.calls.some(([message]) => {

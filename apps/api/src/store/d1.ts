@@ -550,14 +550,15 @@ export class D1VectorizeStore implements Store {
       `WITH target(item_id) AS (VALUES (?))
        UPDATE inquiries
        SET status=CASE
-             WHEN status='closed' THEN 'closed'
+             -- 解決済みはスタッフの明示的な完了判断なので、候補の再判定で戻さない。
+             WHEN status IN ('closed', 'resolved') THEN status
              WHEN EXISTS (
                SELECT 1 FROM matches
                WHERE inquiry_id=inquiries.id
                  AND ((SELECT item_id FROM target) IS NULL
                       OR item_id<>(SELECT item_id FROM target))
                  AND status='confirmed'
-             ) THEN 'resolved'
+             ) THEN 'contacted'
              WHEN EXISTS (
                SELECT 1 FROM matches
                WHERE inquiry_id=inquiries.id
