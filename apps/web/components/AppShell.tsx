@@ -3,15 +3,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
+import { ADMIN_TABS, adminTabHref, requestAdminTab } from "../lib/adminTabs";
 import { Button, ThemeToggle } from "./ui";
 import { NotificationsPopup } from "./NotificationsPopup";
 
-const NAV = [
+const PRIMARY_NAV = [
   { href: "/register", label: "登録" },
   { href: "/search", label: "探す" },
   { href: "/matches", label: "照合" },
-  { href: "/admin", label: "管理" },
 ];
+
+// トップバーは横幅が限られるので、管理はタブを畳んで1項目として見せる。
+// メニュー側は縦に伸ばせるので「管理」を見出しにしてタブを直接並べる
+// （「管理」と「設定」が同列だと、設定が管理の中にあることが読み取れない）。
+const NAV = [...PRIMARY_NAV, { href: "/admin", label: "管理" }];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -130,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="rb-menu__label">表示</span>
                 <ThemeToggle />
                 <span className="rb-menu__label">メニュー</span>
-                {NAV.map((n) => (
+                {PRIMARY_NAV.map((n) => (
                   <Link
                     key={n.href}
                     href={n.href}
@@ -140,9 +145,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     {n.label}
                   </Link>
                 ))}
-                <Link href="/admin#settings" role="menuitem" onClick={() => setMenuOpen(false)}>
-                  設定
-                </Link>
+                <span className="rb-menu__label">管理</span>
+                {ADMIN_TABS.map((t) => (
+                  <Link
+                    key={t.id}
+                    href={adminTabHref(t.id)}
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      requestAdminTab(t.id);
+                    }}
+                  >
+                    {t.label}
+                  </Link>
+                ))}
               </div>
             )}
           </div>
