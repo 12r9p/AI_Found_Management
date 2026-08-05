@@ -14,12 +14,12 @@ light/dark 対応）で、夏の屋外運用でも視認しやすいことを重
 ```
 apps/
   api/   Elysia (Cloudflare Workers / Bun)  … REST API・AI・照合・ストレージ
-  web/   Next.js 15 (Cloudflare Workers, OpenNext) … 登録/探す/照合/管理
+  web/   Next.js 16 (Cloudflare Workers, OpenNext) … 登録/探す/照合/管理
 ```
 
 | 層         | 採用                               | 備考                                                                                                                                                                                                                                                                                          |
 | ---------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| フロント   | **Next.js 15**（App Router）       | Workers に OpenNext でデプロイ。API と分離。                                                                                                                                                                                                                                                  |
+| フロント   | **Next.js 16**（App Router）       | Workers に OpenNext でデプロイ。API と分離。                                                                                                                                                                                                                                                  |
 | API        | **Elysia**                         | Bun ローカル / Workers 両対応（`src/index.ts` と `src/worker.ts`）。                                                                                                                                                                                                                          |
 | インフラ   | **Cloudflare Workers**             | フロントと API を別 Worker として分離デプロイ。                                                                                                                                                                                                                                               |
 | DB         | **D1 + Vectorize**                 | D1 が行データ（source of truth）、Vectorize が埋め込みの近似最近傍検索（items/inquiries で2インデックス）。バインディング未設定時（素の `bun run dev:api` 等）は**インメモリ**で起動（外部依存ゼロでデモ可）。ローカルでは `apps/api/.data/store.json` に自動保存され、再起動しても消えない。 |
@@ -80,7 +80,7 @@ apps/
 
 ```bash
 bun install            # ルートで（workspaces）
-bun run dev            # API(:8787) と Web(:3000) を同時起動
+bun run dev            # Cloudflare API 開発 (cf-dev:api) と Web (:3000) を同時起動
 ```
 
 別ターミナルでデモデータ投入（API 起動後）:
@@ -90,16 +90,15 @@ bun run seed
 ```
 
 - Web: http://localhost:3000
-- API health: http://localhost:8787/api/health → `store: memory, ai: mock`
+- API health: http://localhost:8787/api/health
 
-> 素の `bun run dev:api`（Bun ランタイム）は D1/Vectorize バインディングに到達できず常にインメモリで動きます。
-> D1+Vectorize を実際に使う動作確認は `wrangler dev`（Miniflare のローカルバインディング）または
-> デプロイ後の環境で行ってください（下記デプロイ手順参照）。
+> ルートの `bun run dev` は Cloudflare API 開発（`cf-dev:api`）と Web 開発を同時起動します。単体の `bun run dev:api`（Bun ランタイム）は D1/Vectorize バインディングを使用せずインメモリで動作します。
 
-テスト:
+テスト・検証:
 
 ```bash
 bun test               # ベクトル・照合ロジックのユニットテスト
+bun run check          # リント、フォーマット、型チェック、テスト、ビルドの一括検証
 ```
 
 ---
@@ -120,9 +119,9 @@ bun test               # ベクトル・照合ロジックのユニットテス�
 
 ### DB 準備（D1 + Vectorize）
 
-D1 のスキーマは `wrangler d1 migrations` で適用します（`apps/api/migrations/0001_init.sql`）。
+D1 のスキーマは `bun run migrate:local`（ローカル）または `bun run migrate:remote`（リモート）で適用します（`apps/api/migrations/0001_init.sql`）。
 Vectorize インデックス（`found-items`/`found-inquiries`）は別途作成が必要です。手順は
-下記デプロイ手順を参照。`bun run migrate` は適用済みかどうかの案内を表示するだけです。
+下記デプロイ手順を参照。
 
 ---
 
