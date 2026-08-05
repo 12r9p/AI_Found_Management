@@ -162,6 +162,71 @@ async function safeEmbed(ai: AppContext["ai"], text: string): Promise<number[]> 
   }
 }
 
+/**
+ * 編集内容は先にD1へ保存し、時間のかかる埋め込み・Vectorize同期・再照合は
+ * レスポンス送出後に行う。処理失敗は保存済みデータをロールバックしない。
+ */
+async function refreshItemVector(c: AppContext, id: string, shouldEmbed: boolean): Promise<void> {
+  const item = await c.store.getItem(id);
+  if (!item) return;
+
+  if (!shouldEmbed) {
+    await c.store.updateItem(id, { status: item.status });
+    return;
+  }
+
+  const embedding = await safeEmbed(c.ai, itemEmbedText(item));
+  if (!embedding.length) {
+    await c.store.updateItem(id, {
+      status: item.status,
+      category: item.category,
+      ai_status: "error",
+    });
+    return;
+  }
+
+  const updated = await c.store.updateItem(id, { embedding, ai_status: "ready" });
+  if (updated?.status === "stored") {
+    updated.embedding = embedding;
+    await matchNewItem(c.store, updated, c.cfg.matchThreshold);
+  }
+}
+
+async function refreshInquiryVector(
+  c: AppContext,
+  id: string,
+  shouldEmbed: boolean,
+): Promise<void> {
+  const inquiry = await c.store.getInquiry(id);
+  if (!inquiry) return;
+
+  if (!shouldEmbed) {
+    await c.store.updateInquiry(id, { status: inquiry.status });
+    return;
+  }
+
+  const embedding = await safeEmbed(c.ai, inquiryEmbedText(inquiry));
+  await c.store.updateInquiry(
+    id,
+    embedding.length ? { embedding } : { status: inquiry.status, category: inquiry.category },
+  );
+}
+
+function runAfterSave(task: Promise<void>, entity: "item" | "inquiry", id: string): void {
+  waitUntil(
+    task.catch((error) => {
+      console.error(
+        JSON.stringify({
+          event: "post_save_vector_refresh_failed",
+          entity,
+          id,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }),
+  );
+}
+
 export function createApp(resolveContext: () => Promise<AppContext> = defaultContext) {
   const ctx = resolveContext;
   // aot(実行時コード生成)は Cloudflare Workers のサンドボックスで禁止されているため無効化。
@@ -495,24 +560,10 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         "found_location",
         "notes",
       ]);
-      let embedding: number[] | undefined;
-      let ai_status: typeof existing.ai_status | undefined;
-      if (touchesFeatures) {
-        embedding = await safeEmbed(c.ai, itemEmbedText({ ...existing, ...patch }));
-        // 再埋め込みが成功したら「AI解析失敗」表示を解除する（以前は失敗時しか
-        // ai_status を書き換えず、再解析→保存が成功しても error のまま残っていた）。
-        ai_status = embedding.length ? "ready" : "error";
-        if (!embedding.length) embedding = undefined;
-      }
-      const updated = await c.store.updateItem(params.id, {
-        ...patch,
-        ...(embedding ? { embedding } : {}),
-        ...(ai_status ? { ai_status } : {}),
-      });
-      if (updated && embedding) {
-        updated.embedding = embedding;
-        if (updated.status === "stored") await matchNewItem(c.store, updated, c.cfg.matchThreshold);
-      }
+      // 永続データの書き込み成功をもって応答する。埋め込み・Vectorize同期は
+      // Workerのバックグラウンド処理へ分離し、編集モーダルを待たせない。
+      const updated = await c.store.updateItem(params.id, patch, { syncVector: false });
+      runAfterSave(refreshItemVector(c, params.id, touchesFeatures), "item", params.id);
       return { item: updated };
     })
     .delete("/api/items/:id", async ({ params }) => {
@@ -689,16 +740,8 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       delete patch.embedding;
       // categoryは埋め込み本文にも含まれるため、同値の再試行を含めて再埋め込みする。
       const touches = touchesAnyField(patch, ["category", "color", "description", "tags", "notes"]);
-      let embedding: number[] | undefined;
-      if (touches) {
-        // 失敗しても他フィールドの編集は保存する（埋め込みだけ古いまま据え置く）。
-        const e = await safeEmbed(c.ai, inquiryEmbedText({ ...existing, ...patch }));
-        if (e.length) embedding = e;
-      }
-      const updated = await c.store.updateInquiry(params.id, {
-        ...patch,
-        ...(embedding ? { embedding } : {}),
-      });
+      const updated = await c.store.updateInquiry(params.id, patch, { syncVector: false });
+      runAfterSave(refreshInquiryVector(c, params.id, touches), "inquiry", params.id);
       return { inquiry: updated };
     })
     .delete("/api/inquiries/:id", async ({ params }) => {

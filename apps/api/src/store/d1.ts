@@ -14,6 +14,7 @@ import {
   type MatchBulkEntry,
   type MatchDecision,
   type MatchDecisionResult,
+  type UpdateOptions,
   VectorMetadataSyncError,
   nowIso,
   newId,
@@ -165,7 +166,11 @@ export class D1VectorizeStore implements Store {
       .all();
     return toItemPage((results as any[]).map(rowToItem), limit);
   }
-  async updateItem(id: string, patch: Partial<Item>): Promise<Item | null> {
+  async updateItem(
+    id: string,
+    patch: Partial<Item>,
+    options: UpdateOptions = {},
+  ): Promise<Item | null> {
     const { set, params } = buildSet(patch, ITEM_FIELDS);
     let row: any;
     if (!set) {
@@ -181,7 +186,7 @@ export class D1VectorizeStore implements Store {
       }
     }
     if (!row) return null;
-    if (patch.embedding && patch.embedding.length) {
+    if (options.syncVector !== false && patch.embedding && patch.embedding.length) {
       // metadata は upsert のたびに丸ごと差し替わるため、patch の断片ではなく
       // 更新後の行全体(row)から現在値を組み立てる(そうしないと今回patchに
       // 含まれなかった方のフィールドのメタデータが消えてしまう)。
@@ -192,7 +197,10 @@ export class D1VectorizeStore implements Store {
         patch.embedding,
         vectorMetadata(row),
       );
-    } else if (patch.status !== undefined || patch.category !== undefined) {
+    } else if (
+      options.syncVector !== false &&
+      (patch.status !== undefined || patch.category !== undefined)
+    ) {
       await this.syncAppliedVectorMetadata("item", this.vectorizeItems, id);
     }
     return rowToItem(row);
@@ -355,7 +363,11 @@ export class D1VectorizeStore implements Store {
       : await this.db.prepare(`SELECT ${INQ_COLS} FROM inquiries ORDER BY created_at DESC`).all();
     return (results as any[]).map(rowToInquiry);
   }
-  async updateInquiry(id: string, patch: Partial<Inquiry>): Promise<Inquiry | null> {
+  async updateInquiry(
+    id: string,
+    patch: Partial<Inquiry>,
+    options: UpdateOptions = {},
+  ): Promise<Inquiry | null> {
     const { set, params } = buildSet(patch, INQ_FIELDS);
     let row: any;
     if (!set) {
@@ -367,7 +379,7 @@ export class D1VectorizeStore implements Store {
         .first();
     }
     if (!row) return null;
-    if (patch.embedding && patch.embedding.length) {
+    if (options.syncVector !== false && patch.embedding && patch.embedding.length) {
       await this.upsertAppliedVector(
         "inquiry",
         this.vectorizeInquiries,
@@ -375,7 +387,10 @@ export class D1VectorizeStore implements Store {
         patch.embedding,
         vectorMetadata(row),
       );
-    } else if (patch.status !== undefined || patch.category !== undefined) {
+    } else if (
+      options.syncVector !== false &&
+      (patch.status !== undefined || patch.category !== undefined)
+    ) {
       await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, id);
     }
     return rowToInquiry(row);

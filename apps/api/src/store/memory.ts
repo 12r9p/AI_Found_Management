@@ -15,6 +15,7 @@ import {
   type MatchBulkEntry,
   type MatchDecision,
   type MatchDecisionResult,
+  type UpdateOptions,
   nowIso,
   newId,
 } from "./store.ts";
@@ -130,7 +131,11 @@ export class MemoryStore implements Store {
     const remaining = cursor ? items.filter((item) => isItemAfterCursor(item, cursor)) : items;
     return toItemPage(remaining.slice(0, limit + 1), limit);
   }
-  async updateItem(id: string, patch: Partial<Item>): Promise<Item | null> {
+  async updateItem(
+    id: string,
+    patch: Partial<Item>,
+    _options?: UpdateOptions,
+  ): Promise<Item | null> {
     const it = this.items.find((i) => i.id === id);
     if (!it) return null;
     if (patch.display_id !== undefined) {
@@ -204,7 +209,11 @@ export class MemoryStore implements Store {
   async listInquiries(status?: string): Promise<Inquiry[]> {
     return status ? this.inquiries.filter((i) => i.status === status) : this.inquiries;
   }
-  async updateInquiry(id: string, patch: Partial<Inquiry>): Promise<Inquiry | null> {
+  async updateInquiry(
+    id: string,
+    patch: Partial<Inquiry>,
+    _options?: UpdateOptions,
+  ): Promise<Inquiry | null> {
     const inq = this.inquiries.find((i) => i.id === id);
     if (!inq) return null;
     Object.assign(inq, clean(patch), { id, updated_at: nowIso() });
