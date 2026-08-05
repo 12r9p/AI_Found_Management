@@ -9,20 +9,21 @@ import { ItemsTable } from "../../components/ItemsTable";
 import { InquiriesTab } from "../../components/admin/InquiriesTab";
 import { SettingsTab } from "../../components/admin/SettingsTab";
 import { api, type ItemCursor } from "../../lib/api";
+import {
+  ADMIN_TABS,
+  ADMIN_TAB_EVENT,
+  adminTabHref,
+  isAdminTab,
+  type AdminTab,
+} from "../../lib/adminTabs";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
-type Tab = "items" | "inquiries" | "settings";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "items", label: "物品一覧" },
-  { id: "inquiries", label: "問い合わせ" },
-  { id: "settings", label: "設定" },
-];
 const ITEM_PAGE_SIZE = 100;
 
 export default function AdminPage() {
   const meta = useMeta();
   const presets = useLocationPresets();
-  const [tab, setTab] = usePersistentState<Tab>("admin:tab", "items");
+  const [tab, setTab] = usePersistentState<AdminTab>("admin:tab", "items");
   const [filters, setFilters] = usePersistentState("admin:filters", {
     category: "",
     status: "",
@@ -74,15 +75,25 @@ export default function AdminPage() {
     return () => clearInterval(t);
   }, [items, loadItems]);
 
-  // ハッシュからのタブ遷移（ハンバーガーメニューの「設定」など）
+  // メニューからのタブ遷移。別ページから来たときはマウント時のハッシュで足りるが、
+  // すでに /admin にいる場合、ハッシュだけの遷移は Next が pushState で処理するため
+  // hashchange が発火しない。メニュー側から飛ぶ明示イベントで補う（lib/adminTabs.ts）。
   useEffect(() => {
     const fromHash = () => {
-      const h = location.hash.replace("#", "") as Tab;
-      if (TABS.some((t) => t.id === h)) setTab(h);
+      const h = location.hash.replace("#", "");
+      if (isAdminTab(h)) setTab(h);
+    };
+    const fromEvent = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail;
+      if (isAdminTab(t)) setTab(t);
     };
     fromHash();
     window.addEventListener("hashchange", fromHash);
-    return () => window.removeEventListener("hashchange", fromHash);
+    window.addEventListener(ADMIN_TAB_EVENT, fromEvent);
+    return () => {
+      window.removeEventListener("hashchange", fromHash);
+      window.removeEventListener(ADMIN_TAB_EVENT, fromEvent);
+    };
   }, [setTab]);
 
   const csvHref = api.csvUrl(
@@ -114,9 +125,9 @@ export default function AdminPage() {
     setNextCursor(null);
   };
 
-  const selectTab = (t: Tab) => {
+  const selectTab = (t: AdminTab) => {
     setTab(t);
-    history.replaceState(null, "", `/admin#${t}`);
+    history.replaceState(null, "", adminTabHref(t));
   };
 
   return (
@@ -126,7 +137,7 @@ export default function AdminPage() {
           <h2>管理コンソール</h2>
         </div>
         <div className="rb-nav">
-          {TABS.map((t) => (
+          {ADMIN_TABS.map((t) => (
             <a
               key={t.id}
               href={`#${t.id}`}
