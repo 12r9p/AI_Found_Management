@@ -13,3 +13,5 @@ out/
 apps/api/.data/
 coverage/
 *.tsbuildinfo
+
+AGENTS.md
