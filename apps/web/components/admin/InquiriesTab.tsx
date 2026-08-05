@@ -24,6 +24,7 @@ const STATUS_FILTERS = [
   { id: "", label: "すべて" },
   { id: "open", label: "未解決" },
   { id: "matched", label: "候補あり" },
+  { id: "contacted", label: "連絡済" },
   { id: "resolved", label: "解決" },
   { id: "closed", label: "取下げ" },
 ];
@@ -243,9 +244,11 @@ export function InquiriesTab() {
                         tone={
                           inq.status === "resolved"
                             ? "success"
-                            : inq.status === "open"
-                              ? "warning"
-                              : undefined
+                            : inq.status === "contacted"
+                              ? "info"
+                              : inq.status === "open"
+                                ? "warning"
+                                : undefined
                         }
                       >
                         {STATUS_LABEL[inq.status]}
@@ -385,9 +388,11 @@ function InquiryDetailModal({
                 tone={
                   inquiry.status === "resolved"
                     ? "success"
-                    : inquiry.status === "open"
-                      ? "warning"
-                      : undefined
+                    : inquiry.status === "contacted"
+                      ? "info"
+                      : inquiry.status === "open"
+                        ? "warning"
+                        : undefined
                 }
               >
                 {STATUS_LABEL[inquiry.status]}

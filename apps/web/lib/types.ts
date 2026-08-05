@@ -1,5 +1,5 @@
 export type ItemStatus = "stored" | "returned" | "disposed" | "transferred";
-export type InquiryStatus = "open" | "matched" | "resolved" | "closed";
+export type InquiryStatus = "open" | "matched" | "contacted" | "resolved" | "closed";
 export type MatchStatus = "pending" | "confirmed" | "rejected";
 
 export interface IdRule {
@@ -102,6 +102,7 @@ export const STATUS_LABEL: Record<string, string> = {
   transferred: "移管",
   open: "未解決",
   matched: "候補あり",
+  contacted: "連絡済",
   resolved: "解決",
   closed: "取下げ",
   pending: "確認待ち",

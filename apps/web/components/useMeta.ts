@@ -18,7 +18,7 @@ const FALLBACK: Meta = {
   ].map((name) => ({ name })),
   colors: ["黒", "白", "灰", "紺", "青", "赤", "茶", "緑", "その他"].map((name) => ({ name })),
   itemStatuses: ["stored", "returned", "disposed", "transferred"],
-  inquiryStatuses: ["open", "matched", "resolved", "closed"],
+  inquiryStatuses: ["open", "matched", "contacted", "resolved", "closed"],
 };
 
 export function useMeta(): Meta {

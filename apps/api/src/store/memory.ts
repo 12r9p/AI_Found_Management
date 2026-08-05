@@ -294,9 +294,10 @@ export class MemoryStore implements Store {
   private recomputeInquiryState(inquiry: Inquiry, updatedAt: string): void {
     const related = this.matches.filter((candidate) => candidate.inquiry_id === inquiry.id);
     const confirmed = related.find((candidate) => candidate.status === "confirmed");
-    if (inquiry.status !== "closed") {
+    // 解決済みはスタッフの明示的な完了判断なので、候補の再判定で戻さない。
+    if (inquiry.status !== "closed" && inquiry.status !== "resolved") {
       inquiry.status = confirmed
-        ? "resolved"
+        ? "contacted"
         : related.some((candidate) => candidate.status === "pending")
           ? "matched"
           : "open";

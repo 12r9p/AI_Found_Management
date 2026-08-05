@@ -264,7 +264,7 @@ for (const [storeName, createStore] of storeFactories) {
           match: { id: firstMatch.id, status: "confirmed" },
           inquiry: {
             id: inquiry.id,
-            status: "resolved",
+            status: "contacted",
             matched_item_id: firstItem.id,
           },
         });
@@ -273,7 +273,7 @@ for (const [storeName, createStore] of storeFactories) {
         expect(repeated).toMatchObject({
           ok: true,
           match: { status: "confirmed" },
-          inquiry: { status: "resolved", matched_item_id: firstItem.id },
+          inquiry: { status: "contacted", matched_item_id: firstItem.id },
         });
 
         const reversed = await store.decideMatch(firstMatch.id, "rejected");
@@ -291,7 +291,7 @@ for (const [storeName, createStore] of storeFactories) {
         const confirmedAgain = await store.decideMatch(firstMatch.id, "confirmed");
         expect(confirmedAgain).toMatchObject({
           ok: true,
-          inquiry: { status: "resolved", matched_item_id: firstItem.id },
+          inquiry: { status: "contacted", matched_item_id: firstItem.id },
         });
       } finally {
         fixture.close();
@@ -322,14 +322,14 @@ for (const [storeName, createStore] of storeFactories) {
         const rejectedOther = await store.decideMatch(secondMatch.id, "rejected");
         expect(rejectedOther).toMatchObject({
           ok: true,
-          inquiry: { status: "resolved", matched_item_id: firstItem.id },
+          inquiry: { status: "contacted", matched_item_id: firstItem.id },
         });
 
         await store.decideMatch(firstMatch.id, "rejected");
         const switched = await store.decideMatch(secondMatch.id, "confirmed");
         expect(switched).toMatchObject({
           ok: true,
-          inquiry: { status: "resolved", matched_item_id: secondItem.id },
+          inquiry: { status: "contacted", matched_item_id: secondItem.id },
         });
       } finally {
         fixture.close();
@@ -354,7 +354,7 @@ for (const [storeName, createStore] of storeFactories) {
         expect(
           (await store.listMatches()).filter((match) => match.status === "confirmed"),
         ).toHaveLength(1);
-        expect(await store.getInquiry(inquiry.id)).toMatchObject({ status: "resolved" });
+        expect(await store.getInquiry(inquiry.id)).toMatchObject({ status: "contacted" });
       } finally {
         fixture.close();
       }
@@ -372,6 +372,27 @@ for (const [storeName, createStore] of storeFactories) {
         expect(result).toMatchObject({
           ok: true,
           inquiry: { status: "closed", matched_item_id: firstItem.id },
+        });
+      } finally {
+        fixture.close();
+      }
+    });
+
+    test("解決済み問い合わせの再判断後もstatusをresolvedに維持する", async () => {
+      const fixture = createStore();
+      try {
+        const { store } = fixture;
+        const { firstItem, inquiry, firstMatch } = await seedDecisionScenario(store);
+        await store.updateInquiry(inquiry.id, {
+          status: "resolved",
+          matched_item_id: firstItem.id,
+        });
+
+        const result = await store.decideMatch(firstMatch.id, "confirmed");
+
+        expect(result).toMatchObject({
+          ok: true,
+          inquiry: { status: "resolved", matched_item_id: firstItem.id },
         });
       } finally {
         fixture.close();
@@ -398,7 +419,7 @@ test("D1確定後に問い合わせベクトルの値を保ったまま現在状
       id: inquiry.id,
       values: [0.25, 0.75],
       namespace: "campus-a",
-      metadata: { category: "財布", status: "resolved" },
+      metadata: { category: "財布", status: "contacted" },
     });
   } finally {
     fixture.close();
@@ -479,7 +500,7 @@ test("PATCH成功時は更新後の照合結果と問い合わせを返す", asy
   expect(body.match).toMatchObject({ id: firstMatch.id, status: "confirmed" });
   expect(body.inquiry).toMatchObject({
     id: inquiry.id,
-    status: "resolved",
+    status: "contacted",
     matched_item_id: firstItem.id,
   });
 });
@@ -505,7 +526,7 @@ test("D1判断後のベクトル同期失敗は適用済み503とし、同じ判
     });
     expect(await store.getMatch(firstMatch.id)).toMatchObject({ status: "confirmed" });
     expect(await store.getInquiry(inquiry.id)).toMatchObject({
-      status: "resolved",
+      status: "contacted",
       matched_item_id: firstItem.id,
     });
 
@@ -514,7 +535,7 @@ test("D1判断後のベクトル同期失敗は適用済み503とし、同じ判
     expect(inquiriesVectorize!.upsertCalls).toBe(4);
     expect(inquiriesVectorize!.vectors.get(inquiry.id)?.metadata).toEqual({
       category: "財布",
-      status: "resolved",
+      status: "contacted",
     });
   } finally {
     fixture.close();

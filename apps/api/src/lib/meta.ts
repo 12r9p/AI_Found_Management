@@ -56,7 +56,7 @@ const DEFAULT_COLORS: MetaOption[] = [
 export const CATEGORIES = DEFAULT_CATEGORIES.map((o) => o.name);
 export const COLORS = DEFAULT_COLORS.map((o) => o.name);
 export const ITEM_STATUSES = ["stored", "returned", "disposed", "transferred"];
-export const INQUIRY_STATUSES = ["open", "matched", "resolved", "closed"];
+export const INQUIRY_STATUSES = ["open", "matched", "contacted", "resolved", "closed"];
 
 const HEX_RE = /^#[0-9a-fA-F]{3,8}$/;
 

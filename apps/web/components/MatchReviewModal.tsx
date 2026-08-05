@@ -36,7 +36,7 @@ export function MatchReviewModal({
       title: status === "confirmed" ? "一致の確定" : "不一致の確認",
       body:
         status === "confirmed"
-          ? `この遺失物を受付No: ${inquiry?.reference_no || "—"} の問い合わせと一致として確定します。\n問い合わせは「解決」になります。`
+          ? `この遺失物を受付No: ${inquiry?.reference_no || "—"} の問い合わせと一致として確定します。\n問い合わせは「連絡済」になります。`
           : `この組み合わせを不一致として処理します。\n以後この組み合わせでは通知されません。`,
       danger: status === "rejected",
       okLabel: status === "confirmed" ? "一致を確定" : "不一致にする",
@@ -45,7 +45,12 @@ export function MatchReviewModal({
     setBusy(true);
     try {
       await api.updateMatch(match.id, status);
-      toast(status === "confirmed" ? "一致を確定しました" : "不一致として処理しました", "success");
+      toast(
+        status === "confirmed"
+          ? "一致を確定し、連絡済みに更新しました"
+          : "不一致として処理しました",
+        "success",
+      );
       onDecided();
       onClose();
     } catch (e) {

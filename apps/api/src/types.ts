@@ -9,6 +9,7 @@ export type ItemStatus =
 export type InquiryStatus =
   | "open" // 未解決（照合待ち）
   | "matched" // 候補あり
+  | "contacted" // 一致確認後、問い合わせ元へ連絡済み
   | "resolved" // 解決
   | "closed"; // 取り下げ
 
