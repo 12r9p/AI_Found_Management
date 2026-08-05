@@ -39,6 +39,8 @@ export default function RegisterPage() {
   // タップした位置がプリセットの塗りつぶしエリア内なら自動でセットされる。
   // エリア外をタップした場合は対応するプリセットが無いので空に戻る。
   const [foundLocation, setFoundLocation] = usePersistentState("register:foundLocation", "");
+  // 保管場所は拠点内で連続して登録する間は変わりにくいため、登録画面を閉じても保持する。
+  const [storageLocation, setStorageLocation] = usePersistentState("register:storageLocation", "");
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -71,13 +73,24 @@ export default function RegisterPage() {
     setKeys([]);
   };
 
-  const hasDraft = keys.length > 0 || !!form.notes || !!form.found_at || !!foundLocation || pin;
+  const hasDraft =
+    keys.length > 0 ||
+    !!form.notes ||
+    !!form.found_at ||
+    !!foundLocation ||
+    !!storageLocation ||
+    pin;
 
-  const resetAll = () => {
+  const resetDraft = () => {
     setForm({ ...EMPTY });
     setKeys([]);
     setPin(null);
     setFoundLocation("");
+  };
+
+  const resetAll = () => {
+    resetDraft();
+    setStorageLocation("");
   };
 
   /** 登録直後のトースト。押し直せる猶予として編集導線を残す。 */
@@ -94,7 +107,7 @@ export default function RegisterPage() {
     setResult(null);
     if (!saved) return;
     notifyRegistered(saved);
-    resetAll();
+    resetDraft();
     window.scrollTo({ top: 0 });
   };
 
@@ -129,9 +142,15 @@ export default function RegisterPage() {
         toast("拾得日時は必須です", "error");
         return;
       }
+      const normalizedStorageLocation = storageLocation.trim();
+      if (!normalizedStorageLocation) {
+        toast("保管場所は必須です", "error");
+        return;
+      }
 
       const item = await api.createItem({
         found_at: foundAt,
+        storage_location: normalizedStorageLocation,
         found_location: foundLocation,
         found_x: pin?.x ?? null,
         found_y: pin?.y ?? null,
@@ -239,6 +258,16 @@ export default function RegisterPage() {
       </Card>
 
       <Card variant="bordered">
+        <Field label="保管場所" hint="棚・受付・倉庫など。次の登録にも引き継がれます" required>
+          {(id) => (
+            <Input
+              id={id}
+              value={storageLocation}
+              onChange={(e) => setStorageLocation(e.target.value)}
+              placeholder="例: 本部テント・棚A"
+            />
+          )}
+        </Field>
         <Field label="拾得日時" required>
           {(id) => (
             <>

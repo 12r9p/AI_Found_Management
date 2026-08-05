@@ -283,6 +283,7 @@ class SqliteD1 implements Pick<D1Database, "prepare" | "batch"> {
 
   constructor() {
     applyReferentialIntegrityMigration(this.sqlite);
+    this.sqlite.exec(migration("0006_add_storage_location.sql"));
   }
 
   prepare(query: string): D1PreparedStatement {

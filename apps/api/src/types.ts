@@ -26,6 +26,7 @@ export interface Item {
   category: string; // 種別（例: 財布, 傘, スマホ）
   color: string;
   brand: string;
+  storage_location: string; // 現物の保管場所（複数拠点対応）
   found_location: string; // 拾得場所（エリア名などの補助ラベル）
   found_at: string | null; // 拾得日時 (ISO)
   map_key: string; // 地図画像の R2 キー（拾得場所ピン用）
