@@ -418,11 +418,18 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         set.status = 400;
         return { error: "image_required" };
       }
+      const storage_location =
+        typeof b.storage_location === "string" ? b.storage_location.trim() : "";
+      if (!storage_location) {
+        set.status = 400;
+        return { error: "storage_location_required" };
+      }
       const draft = {
         status: b.status ?? "stored",
         category: b.category ?? "",
         color: b.color ?? "",
         brand: b.brand ?? "",
+        storage_location,
         found_location: b.found_location ?? "",
         found_at: b.found_at ?? null,
         map_key: b.map_key ?? "",
@@ -481,6 +488,14 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       const patch = { ...(body as any) };
       delete patch.id;
       delete patch.embedding; // 埋め込みは派生値。手編集させない
+      if (Object.hasOwn(patch, "storage_location")) {
+        patch.storage_location =
+          typeof patch.storage_location === "string" ? patch.storage_location.trim() : "";
+        if (!patch.storage_location) {
+          set.status = 400;
+          return { error: "storage_location_required" };
+        }
+      }
       // 埋め込み対象の項目を含むPATCHは、同値でも再埋め込みする。
       // D1更新後にVectorize upsertが失敗した場合、同じPATCHを再送して古いvector値を
       // 修復できる必要がある。categoryは埋め込み本文とmetadataの両方に含まれる。

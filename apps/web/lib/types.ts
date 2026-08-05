@@ -19,6 +19,7 @@ export interface Item {
   category: string;
   color: string;
   brand: string;
+  storage_location: string;
   found_location: string;
   found_at: string | null;
   map_key: string;

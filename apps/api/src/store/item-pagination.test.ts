@@ -217,6 +217,7 @@ function createD1Store(rows: { id: string; createdAt: string; category: string }
       category TEXT NOT NULL DEFAULT '',
       color TEXT NOT NULL DEFAULT '',
       brand TEXT NOT NULL DEFAULT '',
+      storage_location TEXT NOT NULL DEFAULT '',
       found_location TEXT NOT NULL DEFAULT '',
       found_at TEXT,
       map_key TEXT NOT NULL DEFAULT '',

@@ -96,9 +96,9 @@ export class D1VectorizeStore implements Store {
       row = await this.db
         .prepare(
           `INSERT INTO items
-          (id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y,
+          (id, display_id, status, category, color, brand, storage_location, found_location, found_at, map_key, found_x, found_y,
            image_keys, ai_description, tags, notes, ai_status, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          RETURNING ${ITEM_COLS}`,
         )
         .bind(
@@ -108,6 +108,7 @@ export class D1VectorizeStore implements Store {
           d.category ?? "",
           d.color ?? "",
           d.brand ?? "",
+          d.storage_location ?? "",
           d.found_location ?? "",
           d.found_at ?? null,
           d.map_key ?? "",
@@ -848,7 +849,7 @@ export class D1VectorizeStore implements Store {
 
 // ---- column lists & row mappers ----
 const ITEM_COLS =
-  "id, display_id, status, category, color, brand, found_location, found_at, map_key, found_x, found_y, image_keys, ai_description, tags, notes, ai_status, created_at, updated_at";
+  "id, display_id, status, category, color, brand, storage_location, found_location, found_at, map_key, found_x, found_y, image_keys, ai_description, tags, notes, ai_status, created_at, updated_at";
 const INQ_COLS =
   "id, status, description, category, color, ai_description, tags, reference_no, notes, matched_item_id, created_at, updated_at";
 const MATCH_COLS = "id, item_id, inquiry_id, score, status, direction, created_at";
@@ -863,6 +864,7 @@ const ITEM_FIELDS = [
   "category",
   "color",
   "brand",
+  "storage_location",
   "found_location",
   "found_at",
   "map_key",
@@ -907,6 +909,7 @@ function rowToItem(r: any): Item {
     category: r.category,
     color: r.color,
     brand: r.brand,
+    storage_location: r.storage_location ?? "",
     found_location: r.found_location,
     found_at: r.found_at ?? null,
     map_key: r.map_key ?? "",

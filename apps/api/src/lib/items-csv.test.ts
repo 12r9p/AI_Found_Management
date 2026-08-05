@@ -56,7 +56,7 @@ test("CSVストリームは同じ作成日時の1,001件を全ページ出力し
   const allLines = allText.trimEnd().split("\n");
   expect(allLines).toHaveLength(1_002);
   expect(allLines[0]).toBe(
-    "id,status,category,color,brand,found_location,map_pin,found_at,ai_description,tags,created_at",
+    "id,status,category,color,brand,storage_location,found_location,map_pin,found_at,ai_description,tags,created_at",
   );
   expect(Array.from(allBytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
   expect(allText).toContain('"Acme, ""Limited"""');

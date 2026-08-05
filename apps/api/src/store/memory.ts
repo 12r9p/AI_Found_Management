@@ -347,6 +347,7 @@ function blankItem(): Item {
     category: "",
     color: "",
     brand: "",
+    storage_location: "",
     found_location: "",
     found_at: null,
     map_key: "",

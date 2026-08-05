@@ -68,6 +68,8 @@ export function RegisteredModal({
         <div>
           <Card variant="muted">
             <div className="rb-small rb-mono">
+              保管場所: <strong>{item.storage_location || "—"}</strong>
+              <br />
               拾得日時:{" "}
               <strong>
                 {item.found_at ? new Date(item.found_at).toLocaleString("ja-JP") : "—"}

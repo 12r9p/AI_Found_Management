@@ -98,6 +98,7 @@ export function ItemEditModal({
         category: form.category,
         color: form.color,
         brand: form.brand,
+        storage_location: form.storage_location,
         found_location: form.found_location,
         found_at: form.found_at || null,
         found_x: pin?.x ?? null,
@@ -265,6 +266,15 @@ export function ItemEditModal({
                   id={id}
                   value={form.brand ?? ""}
                   onChange={(e) => set("brand", e.target.value)}
+                />
+              )}
+            </Field>
+            <Field label="保管場所" required>
+              {(id) => (
+                <Input
+                  id={id}
+                  value={form.storage_location ?? ""}
+                  onChange={(e) => set("storage_location", e.target.value)}
                 />
               )}
             </Field>
