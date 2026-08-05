@@ -717,15 +717,17 @@ button.map-box {
   user-select: none;
   pointer-events: none;
 }
-/* ピンは白黒基調に反転リングを重ね、地図の明暗どちらでも視認できるようにする */
+/* ピンは白黒基調に反転リングを重ね、地図の明暗どちらでも視認できるようにする。
+   タップ判定は .map-box 側が持つ（ピンは pointer-events:none）ので、大きさは
+   視認性だけで決めてよい。地図そのものを隠さないよう控えめに留める。 */
 .map-pin {
   position: absolute;
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   transform: translate(-50%, -50%);
   background: var(--error);
-  border: 3px solid var(--background);
-  outline: 2px solid var(--foreground);
+  border: 2px solid var(--background);
+  outline: 1px solid var(--foreground);
   pointer-events: none;
 }
 .map-pin::after {
@@ -733,10 +735,10 @@ button.map-box {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 34px;
-  height: 34px;
+  width: 22px;
+  height: 22px;
   transform: translate(-50%, -50%);
-  border: 2px solid var(--error);
+  border: 1px solid var(--error);
 }
 
 /* ---- Map regions (拾得場所プリセットの塗りつぶしエリア) ---- */
