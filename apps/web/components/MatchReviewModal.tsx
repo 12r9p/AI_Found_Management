@@ -46,7 +46,9 @@ export function MatchReviewModal({
     try {
       await api.updateMatch(match.id, status);
       toast(
-        status === "confirmed" ? "一致を確定し、連絡済みに更新しました" : "不一致として処理しました",
+        status === "confirmed"
+          ? "一致を確定し、連絡済みに更新しました"
+          : "不一致として処理しました",
         "success",
       );
       onDecided();

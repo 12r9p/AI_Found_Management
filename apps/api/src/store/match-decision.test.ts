@@ -382,7 +382,10 @@ for (const [storeName, createStore] of storeFactories) {
       try {
         const { store } = fixture;
         const { firstItem, inquiry, firstMatch } = await seedDecisionScenario(store);
-        await store.updateInquiry(inquiry.id, { status: "resolved", matched_item_id: firstItem.id });
+        await store.updateInquiry(inquiry.id, {
+          status: "resolved",
+          matched_item_id: firstItem.id,
+        });
 
         const result = await store.decideMatch(firstMatch.id, "confirmed");
 

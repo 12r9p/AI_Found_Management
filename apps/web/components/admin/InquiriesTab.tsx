@@ -246,9 +246,9 @@ export function InquiriesTab() {
                             ? "success"
                             : inq.status === "contacted"
                               ? "info"
-                            : inq.status === "open"
-                              ? "warning"
-                              : undefined
+                              : inq.status === "open"
+                                ? "warning"
+                                : undefined
                         }
                       >
                         {STATUS_LABEL[inq.status]}
@@ -390,9 +390,9 @@ function InquiryDetailModal({
                     ? "success"
                     : inquiry.status === "contacted"
                       ? "info"
-                    : inquiry.status === "open"
-                      ? "warning"
-                      : undefined
+                      : inquiry.status === "open"
+                        ? "warning"
+                        : undefined
                 }
               >
                 {STATUS_LABEL[inquiry.status]}
