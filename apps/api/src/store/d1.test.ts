@@ -9,6 +9,14 @@ import { D1VectorizeStore } from "./d1.ts";
 
 type StoredRow = Record<string, unknown>;
 
+async function eventually(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (predicate()) return;
+    await Bun.sleep(10);
+  }
+  throw new Error("バックグラウンド処理が期限内に完了しませんでした");
+}
+
 /** テスト対象のSQLだけをD1のメソッド形状で記録・実行するスタブ。 */
 class RecordingD1 implements Pick<D1Database, "prepare" | "batch"> {
   readonly items = new Map<string, StoredRow>();
@@ -408,7 +416,7 @@ test("bulkのD1確定後に一部のmetadata同期が失敗しても全matchを�
   }
 });
 
-test("埋め込み同期が3回失敗しても同値PATCHで古いvector値を修復できる", async () => {
+test("埋め込み同期の失敗は保存応答を止めず、後続編集でvectorを修復できる", async () => {
   const db = new RecordingD1();
   db.items.set("item-1", itemRow({ id: "item-1" }));
   const vectorize = new RecordingVectorize();
@@ -437,15 +445,16 @@ test("埋め込み同期が3回失敗しても同値PATCHで古いvector値を�
       body: JSON.stringify({ color: "茶" }),
     });
 
-  const failed = await app.fetch(request());
-  expect(failed.status).toBe(503);
-  expect(await failed.json()).toEqual({ error: "vector_metadata_sync_failed", applied: true });
+  const saved = await app.fetch(request());
+  expect(saved.status).toBe(200);
+  await eventually(() => vectorize.upsertCalls === 3);
   expect(vectorize.upsertCalls).toBe(3);
   expect(db.items.get("item-1")?.color).toBe("茶");
   expect(embedCalls).toBe(1);
 
   const retried = await app.fetch(request());
   expect(retried.status).toBe(200);
+  await eventually(() => vectorize.upsertCalls === 4);
   expect(vectorize.upsertCalls).toBe(4);
   expect(vectorize.vectors.get("item-1")?.values).toEqual([9, 9]);
   expect(vectorize.vectors.get("item-1")?.metadata).toEqual({
@@ -453,6 +462,46 @@ test("埋め込み同期が3回失敗しても同値PATCHで古いvector値を�
     status: "stored",
   });
   expect(embedCalls).toBe(2);
+});
+
+test("編集PATCHは埋め込み計算の完了を待たずに保存応答を返す", async () => {
+  const db = new RecordingD1();
+  db.items.set("item-1", itemRow({ id: "item-1" }));
+  const vectorize = new RecordingVectorize();
+  vectorize.vectors.set("item-1", { id: "item-1", values: [1, 0] });
+  let releaseEmbedding!: () => void;
+  const embeddingStarted = new Promise<void>((resolve) => {
+    releaseEmbedding = resolve;
+  });
+  const ai: AIProvider = {
+    name: "recording",
+    async describeImages() {
+      throw new Error("このテストでは使用しない");
+    },
+    async embed() {
+      await embeddingStarted;
+      return [9, 9];
+    },
+    async chat() {
+      return "";
+    },
+  };
+  const app = createApp(async () => contextFor(createStore(db, vectorize), ai));
+
+  const response = await app.fetch(
+    new Request("http://localhost/api/items/item-1", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ color: "茶" }),
+    }),
+  );
+
+  expect(response.status).toBe(200);
+  expect(db.items.get("item-1")?.color).toBe("茶");
+  expect(vectorize.upsertCalls).toBe(0);
+  releaseEmbedding();
+  await eventually(() => vectorize.upsertCalls === 1);
+  expect(vectorize.vectors.get("item-1")?.values).toEqual([9, 9]);
 });
 
 test("category変更は物品と問い合わせのsemantic embeddingも更新する", async () => {
@@ -496,6 +545,9 @@ test("category変更は物品と問い合わせのsemantic embeddingも更新す
 
   expect(itemResponse.status).toBe(200);
   expect(inquiryResponse.status).toBe(200);
+  await eventually(
+    () => embedTexts.length === 2 && inquiries.vectors.get("inquiry-1")?.values?.[1] === 9,
+  );
   expect(embedTexts).toHaveLength(2);
   expect(embedTexts[0]).toContain("カードケース");
   expect(embedTexts[1]).toContain("かばん");

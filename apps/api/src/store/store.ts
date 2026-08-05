@@ -18,6 +18,11 @@ export interface ScoredInquiry extends Inquiry {
   score: number;
 }
 
+/** 保存応答を先に返す必要がある経路では、Vectorize同期を後続処理へ分離する。 */
+export interface UpdateOptions {
+  syncVector?: boolean;
+}
+
 /** 突き合わせヒット1件分。match作成・関連通知・（あれば）問い合わせの状態更新をまとめて渡す。
  * ref_match_id は作成される match の id を実装側が自動で埋めるため呼び出し側は指定しない。 */
 export interface MatchBulkEntry {
@@ -60,7 +65,7 @@ export interface Store {
   createItem(data: NewItem): Promise<Item>;
   getItem(id: string): Promise<Item | null>;
   listItems(filters: SearchFilters, options?: ItemListOptions): Promise<ItemPage>;
-  updateItem(id: string, patch: Partial<Item>): Promise<Item | null>;
+  updateItem(id: string, patch: Partial<Item>, options?: UpdateOptions): Promise<Item | null>;
   /** 削除できた行を返す。外部resource cleanupはこの確定済みsnapshotを使用する。 */
   deleteItem(id: string): Promise<Item | null>;
   searchItems(embedding: number[], filters: SearchFilters): Promise<ScoredItem[]>;
@@ -69,7 +74,11 @@ export interface Store {
   createInquiry(data: NewInquiry): Promise<Inquiry>;
   getInquiry(id: string): Promise<Inquiry | null>;
   listInquiries(status?: string): Promise<Inquiry[]>;
-  updateInquiry(id: string, patch: Partial<Inquiry>): Promise<Inquiry | null>;
+  updateInquiry(
+    id: string,
+    patch: Partial<Inquiry>,
+    options?: UpdateOptions,
+  ): Promise<Inquiry | null>;
   deleteInquiry(id: string): Promise<boolean>;
   /** filters.status を渡すと（Vectorizeのメタデータインデックス作成済みなら）その状態の
    * 問い合わせだけをクエリ時点で絞り込む。未対応環境では黙って全件から絞り込む。 */
