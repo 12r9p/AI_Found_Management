@@ -15,12 +15,13 @@ export const adminTabHref = (tab: AdminTab) => `/admin#${tab}`;
 /**
  * メニューから管理ページへ「このタブを開け」と伝えるためのイベント名。
  *
- * ハッシュだけが変わる遷移を Next の App Router は onlyHashChange の早期リターンで
- * 処理し、URL の更新も history.pushState で行う（navigate-reducer.js / app-router.js）。
- * pushState は hashchange を発火しないので、すでに /admin にいる状態でメニューから
- * 別タブのリンクを押しても、ハッシュ監視だけではタブが切り替わらない。
- * 別ページからの遷移はマウント時にハッシュを読めば足りるが、同一ページ内は
- * このイベントで明示的に伝える必要がある。
+ * App Router は URL の更新を history.pushState で行い（app-router.js）、pushState は
+ * hashchange を発火しない。そのため、すでに /admin にいる状態でメニューから別タブの
+ * リンクを押しても、ハッシュ監視だけではタブが切り替わらない。
+ * 実測（Next 16.2.12）: /admin#items → /admin#settings の遷移で hashchange は0回。
+ *
+ * 別ページからの遷移はマウント時にハッシュを読めば足りるので、同一ページ内の
+ * 切替だけをこのイベントで明示的に伝える。
  */
 export const ADMIN_TAB_EVENT = "found:admin-tab";
 
