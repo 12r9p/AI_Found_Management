@@ -10,7 +10,7 @@
     "dev": "concurrently -n api,web -c cyan,magenta \"bun run cf-dev:api\" \"bun run dev:web\"",
     "dev:api": "bun run --cwd apps/api dev",
     "dev:web": "bun run --cwd apps/web dev",
-    "build": "bun run --cwd apps/api build && bun run --cwd apps/web cf:build",
+    "build": "bun run --cwd apps/api build && bun run --cwd apps/images build && bun run --cwd apps/web cf:build",
     "check": "bun run lint && bun run format:check && bun run typecheck && bun run test && bun run build",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
@@ -18,14 +18,17 @@
     "lint:fix": "oxlint --fix .",
     "seed": "bun run --cwd apps/api seed",
     "test": "bun test",
-    "typecheck": "bun run --cwd apps/api typecheck && bun run --cwd apps/web typecheck",
+    "typecheck": "bun run --cwd apps/api typecheck && bun run --cwd apps/images typecheck && bun run --cwd apps/web typecheck",
+    "dev:image": "bun run --cwd apps/images dev",
     "cf-dev:api": "bun run --cwd apps/api cf-dev",
     "cf-dev:web": "bun run --cwd apps/web cf:preview",
     "migrate:local": "bun run --cwd apps/api migrate:local",
     "migrate:remote": "bun run --cwd apps/api migrate:remote",
     "deploy:api": "bun run --cwd apps/api deploy",
     "deploy:web": "bun run --cwd apps/web cf:deploy",
-    "deploy": "bun run deploy:api && bun run deploy:web"
+    "build:image": "bun run --cwd apps/images build",
+    "deploy:image": "bun run --cwd apps/images deploy",
+    "deploy": "bun run deploy:image && bun run deploy:api && bun run deploy:web"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

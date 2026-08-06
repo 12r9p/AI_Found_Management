@@ -1,9 +1,9 @@
 "use client";
 import { Button as BaseButton } from "@base-ui/react/button";
 import { useEffect, useState } from "react";
-import { imageUrl } from "../lib/api";
 import { STATUS_LABEL, type Item, type Meta } from "../lib/types";
 import { Badge, Button, ColorSwatch } from "./ui";
+import { FoundImage } from "./FoundImage";
 import { ItemPreviewModal } from "./ItemPreviewModal";
 import { ItemEditModal } from "./ItemEditModal";
 
@@ -77,7 +77,7 @@ export function ItemsTable({
                         onClick={() => setPreview(it)}
                         aria-label={`${it.display_id || "物品"}の画像${index + 1}を表示`}
                       >
-                        <img src={imageUrl(k)} alt="" className="rb-cell-thumb" />
+                        <FoundImage imageKey={k} variant="thumb" alt="" className="rb-cell-thumb" />
                       </BaseButton>
                     ))
                   ) : (

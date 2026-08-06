@@ -8,7 +8,8 @@ import { MapPicker, findRegionAt, type Pin } from "../../components/MapPicker";
 import { useLocationPresets } from "../../components/useLocationPresets";
 import { ItemEditModal } from "../../components/ItemEditModal";
 import { RegisteredModal } from "../../components/RegisteredModal";
-import { api, imageUrl } from "../../lib/api";
+import { FoundImage } from "../../components/FoundImage";
+import { api } from "../../lib/api";
 import { formatMinutesAgoForDateTimeLocal, parseDateTimeLocalToIso } from "../../lib/datetime";
 import { normalizeImageFiles } from "../../lib/image";
 import type { Item } from "../../lib/types";
@@ -198,7 +199,13 @@ export default function RegisterPage() {
         <div className="rb-grid rb-grid--2 mb-16">
           {keys.map((k) => (
             <div key={k}>
-              <img src={imageUrl(k)} alt="拾得物" className="thumb" />
+              <FoundImage
+                imageKey={k}
+                variant="preview"
+                alt="拾得物"
+                fetchPriority="high"
+                className="thumb"
+              />
               <Button
                 variant="destructive"
                 size="sm"

@@ -1,8 +1,9 @@
 "use client";
 import { Button as BaseButton } from "@base-ui/react/button";
 import { useEffect, useId, useRef, useState } from "react";
-import { api, imageUrl } from "../lib/api";
+import { api } from "../lib/api";
 import { Button } from "./ui";
+import { FoundImage } from "./FoundImage";
 
 export interface Pin {
   x: number; // 0..1
@@ -141,7 +142,14 @@ export function MapPicker({
 
   const mapLayers = (
     <>
-      <img src={imageUrl(mapKey)} alt="会場地図" className="map-img" draggable={false} />
+      <FoundImage
+        imageKey={mapKey}
+        variant="original"
+        alt="会場地図"
+        fetchPriority="high"
+        className="map-img"
+        draggable={false}
+      />
 
       {/* 塗りつぶし自体は元の座標系に忠実に描ければよいので SVG のまま（none で歪んでも
           図形としては正しい）。ただしテキスト・頂点の丸は歪むと文字が横伸びして見えるため、

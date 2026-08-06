@@ -1,6 +1,7 @@
 "use client";
 import { Badge, Button, Card, Modal, useToast } from "./ui";
 import { MapPicker } from "./MapPicker";
+import { FoundImage } from "./FoundImage";
 import { api, imageUrl, isAppliedApiError } from "../lib/api";
 import { STATUS_LABEL, type Item } from "../lib/types";
 import { useState } from "react";
@@ -87,8 +88,14 @@ export function ItemLookupModal({
           {item.image_keys.length > 0 ? (
             <div className="rb-grid rb-grid--2">
               {item.image_keys.map((k) => (
-                <a key={k} href={imageUrl(k)} target="_blank" rel="noreferrer">
-                  <img src={imageUrl(k)} alt="拾得物" className="thumb" />
+                <a key={k} href={imageUrl(k, "original")} target="_blank" rel="noreferrer">
+                  <FoundImage
+                    imageKey={k}
+                    variant="preview"
+                    alt="拾得物"
+                    fetchPriority="high"
+                    className="thumb"
+                  />
                 </a>
               ))}
             </div>

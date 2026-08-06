@@ -2,7 +2,8 @@
 import { Button as BaseButton } from "@base-ui/react/button";
 import { useRef, useState } from "react";
 import { Button, useToast } from "./ui";
-import { api, imageUrl } from "../lib/api";
+import { FoundImage } from "./FoundImage";
+import { api } from "../lib/api";
 import { normalizeImageFiles } from "../lib/image";
 
 /**
@@ -57,7 +58,13 @@ export function ImageEditor({
       <div className="rb-grid rb-grid--2">
         {keys.map((k) => (
           <div key={k}>
-            <img src={imageUrl(k)} alt="拾得物" className="thumb" />
+            <FoundImage
+              imageKey={k}
+              variant="preview"
+              alt="拾得物"
+              fetchPriority="high"
+              className="thumb"
+            />
             <Button
               variant="destructive"
               size="sm"

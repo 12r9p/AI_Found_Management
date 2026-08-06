@@ -14,6 +14,7 @@ light/dark 対応）で、夏の屋外運用でも視認しやすいことを重
 ```
 apps/
   api/   Elysia (Cloudflare Workers / Bun)  … REST API・AI・照合・ストレージ
+  images/ Cloudflare Worker                     … R2画像の固定variant変換・Cache
   web/   Next.js 16 (Cloudflare Workers, OpenNext) … 登録/探す/照合/管理
 ```
 
@@ -21,9 +22,9 @@ apps/
 | ---------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | フロント   | **Next.js 16**（App Router）       | Workers に OpenNext でデプロイ。API と分離。                                                                                                                                                                                                                                                  |
 | API        | **Elysia**                         | Bun ローカル / Workers 両対応（`src/index.ts` と `src/worker.ts`）。                                                                                                                                                                                                                          |
-| インフラ   | **Cloudflare Workers**             | フロントと API を別 Worker として分離デプロイ。                                                                                                                                                                                                                                               |
+| インフラ   | **Cloudflare Workers**             | フロント・API・画像配信をWorker分離。画像は開発・本番ともAPIのService Binding経由で同じWorkerを通す。                                                                                                                                                                                         |
 | DB         | **D1 + Vectorize**                 | D1 が行データ（source of truth）、Vectorize が埋め込みの近似最近傍検索（items/inquiries で2インデックス）。バインディング未設定時（素の `bun run dev:api` 等）は**インメモリ**で起動（外部依存ゼロでデモ可）。ローカルでは `apps/api/.data/store.json` に自動保存され、再起動しても消えない。 |
-| ストレージ | **R2**                             | 遺失物画像。ローカルは `apps/api/.data/uploads/` にフォールバック（保存先はカレントディレクトリに依存しない絶対パス）。                                                                                                                                                                       |
+| ストレージ | **R2**                             | 遺失物画像。画像配信は `apps/images` の固定variant Worker、開発・本番ともAPIのService Binding経由で使用。                                                                                                                                                                                     |
 | AI         | **GPT 5.6 Luna 相当 / effort=low** | 画像特徴抽出＋埋め込み。`AI_API_KEY` 未設定時は**決定論的モック**で動作（日本語は文字 n-gram 埋め込み）。                                                                                                                                                                                     |
 
 ### 設計上のポイント
@@ -80,7 +81,7 @@ apps/
 
 ```bash
 bun install            # ルートで（workspaces）
-bun run dev            # Cloudflare API 開発 (cf-dev:api) と Web (:3000) を同時起動
+bun run dev            # Cloudflare API 開発 (cf-dev:api; 画像WorkerをService Bindingで含む) と Web (:3000) を同時起動
 ```
 
 別ターミナルでデモデータ投入（API 起動後）:
@@ -130,11 +131,20 @@ Vectorize インデックス（`found-items`/`found-inquiries`）は別途作成
 > このリポジトリの手元の認証情報は別アカウントのものです。デプロイ時は対象アカウントへ
 > `wrangler login` し直してください（`AI_API_KEY` は `wrangler secret put`）。
 
-### 1. API Worker
+### 1. 画像Worker
+
+API WorkerのService Binding先になるため、先にデプロイします。公開Routeと`workers.dev`は持たず、API経由だけで到達します。
+
+```bash
+cd apps/images
+wrangler r2 bucket create found-images                                   # 初回のみ
+wrangler deploy                                                          # found-images
+```
+
+### 2. API Worker
 
 ```bash
 cd apps/api
-wrangler r2 bucket create found-images                                   # R2 バケット
 wrangler d1 create found-db                                              # D1（database_id を wrangler.toml に反映）
 wrangler vectorize create found-items --dimensions=1536 --metric=cosine       # Vectorize（物品）
 wrangler vectorize create found-inquiries --dimensions=1536 --metric=cosine   # Vectorize（問い合わせ）
@@ -146,7 +156,7 @@ wrangler deploy                                                          # src/w
 `wrangler.toml` で R2（`IMAGES`）・D1（`DB`）・Vectorize（`VECTORIZE_ITEMS`/`VECTORIZE_INQUIRIES`）
 バインディングを定義済み。
 
-### 2. Web Worker（OpenNext）
+### 3. Web Worker（OpenNext）
 
 ```bash
 cd apps/web
@@ -154,7 +164,7 @@ cd apps/web
 bun run cf:deploy                               # opennextjs build + wrangler deploy
 ```
 
-### 3. 認証（Cloudflare Zero Trust / Access）— **API も保護対象**
+### 4. 認証（Cloudflare Zero Trust / Access）— **API も保護対象**
 
 アプリ側にログイン機構は持ちません。**Web と API の両方**を Access アプリケーションで保護します。
 API を保護しないとフロントだけ守っても意味がない（API を直接叩けばデータを読み書きできてしまう）ため、

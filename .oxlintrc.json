@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": ["apps/web/next-env.d.ts"],
+  "ignorePatterns": ["apps/web/next-env.d.ts", "apps/images/worker-configuration.d.ts"],
   "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "nextjs", "import", "jsx-a11y"],
   "categories": {
     "correctness": "error"

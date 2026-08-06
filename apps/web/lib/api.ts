@@ -92,7 +92,13 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return (ct.includes("json") ? res.json() : (res.text() as any)) as Promise<T>;
 }
 
-export const imageUrl = (key: string) => `${API_BASE}/api/images/${key}`;
+export type ImageVariant = "thumb" | "preview" | "original";
+
+export const imageUrl = (key: string, variant: ImageVariant = "original") => {
+  const url = new URL(`/api/images/${encodeURIComponent(key)}`, API_BASE);
+  url.searchParams.set("variant", variant);
+  return url.toString();
+};
 
 export const api = {
   health: () =>

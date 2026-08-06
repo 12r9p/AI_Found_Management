@@ -15,9 +15,10 @@ import {
   MetaOptionList,
 } from "../ui";
 import { MatchReviewModal } from "../MatchReviewModal";
+import { FoundImage } from "../FoundImage";
 import { useMeta } from "../useMeta";
 import { usePersistentState } from "../usePersistentState";
-import { api, imageUrl, isAppliedApiError, itemCursorsEqual, type ItemCursor } from "../../lib/api";
+import { api, isAppliedApiError, itemCursorsEqual, type ItemCursor } from "../../lib/api";
 import { STATUS_LABEL, type Inquiry, type Match } from "../../lib/types";
 
 const STATUS_FILTERS = [
@@ -217,9 +218,10 @@ export function InquiriesTab() {
                 <div className="rb-thumbs">
                   {cands.slice(0, 2).map((m) =>
                     m.item?.image_keys?.[0] ? (
-                      <img
+                      <FoundImage
                         key={m.id}
-                        src={imageUrl(m.item.image_keys[0])}
+                        imageKey={m.item.image_keys[0]}
+                        variant="thumb"
                         alt=""
                         className="rb-thumb-sm"
                       />
@@ -516,7 +518,12 @@ function InquiryDetailModal({
                     <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
                   </span>
                   {m.item?.image_keys?.[0] ? (
-                    <img src={imageUrl(m.item.image_keys[0])} alt="" className="thumb mb-8" />
+                    <FoundImage
+                      imageKey={m.item.image_keys[0]}
+                      variant="preview"
+                      alt=""
+                      className="thumb mb-8"
+                    />
                   ) : (
                     <span className="thumb thumb--empty mb-8">画像なし</span>
                   )}

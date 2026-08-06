@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, Modal, useConfirm, useToast } from "./ui";
 import { MapPicker } from "./MapPicker";
+import { FoundImage } from "./FoundImage";
 import { api, imageUrl, isAppliedApiError } from "../lib/api";
 import { STATUS_LABEL, type Match } from "../lib/types";
 
@@ -112,8 +113,14 @@ export function MatchReviewModal({
           {item?.image_keys?.length ? (
             <div className="rb-grid rb-grid--2 mb-8">
               {item.image_keys.map((k) => (
-                <a key={k} href={imageUrl(k)} target="_blank" rel="noreferrer">
-                  <img src={imageUrl(k)} alt="遺失物" className="thumb" />
+                <a key={k} href={imageUrl(k, "original")} target="_blank" rel="noreferrer">
+                  <FoundImage
+                    imageKey={k}
+                    variant="preview"
+                    alt="遺失物"
+                    fetchPriority="high"
+                    className="thumb"
+                  />
                 </a>
               ))}
             </div>

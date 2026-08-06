@@ -17,6 +17,12 @@ zone_name = "s-t.work"
 binding = "IMAGES"
 bucket_name = "found-images"
 
+# 開発・本番とも、APIが認証後に画像Workerへ画像routeを渡す。
+# 画像Workerには公開Routeを設定せず、このService Bindingだけを入口にする。
+[[services]]
+binding = "IMAGE_WORKER"
+service = "found-images"
+
 # D1（リレーショナルデータ本体）。`wrangler d1 create found-db` で作成し、database_id を反映。
 [[d1_databases]]
 binding = "DB"

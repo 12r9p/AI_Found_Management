@@ -13,6 +13,7 @@ export interface Env {
   ACCESS_AUD?: string;
   // Cloudflare バインディング
   IMAGES?: R2Bucket;
+  IMAGE_WORKER?: Fetcher;
   DB?: D1Database;
   VECTORIZE_ITEMS?: Vectorize;
   VECTORIZE_INQUIRIES?: Vectorize;

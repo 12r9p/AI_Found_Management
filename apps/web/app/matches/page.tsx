@@ -3,8 +3,9 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import { Badge, Button, Card, Select, Field } from "../../components/ui";
 import { MatchReviewModal } from "../../components/MatchReviewModal";
+import { FoundImage } from "../../components/FoundImage";
 import { usePersistentState } from "../../components/usePersistentState";
-import { api, imageUrl } from "../../lib/api";
+import { api } from "../../lib/api";
 import { STATUS_LABEL, type Match } from "../../lib/types";
 
 const FILTERS = [
@@ -108,7 +109,12 @@ export default function MatchesPage() {
                 <button key={m.id} className="rb-listrow" onClick={() => setSelected(m)}>
                   <div className="rb-thumbs">
                     {m.item?.image_keys?.[0] ? (
-                      <img src={imageUrl(m.item.image_keys[0])} alt="" className="rb-thumb-sm" />
+                      <FoundImage
+                        imageKey={m.item.image_keys[0]}
+                        variant="thumb"
+                        alt=""
+                        className="rb-thumb-sm"
+                      />
                     ) : (
                       <span className="rb-thumb-sm rb-thumb-sm--empty">無</span>
                     )}

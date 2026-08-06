@@ -20,7 +20,8 @@ import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
 import { ItemLookupModal } from "../../components/ItemLookupModal";
 import { ItemEditModal } from "../../components/ItemEditModal";
-import { api, imageUrl, isAppliedApiError } from "../../lib/api";
+import { FoundImage } from "../../components/FoundImage";
+import { api, isAppliedApiError } from "../../lib/api";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
 const EMPTY_FILTERS = { category: "", color: "", status: "", location: "", from: "", to: "" };
@@ -327,7 +328,12 @@ export default function SearchPage() {
                         </span>
                       )}
                       {it.image_keys[0] ? (
-                        <img src={imageUrl(it.image_keys[0])} alt="" className="thumb mb-8" />
+                        <FoundImage
+                          imageKey={it.image_keys[0]}
+                          variant="thumb"
+                          alt=""
+                          className="thumb mb-8"
+                        />
                       ) : (
                         <span className="thumb thumb--empty mb-8">画像なし</span>
                       )}
