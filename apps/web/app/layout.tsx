@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
+import { PwaRegistration } from "../components/PwaRegistration";
 import { UIProvider } from "../components/ui";
 
 export const metadata: Metadata = {
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: historyGuardScript }} />
       </head>
       <body>
+        <PwaRegistration />
         <ThemeProvider
           attribute="data-theme"
           storageKey="rb-theme"

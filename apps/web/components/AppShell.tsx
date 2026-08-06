@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { ADMIN_TABS, adminTabHref, requestAdminTab } from "../lib/adminTabs";
 import { Button, ThemeToggle } from "./ui";
 import { NotificationsPopup } from "./NotificationsPopup";
+import { OfflineBanner } from "./OfflineBanner";
 
 const PRIMARY_NAV = [
   { href: "/register", label: "登録" },
@@ -163,6 +164,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
         </header>
+        <OfflineBanner />
         <main className="rb-main">{children}</main>
       </div>
 
