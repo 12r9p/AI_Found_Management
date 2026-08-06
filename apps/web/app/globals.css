@@ -251,7 +251,7 @@ h3,
   color: var(--foreground);
   border: var(--bw-thick) solid var(--border);
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 16px;
   outline: none;
 }
 /* 日付/時刻入力は狭い欄でも収まるよう詰める（ネイティブUIの分だけ余白を削る） */
@@ -259,19 +259,6 @@ h3,
 .rb-input[type="datetime-local"] {
   padding-left: 8px;
   padding-right: 4px;
-  font-size: 14px;
-}
-/* iOS Safariは16px未満の入力欄へフォーカスすると自動ズームする。 */
-@media (pointer: coarse) and (hover: none) {
-  @supports (-webkit-touch-callout: none) {
-    .rb-input,
-    .rb-select,
-    .rb-textarea,
-    .rb-input[type="date"],
-    .rb-input[type="datetime-local"] {
-      font-size: 16px;
-    }
-  }
 }
 .rb-field {
   min-width: 0;
