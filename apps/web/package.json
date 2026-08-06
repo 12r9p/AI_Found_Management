@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
-    "build": "next build --webpack",
+    "dev": "next dev --turbopack -p 3000",
+    "build": "next build --turbopack",
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "cf:build": "opennextjs-cloudflare build",
@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@base-ui/react": "1.6.0",
-    "@serwist/next": "9.5.12",
     "date-fns": "4.4.0",
     "next": "16.2.12",
     "next-themes": "0.4.6",
@@ -23,10 +22,13 @@
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "1.20.2",
+    "@serwist/turbopack": "9.5.12",
     "@types/bun": "^1.1.14",
     "@types/node": "^22.10.2",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
+    "esbuild": "0.28.1",
+    "esbuild-wasm": "0.28.1",
     "serwist": "9.5.12",
     "typescript": "6.0.3",
     "wrangler": "4.114.0"

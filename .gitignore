@@ -14,7 +14,4 @@ apps/api/.data/
 coverage/
 *.tsbuildinfo
 
-# Serwist generates the production Service Worker during the build.
-apps/web/public/sw*
-
 AGENTS.md

@@ -15,8 +15,9 @@ export function PwaRegistration() {
 
     const register = async () => {
       try {
-        const registration = await navigator.serviceWorker.register("/sw.js", {
+        const registration = await navigator.serviceWorker.register("/serwist/sw.js", {
           scope: "/",
+          type: "module",
           updateViaCache: "none",
         });
         await registration.update();
