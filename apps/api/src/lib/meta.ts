@@ -55,8 +55,8 @@ const DEFAULT_COLORS: MetaOption[] = [
 // 後方互換用に文字列配列としても公開（AIプロンプトのヒント生成などで使う）。
 export const CATEGORIES = DEFAULT_CATEGORIES.map((o) => o.name);
 export const COLORS = DEFAULT_COLORS.map((o) => o.name);
-export const ITEM_STATUSES = ["stored", "returned", "disposed", "transferred"];
-export const INQUIRY_STATUSES = ["open", "matched", "contacted", "resolved", "closed"];
+export const ITEM_STATUSES = ["stored", "returned", "disposed", "transferred"] as const;
+export const INQUIRY_STATUSES = ["open", "matched", "contacted", "resolved", "closed"] as const;
 
 const HEX_RE = /^#[0-9a-fA-F]{3,8}$/;
 
