@@ -261,6 +261,18 @@ h3,
   padding-right: 4px;
   font-size: 14px;
 }
+/* iOS Safariは16px未満の入力欄へフォーカスすると自動ズームする。 */
+@media (pointer: coarse) and (hover: none) {
+  @supports (-webkit-touch-callout: none) {
+    .rb-input,
+    .rb-select,
+    .rb-textarea,
+    .rb-input[type="date"],
+    .rb-input[type="datetime-local"] {
+      font-size: 16px;
+    }
+  }
+}
 .rb-field {
   min-width: 0;
 }
