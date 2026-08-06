@@ -1,7 +1,9 @@
 // Bun ローカル開発サーバ。`bun run dev` で起動。
 import { createApp } from "./app.ts";
 
-const app = createApp();
+const app = createApp(undefined, {
+  appEnv: (globalThis as any).process?.env?.APP_ENV,
+});
 const port = Number((globalThis as any).process?.env?.PORT ?? 8787);
 
 app.listen(port);

@@ -1,6 +1,7 @@
 // 環境変数の解決。Bun (process.env) と Cloudflare Workers (env binding) の両対応。
 
 export interface Env {
+  APP_ENV?: string;
   AI_API_KEY?: string;
   AI_BASE_URL?: string;
   AI_VISION_MODEL?: string;

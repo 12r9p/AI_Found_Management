@@ -1,6 +1,9 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
+import { openapi } from "@elysia/openapi";
 import { buildContext, type AppContext } from "./context.ts";
+import { routeContracts } from "./contracts.ts";
+import { toInquiryDto, toItemDto } from "./dto.ts";
 import { getEnv, waitUntil } from "./env-holder.ts";
 import { itemEmbedText, inquiryEmbedText } from "./lib/embed-text.ts";
 import {
@@ -26,7 +29,7 @@ import {
   normalizeMetaOptions,
 } from "./lib/meta.ts";
 import { createItemsCsvStream } from "./lib/items-csv.ts";
-import type { SearchFilters } from "./types.ts";
+import type { ItemStatus, SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
 import {
   InvalidItemCursorError,
@@ -113,16 +116,38 @@ function rematchPageCacheKey(cursor: ItemCursorPosition | undefined): string {
  */
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
 
-function parseFilters(q: Record<string, any>): SearchFilters {
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function itemStatus(value: unknown): ItemStatus | undefined {
+  switch (value) {
+    case "stored":
+    case "returned":
+    case "disposed":
+    case "transferred":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function parseFilters(q: Record<string, unknown>): SearchFilters {
+  const rawLimit = q.limit;
   return {
-    q: q.q || undefined,
-    category: q.category || undefined,
-    color: q.color || undefined,
-    status: q.status || undefined,
-    location: q.location || undefined,
-    from: q.from || undefined,
-    to: q.to || undefined,
-    limit: q.limit ? parseInt(q.limit, 10) : undefined,
+    q: optionalString(q.q),
+    category: optionalString(q.category),
+    color: optionalString(q.color),
+    status: itemStatus(q.status),
+    location: optionalString(q.location),
+    from: optionalString(q.from),
+    to: optionalString(q.to),
+    limit:
+      typeof rawLimit === "number"
+        ? rawLimit
+        : typeof rawLimit === "string" && rawLimit
+          ? parseInt(rawLimit, 10)
+          : undefined,
   };
 }
 
@@ -227,11 +252,47 @@ function runAfterSave(task: Promise<void>, entity: "item" | "inquiry", id: strin
   );
 }
 
-export function createApp(resolveContext: () => Promise<AppContext> = defaultContext) {
+export interface CreateAppOptions {
+  appEnv?: string;
+}
+
+export function createApp(
+  resolveContext: () => Promise<AppContext> = defaultContext,
+  options: CreateAppOptions = {},
+) {
   const ctx = resolveContext;
   // aot(実行時コード生成)は Cloudflare Workers のサンドボックスで禁止されているため無効化。
   const app = new Elysia({ aot: false })
+    .use(
+      openapi({
+        enabled: options.appEnv === "develop",
+        exclude: { staticFile: false },
+        documentation: {
+          info: {
+            title: "遺失物管理API",
+            version: "1.0.0",
+            description: "遺失物・問い合わせ・照合・通知を管理する内部API。",
+          },
+          tags: [
+            { name: "システム", description: "稼働状態" },
+            { name: "設定", description: "選択肢と採番ルール" },
+            { name: "画像", description: "画像の保存と配信" },
+            { name: "地図", description: "拾得場所入力用の地図" },
+            { name: "AI", description: "画像の特徴抽出" },
+            { name: "遺失物", description: "遺失物の登録・検索・出力" },
+            { name: "検索", description: "特徴検索" },
+            { name: "問い合わせ", description: "問い合わせの登録と管理" },
+            { name: "照合", description: "遺失物と問い合わせの照合" },
+            { name: "通知", description: "照合通知" },
+          ],
+        },
+      }),
+    )
     .onError(({ error, code, set }) => {
+      if (code === "VALIDATION") {
+        set.status = 400;
+        return { error: "invalid_request" };
+      }
       if (error instanceof DuplicateDisplayIdError) {
         set.status = 409;
         return { error: error.code };
@@ -276,542 +337,670 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
     })
 
     // ---- meta ----
-    .get("/", () => ({ name: "found-api", ok: true }))
-    .get("/api/health", async () => {
-      const c = await ctx();
-      return {
-        ok: true,
-        store: c.store.kind,
-        ai: c.ai.name,
-        matchThreshold: c.cfg.matchThreshold,
-        embedDim: c.cfg.ai.embedDim,
-        accessProtected: c.cfg.access.enabled,
-      };
-    })
+    .get("/", () => ({ name: "found-api", ok: true }), routeContracts.root)
+    .get(
+      "/api/health",
+      async () => {
+        const c = await ctx();
+        return {
+          ok: true,
+          store: c.store.kind,
+          ai: c.ai.name,
+          matchThreshold: c.cfg.matchThreshold,
+          embedDim: c.cfg.ai.embedDim,
+          accessProtected: c.cfg.access.enabled,
+        };
+      },
+      routeContracts.health,
+    )
     // 種別・色はスタッフが設定画面から編集できる（現場ごとに扱う物品が違うため）。
     // 未設定なら既定リストを返す。並び順・グループ見出し・色タグ込みで返す。
-    .get("/api/meta", async () => {
-      const c = await ctx();
-      const { categories, colors } = await getMetaOptions(c.store);
-      return {
-        categories,
-        colors,
-        itemStatuses: ITEM_STATUSES,
-        inquiryStatuses: INQUIRY_STATUSES,
-      };
-    })
-    .put("/api/meta/:kind", async ({ params, body, set }) => {
-      const kind = params.kind;
-      if (kind !== "categories" && kind !== "colors") {
-        set.status = 400;
-        return { error: "categories か colors のみ変更できます" };
-      }
-      const c = await ctx();
-      const raw = (body as any)?.values;
-      if (!Array.isArray(raw)) {
-        set.status = 400;
-        return { error: "values は配列で指定してください" };
-      }
-      const values = normalizeMetaOptions(raw);
-      if (values.length === 0) {
-        set.status = 400;
-        return { error: "1件以上必要です" };
-      }
-      await c.store.setSetting(kind, JSON.stringify(values));
-      return { values };
-    })
+    .get(
+      "/api/meta",
+      async () => {
+        const c = await ctx();
+        const { categories, colors } = await getMetaOptions(c.store);
+        return {
+          categories,
+          colors,
+          itemStatuses: [...ITEM_STATUSES],
+          inquiryStatuses: [...INQUIRY_STATUSES],
+        };
+      },
+      routeContracts.getMeta,
+    )
+    .put(
+      "/api/meta/:kind",
+      async ({ params, body, set }) => {
+        const kind = params.kind;
+        if (kind !== "categories" && kind !== "colors") {
+          set.status = 400;
+          return { error: "categories か colors のみ変更できます" };
+        }
+        const c = await ctx();
+        const raw = body.values;
+        if (!Array.isArray(raw)) {
+          set.status = 400;
+          return { error: "values は配列で指定してください" };
+        }
+        const values = normalizeMetaOptions(raw);
+        if (values.length === 0) {
+          set.status = 400;
+          return { error: "1件以上必要です" };
+        }
+        await c.store.setSetting(kind, JSON.stringify(values));
+        return { values };
+      },
+      routeContracts.putMeta,
+    )
 
     // ---- 拾得場所プリセット（名前 ⇔ 地図ピン位置） ----
-    .get("/api/location-presets", async () => {
-      const c = await ctx();
-      return { presets: await getLocationPresets(c.store) };
-    })
-    .put("/api/location-presets", async ({ body, set }) => {
-      const raw = (body as any)?.presets;
-      if (!Array.isArray(raw)) {
-        set.status = 400;
-        return { error: "presets は配列で指定してください" };
-      }
-      const c = await ctx();
-      const presets = await setLocationPresets(c.store, normalizePresets(raw));
-      return { presets };
-    })
+    .get(
+      "/api/location-presets",
+      async () => {
+        const c = await ctx();
+        return { presets: await getLocationPresets(c.store) };
+      },
+      routeContracts.getLocationPresets,
+    )
+    .put(
+      "/api/location-presets",
+      async ({ body, set }) => {
+        const raw = body.presets;
+        if (!Array.isArray(raw)) {
+          set.status = 400;
+          return { error: "presets は配列で指定してください" };
+        }
+        const c = await ctx();
+        const presets = await setLocationPresets(c.store, normalizePresets(raw));
+        return { presets };
+      },
+      routeContracts.putLocationPresets,
+    )
 
     // ---- 管理番号の採番ルール ----
-    .get("/api/id-rule", async () => {
-      const c = await ctx();
-      const rule = await getIdRule(c.store);
-      return { rule, preview: previewId(rule) };
-    })
-    .put("/api/id-rule", async ({ body }) => {
-      const c = await ctx();
-      const rule = await setIdRule(c.store, normalizeRule((body as any)?.rule));
-      return { rule, preview: previewId(rule) };
-    })
+    .get(
+      "/api/id-rule",
+      async () => {
+        const c = await ctx();
+        const rule = await getIdRule(c.store);
+        return { rule, preview: previewId(rule) };
+      },
+      routeContracts.getIdRule,
+    )
+    .put(
+      "/api/id-rule",
+      async ({ body }) => {
+        const c = await ctx();
+        const rule = await setIdRule(c.store, normalizeRule(body.rule));
+        return { rule, preview: previewId(rule) };
+      },
+      routeContracts.putIdRule,
+    )
 
     // ---- uploads / images ----
-    .post("/api/uploads", async ({ body, set }) => {
-      const c = await ctx();
-      const b = body as any;
-      const files: File[] = [];
-      if (b && typeof b === "object") {
-        for (const key of Object.keys(b)) {
-          const v = b[key];
-          if (v instanceof File) files.push(v);
-          else if (Array.isArray(v)) for (const f of v) if (f instanceof File) files.push(f);
+    .post(
+      "/api/uploads",
+      async ({ body, set }) => {
+        const c = await ctx();
+        const files = [body.image0, body.image1].filter(
+          (file): file is File => file instanceof File,
+        );
+        if (files.length === 0) {
+          set.status = 400;
+          return { error: "画像ファイルがありません（multipart/form-data で送信してください）" };
         }
-      }
-      if (files.length === 0) {
-        set.status = 400;
-        return { error: "画像ファイルがありません（multipart/form-data で送信してください）" };
-      }
-      const tooLarge = files.find((f) => f.size > MAX_UPLOAD_BYTES);
-      if (tooLarge) {
-        set.status = 413;
-        return {
-          error: `画像は1枚 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです（${tooLarge.name}）`,
-        };
-      }
-      const keys: string[] = [];
-      for (const f of files.slice(0, 2)) {
-        const ct = f.type || "image/jpeg";
-        const key = `img_${crypto.randomUUID()}.${extFromContentType(ct)}`;
-        await c.images.put(key, await f.arrayBuffer(), ct);
-        keys.push(key);
-      }
-      return { keys };
-    })
-    .get("/api/images/:key", async ({ set, request }) => {
-      // 開発・本番ともAPIを認証境界にし、画像WorkerへService Bindingで転送する。
-      const imageWorker = getEnv().IMAGE_WORKER;
-      if (!imageWorker) {
-        set.status = 503;
-        return { error: "image_worker_unavailable" };
-      }
-      try {
-        return await imageWorker.fetch(request);
-      } catch (error) {
-        console.error(`[image-worker] proxy failed: ${String(error)}`);
-        set.status = 503;
-        return { error: "image_worker_unavailable" };
-      }
-    })
+        const tooLarge = files.find((f) => f.size > MAX_UPLOAD_BYTES);
+        if (tooLarge) {
+          set.status = 413;
+          return {
+            error: `画像は1枚 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです（${tooLarge.name}）`,
+          };
+        }
+        const keys: string[] = [];
+        for (const f of files.slice(0, 2)) {
+          const ct = f.type || "image/jpeg";
+          const key = `img_${crypto.randomUUID()}.${extFromContentType(ct)}`;
+          await c.images.put(key, await f.arrayBuffer(), ct);
+          keys.push(key);
+        }
+        return { keys };
+      },
+      routeContracts.uploadImages,
+    )
+    .get(
+      "/api/images/:key",
+      async ({ set, request }) => {
+        // 開発・本番ともAPIを認証境界にし、画像WorkerへService Bindingで転送する。
+        const imageWorker = getEnv().IMAGE_WORKER;
+        if (!imageWorker) {
+          set.status = 503;
+          return { error: "image_worker_unavailable" };
+        }
+        try {
+          return await imageWorker.fetch(request);
+        } catch (error) {
+          console.error(`[image-worker] proxy failed: ${String(error)}`);
+          set.status = 503;
+          return { error: "image_worker_unavailable" };
+        }
+      },
+      routeContracts.getImage,
+    )
 
     // ---- 地図（拾得場所のピン留め用） ----
-    .get("/api/map", async () => {
-      const c = await ctx();
-      const key = await c.store.getSetting(ACTIVE_MAP_KEY);
-      return { key: key ?? "" };
-    })
-    .post("/api/map", async ({ body, set }) => {
-      const c = await ctx();
-      const b = body as any;
-      let file: File | null = null;
-      if (b && typeof b === "object") {
-        for (const k of Object.keys(b)) {
-          if (b[k] instanceof File) {
-            file = b[k];
-            break;
-          }
+    .get(
+      "/api/map",
+      async () => {
+        const c = await ctx();
+        const key = await c.store.getSetting(ACTIVE_MAP_KEY);
+        return { key: key ?? "" };
+      },
+      routeContracts.getMap,
+    )
+    .post(
+      "/api/map",
+      async ({ body, set }) => {
+        const c = await ctx();
+        const file = body.map instanceof File ? body.map : null;
+        if (!file) {
+          set.status = 400;
+          return { error: "地図画像がありません（multipart/form-data）" };
         }
-      }
-      if (!file) {
-        set.status = 400;
-        return { error: "地図画像がありません（multipart/form-data）" };
-      }
-      if (file.size > MAX_UPLOAD_BYTES) {
-        set.status = 413;
-        return { error: `地図画像は ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです` };
-      }
-      const ct = file.type || "image/png";
-      const key = `map_${crypto.randomUUID()}.${extFromContentType(ct)}`;
-      await c.images.put(key, await file.arrayBuffer(), ct);
-      await c.store.setSetting(ACTIVE_MAP_KEY, key);
-      return { key };
-    })
+        if (file.size > MAX_UPLOAD_BYTES) {
+          set.status = 413;
+          return { error: `地図画像は ${MAX_UPLOAD_BYTES / 1024 / 1024}MB までです` };
+        }
+        const ct = file.type || "image/png";
+        const key = `map_${crypto.randomUUID()}.${extFromContentType(ct)}`;
+        await c.images.put(key, await file.arrayBuffer(), ct);
+        await c.store.setSetting(ACTIVE_MAP_KEY, key);
+        return { key };
+      },
+      routeContracts.uploadMap,
+    )
 
     // ---- AI analyze (tagging) ----
-    .post("/api/analyze", async ({ body }) => {
-      const c = await ctx();
-      const b = (body as any) ?? {};
-      const dataUrls: string[] = [];
-      for (const url of b.dataUrls ?? []) if (typeof url === "string") dataUrls.push(url);
-      for (const key of b.keys ?? []) {
-        const obj = await c.images.get(key);
-        if (obj) dataUrls.push(arrayBufferToDataUrl(obj.body, obj.contentType));
-      }
-      const { categories, colors } = await getMetaLists(c.store);
-      const result = await c.ai.describeImages(
-        dataUrls.map((url) => ({ url })),
-        { hint: b.hint, categories, colors },
-      );
-      return result;
-    })
+    .post(
+      "/api/analyze",
+      async ({ body }) => {
+        const c = await ctx();
+        const b = body;
+        const dataUrls: string[] = [];
+        for (const url of b.dataUrls ?? []) if (typeof url === "string") dataUrls.push(url);
+        for (const key of b.keys ?? []) {
+          const obj = await c.images.get(key);
+          if (obj) dataUrls.push(arrayBufferToDataUrl(obj.body, obj.contentType));
+        }
+        const { categories, colors } = await getMetaLists(c.store);
+        const result = await c.ai.describeImages(
+          dataUrls.map((url) => ({ url })),
+          { hint: b.hint, categories, colors },
+        );
+        return result;
+      },
+      routeContracts.analyze,
+    )
 
     // ---- items ----
-    .get("/api/items", async ({ query, set }) => {
-      try {
-        const c = await ctx();
-        return await c.store.listItems(
-          parseFilters(query as Record<string, unknown>),
-          parseItemListOptions(query as Record<string, unknown>),
-        );
-      } catch (error) {
-        if (error instanceof InvalidItemCursorError || error instanceof InvalidItemLimitError) {
-          set.status = 400;
-          return { error: error.message };
+    .get(
+      "/api/items",
+      async ({ query, set }) => {
+        try {
+          const c = await ctx();
+          const page = await c.store.listItems(parseFilters(query), parseItemListOptions(query));
+          return { ...page, items: page.items.map(toItemDto) };
+        } catch (error) {
+          if (error instanceof InvalidItemCursorError || error instanceof InvalidItemLimitError) {
+            set.status = 400;
+            return { error: error.message };
+          }
+          throw error;
         }
-        throw error;
-      }
-    })
-    .post("/api/items", async ({ body, set }) => {
-      const c = await ctx();
-      const b = (body as any) ?? {};
-      const keys: string[] = Array.isArray(b.image_keys) ? b.image_keys : [];
-      // 画像なしの登録は現場での照合に使えないため必須化。
-      if (keys.length === 0) {
-        set.status = 400;
-        return { error: "image_required" };
-      }
-      const storage_location =
-        typeof b.storage_location === "string" ? b.storage_location.trim() : "";
-      if (!storage_location) {
-        set.status = 400;
-        return { error: "storage_location_required" };
-      }
-      const draft = {
-        status: b.status ?? "stored",
-        category: b.category ?? "",
-        color: b.color ?? "",
-        brand: b.brand ?? "",
-        storage_location,
-        found_location: b.found_location ?? "",
-        found_at: b.found_at ?? null,
-        map_key: b.map_key ?? "",
-        found_x: typeof b.found_x === "number" ? b.found_x : null,
-        found_y: typeof b.found_y === "number" ? b.found_y : null,
-        image_keys: keys,
-        ai_description: b.ai_description ?? "",
-        tags: Array.isArray(b.tags) ? b.tags : [],
-        notes: b.notes ?? "",
-      };
-      // 管理番号は設定の採番ルールに従って自動付与（現場・紙台帳での照合用）
-      const display_id = b.display_id || (await nextDisplayId(c.store));
-
-      // 画像はあるが特徴文が未指定 → AI解析（vision＋埋め込み＋自動照合）は
-      // 現場を待たせないようレスポンスの後ろでバックグラウンド実行する。
-      // 一致が見つかった場合は既存の通知の仕組みで届く（この時点の応答には含まれない）。
-      if (keys.length > 0 && !draft.ai_description) {
-        const item = await c.store.createItem({ ...draft, display_id, ai_status: "pending" });
-        waitUntil(runBackgroundAnalysis(c, item));
-        return { item, matches: [], topScore: 0 };
-      }
-
-      // 呼び出し側が特徴文を渡し済み → 従来通り即時処理。
-      // 埋め込みが失敗しても登録自体は必ず成立させる（AI障害で登録がブロックされないように）。
-      const embedding = await safeEmbed(c.ai, itemEmbedText(draft));
-      const item = await c.store.createItem({
-        ...draft,
-        display_id,
-        embedding,
-        ai_status: embedding.length ? "ready" : "error",
-      });
-      item.embedding = embedding; // pg/D1 実装は embedding を返さないため補完
-      const outcome =
-        item.status === "stored" && embedding.length
-          ? await matchNewItem(c.store, item, c.cfg.matchThreshold)
-          : { matches: [], topScore: 0 };
-      return { item, matches: outcome.matches, topScore: outcome.topScore };
-    })
-    .get("/api/items/:id", async ({ params, set }) => {
-      const c = await ctx();
-      const item = await c.store.getItem(params.id);
-      if (!item) {
-        set.status = 404;
-        return { error: "not found" };
-      }
-      const matches = (await c.store.listMatches()).filter((m) => m.item_id === params.id);
-      return { item, matches };
-    })
-    .patch("/api/items/:id", async ({ params, body, set }) => {
-      const c = await ctx();
-      const existing = await c.store.getItem(params.id);
-      if (!existing) {
-        set.status = 404;
-        return { error: "not found" };
-      }
-      const patch = { ...(body as any) };
-      delete patch.id;
-      delete patch.embedding; // 埋め込みは派生値。手編集させない
-      if (Object.hasOwn(patch, "storage_location")) {
-        patch.storage_location =
-          typeof patch.storage_location === "string" ? patch.storage_location.trim() : "";
-        if (!patch.storage_location) {
+      },
+      routeContracts.listItems,
+    )
+    .post(
+      "/api/items",
+      async ({ body, set }) => {
+        const c = await ctx();
+        const b = body;
+        const keys: string[] = Array.isArray(b.image_keys) ? b.image_keys : [];
+        // 画像なしの登録は現場での照合に使えないため必須化。
+        if (keys.length === 0) {
+          set.status = 400;
+          return { error: "image_required" };
+        }
+        const storage_location =
+          typeof b.storage_location === "string" ? b.storage_location.trim() : "";
+        if (!storage_location) {
           set.status = 400;
           return { error: "storage_location_required" };
         }
-      }
-      // 埋め込み対象の項目を含むPATCHは、同値でも再埋め込みする。
-      // D1更新後にVectorize upsertが失敗した場合、同じPATCHを再送して古いvector値を
-      // 修復できる必要がある。categoryは埋め込み本文とmetadataの両方に含まれる。
-      // 埋め込みが失敗しても、他のフィールドの編集（状態変更など）まで巻き込んで
-      // 失敗にしない — 埋め込みだけ古いまま保持し、ai_status で要再解析を示す。
-      const touchesFeatures = touchesAnyField(patch, [
-        "category",
-        "color",
-        "brand",
-        "ai_description",
-        "tags",
-        "found_location",
-        "notes",
-      ]);
-      // 永続データの書き込み成功をもって応答する。埋め込み・Vectorize同期は
-      // Workerのバックグラウンド処理へ分離し、編集モーダルを待たせない。
-      const updated = await c.store.updateItem(params.id, patch, { syncVector: false });
-      runAfterSave(refreshItemVector(c, params.id, touchesFeatures), "item", params.id);
-      return { item: updated };
-    })
-    .delete("/api/items/:id", async ({ params }) => {
-      const c = await ctx();
-      const deletedItem = await c.store.deleteItem(params.id);
-      if (deletedItem) {
-        const cleanupResults = await Promise.allSettled(
-          deletedItem.image_keys.map((key) => c.images.delete(key)),
-        );
-        cleanupResults.forEach((result, index) => {
-          if (result.status === "fulfilled") return;
-          console.error(
-            JSON.stringify({
-              event: "deletion_cleanup_failed",
-              resource: "r2_image",
-              entityId: deletedItem.id,
-              objectKey: deletedItem.image_keys[index],
-              applied: true,
-              error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-            }),
-          );
+        const draft = {
+          status: b.status ?? "stored",
+          category: b.category ?? "",
+          color: b.color ?? "",
+          brand: b.brand ?? "",
+          storage_location,
+          found_location: b.found_location ?? "",
+          found_at: b.found_at ?? null,
+          map_key: b.map_key ?? "",
+          found_x: typeof b.found_x === "number" ? b.found_x : null,
+          found_y: typeof b.found_y === "number" ? b.found_y : null,
+          image_keys: keys,
+          ai_description: b.ai_description ?? "",
+          tags: Array.isArray(b.tags) ? b.tags : [],
+          notes: b.notes ?? "",
+        };
+        // 管理番号は設定の採番ルールに従って自動付与（現場・紙台帳での照合用）
+        const display_id = b.display_id || (await nextDisplayId(c.store));
+
+        // 画像はあるが特徴文が未指定 → AI解析（vision＋埋め込み＋自動照合）は
+        // 現場を待たせないようレスポンスの後ろでバックグラウンド実行する。
+        // 一致が見つかった場合は既存の通知の仕組みで届く（この時点の応答には含まれない）。
+        if (keys.length > 0 && !draft.ai_description) {
+          const item = await c.store.createItem({ ...draft, display_id, ai_status: "pending" });
+          waitUntil(runBackgroundAnalysis(c, item));
+          return { item: toItemDto(item), matches: [], topScore: 0 };
+        }
+
+        // 呼び出し側が特徴文を渡し済み → 従来通り即時処理。
+        // 埋め込みが失敗しても登録自体は必ず成立させる（AI障害で登録がブロックされないように）。
+        const embedding = await safeEmbed(c.ai, itemEmbedText(draft));
+        const item = await c.store.createItem({
+          ...draft,
+          display_id,
+          embedding,
+          ai_status: embedding.length ? "ready" : "error",
         });
-      }
-      return { deleted: deletedItem !== null };
-    })
+        item.embedding = embedding; // pg/D1 実装は embedding を返さないため補完
+        const outcome =
+          item.status === "stored" && embedding.length
+            ? await matchNewItem(c.store, item, c.cfg.matchThreshold)
+            : { matches: [], topScore: 0 };
+        return { item: toItemDto(item), matches: outcome.matches, topScore: outcome.topScore };
+      },
+      routeContracts.createItem,
+    )
+    .get(
+      "/api/items/:id",
+      async ({ params, set }) => {
+        const c = await ctx();
+        const item = await c.store.getItem(params.id);
+        if (!item) {
+          set.status = 404;
+          return { error: "not found" };
+        }
+        const matches = (await c.store.listMatches()).filter((m) => m.item_id === params.id);
+        return { item: toItemDto(item), matches };
+      },
+      routeContracts.getItem,
+    )
+    .patch(
+      "/api/items/:id",
+      async ({ params, body, set }) => {
+        const c = await ctx();
+        const existing = await c.store.getItem(params.id);
+        if (!existing) {
+          set.status = 404;
+          return { error: "not found" };
+        }
+        const patch = { ...body };
+        if (Object.hasOwn(patch, "storage_location")) {
+          patch.storage_location =
+            typeof patch.storage_location === "string" ? patch.storage_location.trim() : "";
+          if (!patch.storage_location) {
+            set.status = 400;
+            return { error: "storage_location_required" };
+          }
+        }
+        // 埋め込み対象の項目を含むPATCHは、同値でも再埋め込みする。
+        // D1更新後にVectorize upsertが失敗した場合、同じPATCHを再送して古いvector値を
+        // 修復できる必要がある。categoryは埋め込み本文とmetadataの両方に含まれる。
+        // 埋め込みが失敗しても、他のフィールドの編集（状態変更など）まで巻き込んで
+        // 失敗にしない — 埋め込みだけ古いまま保持し、ai_status で要再解析を示す。
+        const touchesFeatures = touchesAnyField(patch, [
+          "category",
+          "color",
+          "brand",
+          "ai_description",
+          "tags",
+          "found_location",
+          "notes",
+        ]);
+        // 永続データの書き込み成功をもって応答する。埋め込み・Vectorize同期は
+        // Workerのバックグラウンド処理へ分離し、編集モーダルを待たせない。
+        const updated = await c.store.updateItem(params.id, patch, { syncVector: false });
+        runAfterSave(refreshItemVector(c, params.id, touchesFeatures), "item", params.id);
+        return { item: updated ? toItemDto(updated) : null };
+      },
+      routeContracts.updateItem,
+    )
+    .delete(
+      "/api/items/:id",
+      async ({ params }) => {
+        const c = await ctx();
+        const deletedItem = await c.store.deleteItem(params.id);
+        if (deletedItem) {
+          const cleanupResults = await Promise.allSettled(
+            deletedItem.image_keys.map((key) => c.images.delete(key)),
+          );
+          cleanupResults.forEach((result, index) => {
+            if (result.status === "fulfilled") return;
+            console.error(
+              JSON.stringify({
+                event: "deletion_cleanup_failed",
+                resource: "r2_image",
+                entityId: deletedItem.id,
+                objectKey: deletedItem.image_keys[index],
+                applied: true,
+                error:
+                  result.reason instanceof Error ? result.reason.message : String(result.reason),
+              }),
+            );
+          });
+        }
+        return { deleted: deletedItem !== null };
+      },
+      routeContracts.deleteItem,
+    )
 
     // ---- search (vector + filters) ----
-    .post("/api/search", async ({ body }) => {
-      const c = await ctx();
-      const b = (body as any) ?? {};
-      const filters: SearchFilters = { ...parseFilters(b), limit: b.limit ?? 50 };
-      if (!filters.q) {
-        // クエリ無しならフィルタのみの一覧
-        const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
-        return { items: page.items.map((i) => ({ ...i, score: null })) };
-      }
-      const embedding = await safeEmbed(c.ai, filters.q);
-      if (!embedding.length) {
-        // AI障害時は特徴文検索を諦め、フィルタだけの一覧にフォールバック
-        // （検索自体を丸ごとエラーにしない）。degraded を立てて呼び出し側に
-        // 「ベクトル検索はできていない」ことを伝える（何も伝えないと検索してるのに
-        // スコアが出ず、壊れているようにしか見えない）。
-        const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
-        return { items: page.items.map((i) => ({ ...i, score: null })), degraded: true };
-      }
-      const items = await c.store.searchItems(embedding, filters);
-      return { items };
-    })
+    .post(
+      "/api/search",
+      async ({ body }) => {
+        const c = await ctx();
+        const b = body;
+        const filters: SearchFilters = { ...parseFilters(b), limit: b.limit ?? 50 };
+        if (!filters.q) {
+          // クエリ無しならフィルタのみの一覧
+          const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
+          return { items: page.items.map((i) => toItemDto({ ...i, score: null })) };
+        }
+        const embedding = await safeEmbed(c.ai, filters.q);
+        if (!embedding.length) {
+          // AI障害時は特徴文検索を諦め、フィルタだけの一覧にフォールバック
+          // （検索自体を丸ごとエラーにしない）。degraded を立てて呼び出し側に
+          // 「ベクトル検索はできていない」ことを伝える（何も伝えないと検索してるのに
+          // スコアが出ず、壊れているようにしか見えない）。
+          const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
+          return {
+            items: page.items.map((i) => toItemDto({ ...i, score: null })),
+            degraded: true,
+          };
+        }
+        const items = await c.store.searchItems(embedding, filters);
+        return { items: items.map(toItemDto) };
+      },
+      routeContracts.searchItems,
+    )
 
     // ---- ページ単位の全件再照合（管理画面の手動トリガー） ----
     // 管理画面がカーソルを引き継ぎ、100件ずつ終端まで順番に呼び出す。
-    .post("/api/rematch", async ({ body, set }) => {
-      const payload = (body as { cursor?: unknown; runId?: unknown } | undefined) ?? {};
-      let cursor: ItemCursorPosition | undefined;
-      try {
-        cursor = payload.cursor === undefined ? undefined : parseItemCursor(payload.cursor);
-      } catch {
-        set.status = 400;
-        return { error: "invalid_cursor" };
-      }
-      const runId =
-        payload.runId === undefined
-          ? undefined
-          : isRematchRunId(payload.runId)
-            ? payload.runId
-            : null;
-      if (runId === null) {
-        set.status = 400;
-        return { error: "invalid_run_id" };
-      }
-
-      try {
-        const c = await ctx();
-        if (!runId) return await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
-
-        const cache = await readRematchPageCache(c.store, runId);
-        const pageKey = rematchPageCacheKey(cursor);
-        const cached = cache.pages[pageKey];
-        if (cached) return cached;
-
-        const outcome = await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
-        cache.pages[pageKey] = outcome;
-        await c.store.setSetting(rematchCacheKey(runId), JSON.stringify(cache));
-        return outcome;
-      } catch (error) {
-        if (error instanceof InvalidItemCursorError) {
+    .post(
+      "/api/rematch",
+      async ({ body, set }) => {
+        const payload = body;
+        let cursor: ItemCursorPosition | undefined;
+        try {
+          cursor = payload.cursor === undefined ? undefined : parseItemCursor(payload.cursor);
+        } catch {
           set.status = 400;
-          return { error: error.message };
+          return { error: "invalid_cursor" };
         }
-        throw error;
-      }
-    })
-    .post("/api/rematch/finish", async ({ body, set }) => {
-      const runId = (body as { runId?: unknown } | undefined)?.runId;
-      if (!isRematchRunId(runId)) {
-        set.status = 400;
-        return { error: "invalid_run_id" };
-      }
-      const c = await ctx();
-      // 終了通知が失われてもTTLで回収できるよう、削除は補助的に行う。
-      await c.store.setSetting(rematchCacheKey(runId), "");
-      return { ok: true };
-    })
+        const runId =
+          payload.runId === undefined
+            ? undefined
+            : isRematchRunId(payload.runId)
+              ? payload.runId
+              : null;
+        if (runId === null) {
+          set.status = 400;
+          return { error: "invalid_run_id" };
+        }
+
+        try {
+          const c = await ctx();
+          if (!runId) return await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
+
+          const cache = await readRematchPageCache(c.store, runId);
+          const pageKey = rematchPageCacheKey(cursor);
+          const cached = cache.pages[pageKey];
+          if (cached) return cached;
+
+          const outcome = await rematchPage(c.store, c.ai, c.cfg.matchThreshold, cursor);
+          cache.pages[pageKey] = outcome;
+          await c.store.setSetting(rematchCacheKey(runId), JSON.stringify(cache));
+          return outcome;
+        } catch (error) {
+          if (error instanceof InvalidItemCursorError) {
+            set.status = 400;
+            return { error: error.message };
+          }
+          throw error;
+        }
+      },
+      routeContracts.rematch,
+    )
+    .post(
+      "/api/rematch/finish",
+      async ({ body, set }) => {
+        const runId = body.runId;
+        if (!isRematchRunId(runId)) {
+          set.status = 400;
+          return { error: "invalid_run_id" };
+        }
+        const c = await ctx();
+        // 終了通知が失われてもTTLで回収できるよう、削除は補助的に行う。
+        await c.store.setSetting(rematchCacheKey(runId), "");
+        return { ok: true };
+      },
+      routeContracts.finishRematch,
+    )
 
     // ---- inquiries ----
-    .get("/api/inquiries", async ({ query }) => {
-      const c = await ctx();
-      const inquiries = await c.store.listInquiries((query as any).status);
-      // ?withMatches=1 で照合候補（＋物品の画像）を同梱。
-      // 問い合わせ一覧から候補を写真付きで確認できるようにするため。
-      if ((query as any).withMatches !== "1") return { inquiries };
-      const allMatches = await c.store.listMatches();
-      const itemCache = new Map<string, Awaited<ReturnType<typeof c.store.getItem>>>();
-      const getItem = async (id: string) => {
-        if (!itemCache.has(id)) itemCache.set(id, await c.store.getItem(id));
-        return itemCache.get(id) ?? null;
-      };
-      const enriched = await Promise.all(
-        inquiries.map(async (inq) => {
-          const mine = allMatches
-            .filter((m) => m.inquiry_id === inq.id && m.status !== "rejected")
-            .sort((a, b) => b.score - a.score);
-          return {
-            ...inq,
-            matches: await Promise.all(
-              mine.map(async (m) => ({ ...m, item: await getItem(m.item_id) })),
-            ),
-          };
-        }),
-      );
-      return { inquiries: enriched };
-    })
-    .post("/api/inquiries", async ({ body }) => {
-      const c = await ctx();
-      const b = (body as any) ?? {};
-      const draft = {
-        status: "open" as const,
-        description: b.description ?? "",
-        category: b.category ?? "",
-        color: b.color ?? "",
-        ai_description: b.description ?? "",
-        tags: Array.isArray(b.tags) ? b.tags : [],
-        reference_no: b.reference_no ?? "",
-        notes: b.notes ?? "",
-      };
-      // 埋め込みが失敗しても、問い合わせの記録自体は必ず保存する。
-      const embedding = await safeEmbed(c.ai, inquiryEmbedText(draft));
-      const inquiry = await c.store.createInquiry({ ...draft, embedding });
-      inquiry.embedding = embedding;
-      const outcome = embedding.length
-        ? await matchNewInquiry(c.store, inquiry, c.cfg.matchThreshold)
-        : { matches: [], topScore: 0 };
-      return { inquiry, matches: outcome.matches, topScore: outcome.topScore };
-    })
-    .get("/api/inquiries/:id", async ({ params, set }) => {
-      const c = await ctx();
-      const inquiry = await c.store.getInquiry(params.id);
-      if (!inquiry) {
-        set.status = 404;
-        return { error: "not found" };
-      }
-      const matches = (await c.store.listMatches()).filter((m) => m.inquiry_id === params.id);
-      return { inquiry, matches };
-    })
-    .patch("/api/inquiries/:id", async ({ params, body, set }) => {
-      const c = await ctx();
-      const existing = await c.store.getInquiry(params.id);
-      if (!existing) {
-        set.status = 404;
-        return { error: "not found" };
-      }
-      const patch = { ...(body as any) };
-      delete patch.id;
-      delete patch.embedding;
-      // categoryは埋め込み本文にも含まれるため、同値の再試行を含めて再埋め込みする。
-      const touches = touchesAnyField(patch, ["category", "color", "description", "tags", "notes"]);
-      const updated = await c.store.updateInquiry(params.id, patch, { syncVector: false });
-      runAfterSave(refreshInquiryVector(c, params.id, touches), "inquiry", params.id);
-      return { inquiry: updated };
-    })
-    .delete("/api/inquiries/:id", async ({ params }) => {
-      const c = await ctx();
-      return { deleted: await c.store.deleteInquiry(params.id) };
-    })
+    .get(
+      "/api/inquiries",
+      async ({ query }) => {
+        const c = await ctx();
+        const inquiries = await c.store.listInquiries(query.status);
+        // ?withMatches=1 で照合候補（＋物品の画像）を同梱。
+        // 問い合わせ一覧から候補を写真付きで確認できるようにするため。
+        if (query.withMatches !== "1") {
+          return { inquiries: inquiries.map(toInquiryDto) };
+        }
+        const allMatches = await c.store.listMatches();
+        const itemCache = new Map<string, Awaited<ReturnType<typeof c.store.getItem>>>();
+        const getItem = async (id: string) => {
+          if (!itemCache.has(id)) itemCache.set(id, await c.store.getItem(id));
+          return itemCache.get(id) ?? null;
+        };
+        const enriched = await Promise.all(
+          inquiries.map(async (inq) => {
+            const mine = allMatches
+              .filter((m) => m.inquiry_id === inq.id && m.status !== "rejected")
+              .sort((a, b) => b.score - a.score);
+            return {
+              ...toInquiryDto(inq),
+              matches: await Promise.all(
+                mine.map(async (m) => {
+                  const item = await getItem(m.item_id);
+                  return { ...m, item: item ? toItemDto(item) : null };
+                }),
+              ),
+            };
+          }),
+        );
+        return { inquiries: enriched };
+      },
+      routeContracts.listInquiries,
+    )
+    .post(
+      "/api/inquiries",
+      async ({ body }) => {
+        const c = await ctx();
+        const b = body;
+        const draft = {
+          status: "open" as const,
+          description: b.description ?? "",
+          category: b.category ?? "",
+          color: b.color ?? "",
+          ai_description: b.description ?? "",
+          tags: Array.isArray(b.tags) ? b.tags : [],
+          reference_no: b.reference_no ?? "",
+          notes: b.notes ?? "",
+        };
+        // 埋め込みが失敗しても、問い合わせの記録自体は必ず保存する。
+        const embedding = await safeEmbed(c.ai, inquiryEmbedText(draft));
+        const inquiry = await c.store.createInquiry({ ...draft, embedding });
+        inquiry.embedding = embedding;
+        const outcome = embedding.length
+          ? await matchNewInquiry(c.store, inquiry, c.cfg.matchThreshold)
+          : { matches: [], topScore: 0 };
+        return {
+          inquiry: toInquiryDto(inquiry),
+          matches: outcome.matches,
+          topScore: outcome.topScore,
+        };
+      },
+      routeContracts.createInquiry,
+    )
+    .get(
+      "/api/inquiries/:id",
+      async ({ params, set }) => {
+        const c = await ctx();
+        const inquiry = await c.store.getInquiry(params.id);
+        if (!inquiry) {
+          set.status = 404;
+          return { error: "not found" };
+        }
+        const matches = (await c.store.listMatches()).filter((m) => m.inquiry_id === params.id);
+        return { inquiry: toInquiryDto(inquiry), matches };
+      },
+      routeContracts.getInquiry,
+    )
+    .patch(
+      "/api/inquiries/:id",
+      async ({ params, body, set }) => {
+        const c = await ctx();
+        const existing = await c.store.getInquiry(params.id);
+        if (!existing) {
+          set.status = 404;
+          return { error: "not found" };
+        }
+        const patch = { ...body };
+        // categoryは埋め込み本文にも含まれるため、同値の再試行を含めて再埋め込みする。
+        const touches = touchesAnyField(patch, [
+          "category",
+          "color",
+          "description",
+          "tags",
+          "notes",
+        ]);
+        const updated = await c.store.updateInquiry(params.id, patch, { syncVector: false });
+        runAfterSave(refreshInquiryVector(c, params.id, touches), "inquiry", params.id);
+        return { inquiry: updated ? toInquiryDto(updated) : null };
+      },
+      routeContracts.updateInquiry,
+    )
+    .delete(
+      "/api/inquiries/:id",
+      async ({ params }) => {
+        const c = await ctx();
+        return { deleted: await c.store.deleteInquiry(params.id) };
+      },
+      routeContracts.deleteInquiry,
+    )
 
     // ---- matches ----
-    .get("/api/matches", async ({ query }) => {
-      const c = await ctx();
-      const matches = await c.store.listMatches((query as any).status);
-      // 参照物品・問い合わせの要約を同梱（画面で扱いやすく）
-      const enriched = await Promise.all(
-        matches.map(async (m) => ({
-          ...m,
-          item: await c.store.getItem(m.item_id),
-          inquiry: await c.store.getInquiry(m.inquiry_id),
-        })),
-      );
-      return { matches: enriched };
-    })
-    .patch("/api/matches/:id", async ({ params, body, set }) => {
-      const c = await ctx();
-      const status = (body as any)?.status;
-      if (status !== "confirmed" && status !== "rejected") {
-        set.status = 400;
-        return { error: "invalid_match_status" };
-      }
+    .get(
+      "/api/matches",
+      async ({ query }) => {
+        const c = await ctx();
+        const matches = await c.store.listMatches(query.status);
+        // 参照物品・問い合わせの要約を同梱（画面で扱いやすく）
+        const enriched = await Promise.all(
+          matches.map(async (m) => {
+            const [item, inquiry] = await Promise.all([
+              c.store.getItem(m.item_id),
+              c.store.getInquiry(m.inquiry_id),
+            ]);
+            return {
+              ...m,
+              item: item ? toItemDto(item) : null,
+              inquiry: inquiry ? toInquiryDto(inquiry) : null,
+            };
+          }),
+        );
+        return { matches: enriched };
+      },
+      routeContracts.listMatches,
+    )
+    .patch(
+      "/api/matches/:id",
+      async ({ params, body, set }) => {
+        const c = await ctx();
+        const status = body.status;
+        if (status !== "confirmed" && status !== "rejected") {
+          set.status = 400;
+          return { error: "invalid_match_status" };
+        }
 
-      const result = await c.store.decideMatch(params.id, status);
-      if (!result.ok && result.reason === "not_found") {
-        set.status = 404;
-        return { error: "not found" };
-      }
-      if (!result.ok) {
-        set.status = 409;
-        return { error: "match_confirmation_conflict" };
-      }
-      return { match: result.match, inquiry: result.inquiry };
-    })
+        const result = await c.store.decideMatch(params.id, status);
+        if (!result.ok && result.reason === "not_found") {
+          set.status = 404;
+          return { error: "not found" };
+        }
+        if (!result.ok) {
+          set.status = 409;
+          return { error: "match_confirmation_conflict" };
+        }
+        return { match: result.match, inquiry: toInquiryDto(result.inquiry) };
+      },
+      routeContracts.decideMatch,
+    )
 
     // ---- notifications ----
-    .get("/api/notifications", async ({ query }) => {
-      const c = await ctx();
-      return { notifications: await c.store.listNotifications((query as any).unread === "1") };
-    })
-    .get("/api/notifications/unread-count", async () => {
-      const c = await ctx();
-      return { count: await c.store.unreadCount() };
-    })
-    .post("/api/notifications/:id/read", async ({ params }) => {
-      const c = await ctx();
-      return { ok: await c.store.markNotificationRead(params.id) };
-    })
+    .get(
+      "/api/notifications",
+      async ({ query }) => {
+        const c = await ctx();
+        return { notifications: await c.store.listNotifications(query.unread === "1") };
+      },
+      routeContracts.listNotifications,
+    )
+    .get(
+      "/api/notifications/unread-count",
+      async () => {
+        const c = await ctx();
+        return { count: await c.store.unreadCount() };
+      },
+      routeContracts.unreadCount,
+    )
+    .post(
+      "/api/notifications/:id/read",
+      async ({ params }) => {
+        const c = await ctx();
+        return { ok: await c.store.markNotificationRead(params.id) };
+      },
+      routeContracts.markNotificationRead,
+    )
 
     // ---- 物品CSV出力 ----
-    .get("/api/export/items.csv", async ({ query }) => {
-      const c = await ctx();
-      return new Response(createItemsCsvStream(c.store, parseFilters(query as any)), {
-        headers: {
-          "content-type": "text/csv; charset=utf-8",
-          "content-disposition": 'attachment; filename="items.csv"',
-        },
-      });
-    });
+    .get(
+      "/api/export/items.csv",
+      async ({ query }) => {
+        const c = await ctx();
+        return new Response(createItemsCsvStream(c.store, parseFilters(query)), {
+          headers: {
+            "content-type": "text/csv; charset=utf-8",
+            "content-disposition": 'attachment; filename="items.csv"',
+          },
+        });
+      },
+      routeContracts.exportItemsCsv,
+    );
 
   return app;
 }
