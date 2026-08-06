@@ -3,11 +3,12 @@ import { handleImageRequest, parseImageRequest } from "./index.ts";
 import { IMAGE_CACHE_TTL_SECONDS, IMAGE_VARIANTS } from "./variants.ts";
 
 const key = "img_123e4567-e89b-12d3-a456-426614174000.jpg";
+const heicKey = "img_123e4567-e89b-12d3-a456-426614174000.heic";
 const svgKey = "map_123e4567-e89b-12d3-a456-426614174000.svg";
 
-function fakeObject(contentType: string, body: Uint8Array, httpEtag = '"source"') {
+function fakeObject(contentType: string, body: Uint8Array, httpEtag = '"source"', objectKey = key) {
   return {
-    key,
+    key: objectKey,
     version: "version",
     size: body.byteLength,
     etag: httpEtag.replaceAll('"', ""),
@@ -137,6 +138,22 @@ describe("画像URLの固定variant", () => {
     );
     const response = await handleImageRequest(
       new Request(`https://found.s-t.work/api/images/${key}?variant=thumb`),
+      fixture.env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/webp");
+    expect(response.headers.get("content-length")).toBe("3");
+    expect(response.headers.get("etag")).toBe('W/"source-thumb"');
+  });
+
+  test("HEICの固定variantもWebPへ変換する", async () => {
+    const fixture = fakeEnv(
+      [fakeObject("image/heic", new Uint8Array([1, 2, 3, 4]), '"source"', heicKey)],
+      new Response(new Uint8Array([9, 8, 7]), { headers: { "content-type": "image/webp" } }),
+    );
+    const response = await handleImageRequest(
+      new Request(`https://found.s-t.work/api/images/${heicKey}?variant=thumb`),
       fixture.env,
     );
 

@@ -5,7 +5,7 @@ export type { ImageVariant } from "./variants.ts";
 const IMAGE_PATH_PREFIX = "/api/images/";
 const IMAGE_KEY_PATTERN =
   /^(?:img|map)_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|jpeg|png|webp|gif|heic|avif|svg|pdf|bin)$/i;
-const TRANSFORMABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);
+const TRANSFORMABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif", "heic"]);
 
 export interface ImageRequest {
   key: string;
@@ -204,8 +204,9 @@ export async function handleImageRequest(request: Request, env: Env): Promise<Re
   try {
     return await transformedResponse(request, env, source, key, variant);
   } catch (error) {
-    // SVG/PDF/HEIC and malformed uploads remain usable as originals. Re-read because
-    // the Images binding consumes the R2 stream before reporting a transform error.
+    // SVG/PDF and malformed uploads remain usable as originals. HEIC sources also
+    // fall back when the Images binding cannot decode them. Re-read because the
+    // Images binding consumes the R2 stream before reporting a transform error.
     console.warn(
       JSON.stringify({ event: "image_transform_fallback", key, variant, error: String(error) }),
     );
