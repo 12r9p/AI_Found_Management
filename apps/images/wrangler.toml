@@ -2,12 +2,8 @@ name = "found-images"
 main = "src/index.ts"
 compatibility_date = "2026-08-04"
 
-# workers.dev からの迂回を許可せず、Accessで保護した同一ホストのrouteだけを公開する。
+# 公開Routeとworkers.devを持たず、found-apiのService Bindingからだけ到達させる。
 workers_dev = false
-
-[[routes]]
-pattern = "found.s-t.work/api/images/*"
-zone_name = "s-t.work"
 
 # 既存APIと同じR2原本を読む。派生画像はR2へ保存しない。
 [[r2_buckets]]

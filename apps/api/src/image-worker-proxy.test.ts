@@ -31,3 +31,13 @@ test("画像routeはService Bindingの画像Workerへ同じRequestを転送す�
     setEnv({});
   }
 });
+
+test("画像WorkerのService Bindingがない場合は旧R2経路へフォールバックしない", async () => {
+  setEnv({});
+  const response = await createApp().handle(
+    new Request("http://localhost/api/images/img_123e4567-e89b-12d3-a456-426614174000.jpg"),
+  );
+
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ error: "image_worker_unavailable" });
+});

@@ -22,9 +22,9 @@ apps/
 | ---------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | フロント   | **Next.js 16**（App Router）       | Workers に OpenNext でデプロイ。API と分離。                                                                                                                                                                                                                                                  |
 | API        | **Elysia**                         | Bun ローカル / Workers 両対応（`src/index.ts` と `src/worker.ts`）。                                                                                                                                                                                                                          |
-| インフラ   | **Cloudflare Workers**             | フロント・API・画像配信をWorker分離。画像は本番Route、ローカルService Bindingで同じWorkerを通す。                                                                                                                                                                                             |
+| インフラ   | **Cloudflare Workers**             | フロント・API・画像配信をWorker分離。画像は開発・本番ともAPIのService Binding経由で同じWorkerを通す。                                                                                                                                                                                         |
 | DB         | **D1 + Vectorize**                 | D1 が行データ（source of truth）、Vectorize が埋め込みの近似最近傍検索（items/inquiries で2インデックス）。バインディング未設定時（素の `bun run dev:api` 等）は**インメモリ**で起動（外部依存ゼロでデモ可）。ローカルでは `apps/api/.data/store.json` に自動保存され、再起動しても消えない。 |
-| ストレージ | **R2**                             | 遺失物画像。画像配信は `apps/images` の固定variant Worker、ローカルは同WorkerをService Binding経由で使用。                                                                                                                                                                                    |
+| ストレージ | **R2**                             | 遺失物画像。画像配信は `apps/images` の固定variant Worker、開発・本番ともAPIのService Binding経由で使用。                                                                                                                                                                                     |
 | AI         | **GPT 5.6 Luna 相当 / effort=low** | 画像特徴抽出＋埋め込み。`AI_API_KEY` 未設定時は**決定論的モック**で動作（日本語は文字 n-gram 埋め込み）。                                                                                                                                                                                     |
 
 ### 設計上のポイント
@@ -133,7 +133,7 @@ Vectorize インデックス（`found-items`/`found-inquiries`）は別途作成
 
 ### 1. 画像Worker
 
-API WorkerのService Binding先になるため、先にデプロイします。
+API WorkerのService Binding先になるため、先にデプロイします。公開Routeと`workers.dev`は持たず、API経由だけで到達します。
 
 ```bash
 cd apps/images

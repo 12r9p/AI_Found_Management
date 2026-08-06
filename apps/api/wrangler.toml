@@ -17,8 +17,8 @@ zone_name = "s-t.work"
 binding = "IMAGES"
 bucket_name = "found-images"
 
-# ローカルのmulti-worker開発では、APIの画像routeを専用画像Workerへ渡す。
-# 本番の同一ホストrouteでは、より具体的なfound-images routeが直接処理する。
+# 開発・本番とも、APIが認証後に画像Workerへ画像routeを渡す。
+# 画像Workerには公開Routeを設定せず、このService Bindingだけを入口にする。
 [[services]]
 binding = "IMAGE_WORKER"
 service = "found-images"

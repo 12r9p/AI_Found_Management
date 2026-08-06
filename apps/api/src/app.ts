@@ -381,47 +381,20 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       }
       return { keys };
     })
-    .get("/api/images/:key", async ({ params, set, request }) => {
-      // 本番はCloudflare Routeが画像Workerへ直接振り分けるが、ローカルの
-      // multi-worker開発ではAPI WorkerがService Binding経由で同じWorkerへ渡す。
+    .get("/api/images/:key", async ({ set, request }) => {
+      // 開発・本番ともAPIを認証境界にし、画像WorkerへService Bindingで転送する。
       const imageWorker = getEnv().IMAGE_WORKER;
-      if (imageWorker) {
-        try {
-          return await imageWorker.fetch(request);
-        } catch (error) {
-          // 画像Workerを単独起動した場合も既存のR2フォールバックで開発を続けられるようにする。
-          console.warn(`[image-worker] proxy unavailable, using API fallback: ${String(error)}`);
-        }
+      if (!imageWorker) {
+        set.status = 503;
+        return { error: "image_worker_unavailable" };
       }
-
-      // 画像キーは crypto.randomUUID() ベースで不変（同じキーの中身が変わることはない）。
-      // Cloudflare のエッジキャッシュに直接載せることで、R2/Worker を経由せず
-      // colo からそのまま返せるようにする（Bunローカル開発には caches が無いので素通し）。
-      const edgeCache = (globalThis as any).caches?.default as Cache | undefined;
-      const cacheKey = edgeCache ? new Request(new URL(request.url).toString()) : null;
-      if (edgeCache && cacheKey) {
-        const hit = await edgeCache.match(cacheKey);
-        if (hit) return hit;
+      try {
+        return await imageWorker.fetch(request);
+      } catch (error) {
+        console.error(`[image-worker] proxy failed: ${String(error)}`);
+        set.status = 503;
+        return { error: "image_worker_unavailable" };
       }
-      const c = await ctx();
-      const obj = await c.images.get(params.key);
-      if (!obj) {
-        set.status = 404;
-        return "not found";
-      }
-      const res = new Response(new Uint8Array(obj.body), {
-        headers: {
-          "content-type": obj.contentType,
-          "cache-control": "public, max-age=604800, s-maxage=604800",
-          "cdn-cache-control": "public, max-age=604800",
-          "content-length": String(obj.body.byteLength),
-          // The legacy storage interface does not expose the R2 etag. The key is
-          // immutable, so this weak validator remains stable for the fallback route.
-          etag: `W/"${params.key}"`,
-        },
-      });
-      if (edgeCache && cacheKey) waitUntil(edgeCache.put(cacheKey, res.clone()));
-      return res;
     })
 
     // ---- 地図（拾得場所のピン留め用） ----
