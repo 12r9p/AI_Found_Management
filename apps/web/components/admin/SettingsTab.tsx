@@ -17,6 +17,7 @@ import { MapPicker, invalidateMapCache, type Pin } from "../MapPicker";
 import { api } from "../../lib/api";
 import type { IdRule, LocationPreset, MetaOption } from "../../lib/types";
 import { normalizeImageFile } from "../../lib/image";
+import { clearPwaCaches } from "../../lib/pwa";
 
 /** 設定タブ: 会場地図と、種別・色の選択肢を編集する。 */
 export function SettingsTab() {
@@ -37,7 +38,50 @@ export function SettingsTab() {
         description="登録・検索で使う色の選択肢です。"
         placeholder="例: モスグリーン"
       />
+      <PwaCacheSetting />
     </div>
+  );
+}
+
+function PwaCacheSetting() {
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = async () => {
+    const ok = await confirm({
+      title: "キャッシュを削除して最新版にする",
+      body: "このサイトのService Worker登録とCache Storageを削除して、ページを再読み込みします。サーバー上の物品・設定・画像データは変更されません。入力中の内容も保存・復元されません。",
+      danger: true,
+      okLabel: "削除して更新",
+    });
+    if (!ok) return;
+
+    setRefreshing(true);
+    try {
+      await clearPwaCaches();
+      window.location.reload();
+    } catch (error) {
+      toast(`キャッシュの削除に失敗しました: ${(error as Error).message}`, "error");
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <Card variant="bordered">
+      <div className="rb-between mb-8">
+        <h3 style={{ margin: 0 }}>PWAキャッシュ</h3>
+      </div>
+      <p className="rb-small muted-text">
+        Service WorkerとCache
+        Storageを削除して、ページを最新版として再読み込みします。サーバーの物品・設定・画像データやブラウザのHTTPキャッシュは削除しません。
+      </p>
+      <div className="rb-row mt-16">
+        <Button variant="destructive" onClick={() => void refresh()} disabled={refreshing}>
+          {refreshing ? "更新準備中…" : "キャッシュを削除して最新版にする"}
+        </Button>
+      </div>
+    </Card>
   );
 }
 
