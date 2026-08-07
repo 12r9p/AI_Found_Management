@@ -85,8 +85,10 @@ export function MapPicker({
 }) {
   const [mapKey, setMapKey] = useState<string>(mapKeyOverride ?? cachedMapKey ?? "");
   const [loading, setLoading] = useState(!mapKeyOverride && cachedMapKey == null);
+  const [showRegionLabels, setShowRegionLabels] = useState(true);
   const boxRef = useRef<HTMLButtonElement>(null);
   const hintId = useId();
+  const hasRegionLabels = Boolean(regions?.some((region) => region.name));
 
   useEffect(() => {
     if (mapKeyOverride) {
@@ -171,19 +173,20 @@ export function MapPicker({
         </svg>
       )}
 
-      {regions?.map((r) => {
-        const c = centroid(r.points);
-        return (
-          <span
-            key={`${r.name}-label`}
-            className="map-region-label"
-            style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }}
-            aria-hidden
-          >
-            {r.name}
-          </span>
-        );
-      })}
+      {showRegionLabels &&
+        regions?.map((r) => {
+          const c = centroid(r.points);
+          return (
+            <span
+              key={`${r.name}-label`}
+              className="map-region-label"
+              style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }}
+              aria-hidden
+            >
+              {r.name}
+            </span>
+          );
+        })}
       {previewPoints?.map((p, i) => (
         <span
           key={i}
@@ -238,14 +241,26 @@ export function MapPicker({
           {mapLayers}
         </BaseButton>
       )}
-      {!readOnly && (
+      {(hasRegionLabels || (!readOnly && value)) && (
         <div className="rb-row mt-8">
-          <output id={hintId} className="rb-hint" aria-live="polite">
-            {value
-              ? `ピン位置: ${(value.x * 100).toFixed(0)}% , ${(value.y * 100).toFixed(0)}%（矢印キーで微調整）`
-              : ""}
-          </output>
-          {value && onChange && (
+          {hasRegionLabels && (
+            <Button
+              variant="outline"
+              size="sm"
+              aria-pressed={showRegionLabels}
+              onClick={() => setShowRegionLabels((visible) => !visible)}
+            >
+              {showRegionLabels ? "エリア名を隠す" : "エリア名を表示"}
+            </Button>
+          )}
+          {!readOnly && (
+            <output id={hintId} className="rb-hint" aria-live="polite">
+              {value
+                ? `ピン位置: ${(value.x * 100).toFixed(0)}% , ${(value.y * 100).toFixed(0)}%（矢印キーで微調整）`
+                : ""}
+            </output>
+          )}
+          {!readOnly && value && onChange && (
             <Button variant="outline" size="sm" onClick={() => onChange(null)}>
               ピンを消す
             </Button>
