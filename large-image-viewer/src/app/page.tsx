@@ -28,11 +28,11 @@ const STATUS_LABEL: Record<string, string> = {
 const DEFAULT_REMOTE_API = "https://found.s-t.work";
 
 export default function LargeImageViewerPage() {
-  // 空文字の場合は Next.js の rewrites プロキシ (https://found.s-t.work へ転送) を利用
   const [apiBase, setApiBase] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isAuthError, setIsAuthError] = useState(false);
   const [imageVariant, setImageVariant] = useState<"original" | "preview" | "thumb">("original");
   const [imageSize, setImageSize] = useState<number>(200); // px
   const [filterText, setFilterText] = useState("");
@@ -41,6 +41,7 @@ export default function LargeImageViewerPage() {
   const fetchItems = async () => {
     setLoading(true);
     setError("");
+    setIsAuthError(false);
     try {
       let allItems: Item[] = [];
       let cursor: { createdAt: string; id: string } | null = null;
@@ -59,10 +60,24 @@ export default function LargeImageViewerPage() {
         const endpoint = `${baseUrl}/api/items?${params.toString()}`;
         const res = await fetch(endpoint, {
           credentials: "include",
+          headers: {
+            "Accept": "application/json",
+          },
         });
+
+        // ログイン画面へのリダイレクト判定
+        if (res.redirected && res.url.includes("cloudflareaccess.com")) {
+          setIsAuthError(true);
+          throw new Error("Cloudflare Access (Zero Trust) のログイン認証が必要です。");
+        }
+
         if (!res.ok) {
+          if (res.status === 403 || res.status === 302) {
+            setIsAuthError(true);
+          }
           throw new Error(`APIエラー: HTTP ${res.status} (${endpoint})`);
         }
+
         const data = await res.json();
         allItems = [...allItems, ...(data.items || [])];
 
@@ -199,10 +214,22 @@ export default function LargeImageViewerPage() {
 
       {/* エラー表示 */}
       {error && (
-        <div style={{ padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 6, marginBottom: 16 }}>
-          <strong>通信エラー:</strong> {error}
-          <div style={{ fontSize: 11, marginTop: 4, color: "#7f1d1d" }}>
-            ※ 直接URLを入力してCORSエラーになる場合は、入力欄を空欄にしてNext.jsのプロキシ機能経由でアクセスしてください。
+        <div style={{ padding: 16, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 6, marginBottom: 16 }}>
+          <div style={{ fontWeight: "bold", fontSize: 15, marginBottom: 4 }}>通信エラーが発生しました</div>
+          <div>{error}</div>
+          
+          <div style={{ marginTop: 12, padding: 12, background: "#fff", border: "1px solid #fca5a5", borderRadius: 4, fontSize: 13, color: "#1e293b" }}>
+            <div style={{ fontWeight: "bold", marginBottom: 6 }}>🔑 解決方法（Cloudflare Access 認証）:</div>
+            <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
+              <li>
+                ブラウザの別タブで{" "}
+                <a href="https://found.s-t.work" target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: "bold" }}>
+                  https://found.s-t.work
+                </a>{" "}
+                を開いてログイン認証を完了させてください。
+              </li>
+              <li>ログイン完了後、このページに戻り「再読み込み」ボタンを押してください。</li>
+            </ol>
           </div>
         </div>
       )}
