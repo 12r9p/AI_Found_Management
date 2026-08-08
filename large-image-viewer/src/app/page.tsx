@@ -109,7 +109,7 @@ export default function LargeImageViewerPage() {
 
   useEffect(() => {
     fetchItems();
-  }, [apiBase]);
+  }, [apiBase, cfToken]);
 
   const filteredItems = useMemo(() => {
     if (!filterText.trim()) return items;
@@ -125,9 +125,66 @@ export default function LargeImageViewerPage() {
     );
   }, [items, filterText]);
 
-  const getImageUrl = (key: string) => {
-    const baseUrl = apiBase.replace(/\/$/, "");
-    return `${baseUrl}/api/images/${encodeURIComponent(key)}?variant=${imageVariant}`;
+  // 画像表示用コンポーネント (画像取得時の認証エラーやリダイレクトを回避するためにBlob fetchまたはトークン付きURLを処理)
+  const AuthenticatedImage = ({ imageKey, size, onClick }: { imageKey: string; size: number; onClick: (url: string) => void }) => {
+    const [blobUrl, setBlobUrl] = useState<string | null>(null);
+    const [imgError, setImgError] = useState(false);
+
+    useEffect(() => {
+      let active = true;
+      const baseUrl = apiBase.replace(/\/$/, "");
+      const url = `${baseUrl}/api/images/${encodeURIComponent(imageKey)}?variant=${imageVariant}`;
+
+      const headers: Record<string, string> = {};
+      if (cfToken.trim()) {
+        headers["Cf-Access-Jwt-Assertion"] = cfToken.trim();
+      }
+
+      fetch(url, { credentials: "include", headers })
+        .then((res) => {
+          if (!res.ok) throw new Error("Image load failed");
+          return res.blob();
+        })
+        .then((blob) => {
+          if (!active) return;
+          const objectUrl = URL.createObjectURL(blob);
+          setBlobUrl(objectUrl);
+        })
+        .catch(() => {
+          if (active) setImgError(true);
+        });
+
+      return () => {
+        active = false;
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+      };
+    }, [imageKey, imageVariant, apiBase, cfToken]);
+
+    if (imgError) {
+      return <span style={{ color: "#ef4444", fontSize: 11 }}>読込失敗</span>;
+    }
+    if (!blobUrl) {
+      return <span style={{ color: "#94a3b8", fontSize: 11 }}>読込中...</span>;
+    }
+
+    return (
+      <img
+        src={blobUrl}
+        alt=""
+        onClick={() => onClick(blobUrl)}
+        style={{
+          width: size,
+          height: size,
+          objectFit: "cover",
+          border: "1px solid #333",
+          borderRadius: 4,
+          display: "block",
+          cursor: "pointer",
+          margin: "0 auto",
+        }}
+        title="クリックで原寸拡大"
+      />
+    );
   };
 
   return (
@@ -304,30 +361,16 @@ export default function LargeImageViewerPage() {
           <tbody>
             {filteredItems.map((it, i) => {
               const imageKey = it.image_keys[0];
-              const imgUrl = imageKey ? getImageUrl(imageKey) : null;
 
               return (
                 <tr key={it.id} style={{ borderBottom: "1px solid #ccc" }}>
                   <td style={cell}>{i + 1}</td>
                   <td style={{ ...cell, width: imageSize + 16, textAlign: "center" }}>
-                    {imgUrl ? (
-                      <img
-                        src={imgUrl}
-                        alt=""
-                        loading="lazy"
-                        onClick={() => setSelectedImage(imgUrl)}
-                        style={{
-                          width: imageSize,
-                          height: imageSize,
-                          objectFit: "cover",
-                          border: "1px solid #333",
-                          borderRadius: 4,
-                          display: "block",
-                          cursor: "pointer",
-                          margin: "0 auto",
-                          transition: "transform 0.15s ease-in-out",
-                        }}
-                        title="クリックで原寸拡大"
+                    {imageKey ? (
+                      <AuthenticatedImage
+                        imageKey={imageKey}
+                        size={imageSize}
+                        onClick={(url) => setSelectedImage(url)}
                       />
                     ) : (
                       <span style={{ color: "#94a3b8" }}>なし</span>
