@@ -29,19 +29,29 @@ const DEFAULT_REMOTE_API = "https://found.s-t.work";
 
 export default function LargeImageViewerPage() {
   const [apiBase, setApiBase] = useState("");
+  const [cfToken, setCfToken] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isAuthError, setIsAuthError] = useState(false);
   const [imageVariant, setImageVariant] = useState<"original" | "preview" | "thumb">("original");
   const [imageSize, setImageSize] = useState<number>(200); // px
   const [filterText, setFilterText] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  // ローカルストレージからトークン復元
+  useEffect(() => {
+    const savedToken = localStorage.getItem("cf_access_token");
+    if (savedToken) setCfToken(savedToken);
+  }, []);
+
+  const handleTokenChange = (val: string) => {
+    setCfToken(val);
+    localStorage.setItem("cf_access_token", val);
+  };
+
   const fetchItems = async () => {
     setLoading(true);
     setError("");
-    setIsAuthError(false);
     try {
       let allItems: Item[] = [];
       let cursor: { createdAt: string; id: string } | null = null;
@@ -58,23 +68,25 @@ export default function LargeImageViewerPage() {
         }
 
         const endpoint = `${baseUrl}/api/items?${params.toString()}`;
+        
+        const headers: Record<string, string> = {
+          "Accept": "application/json",
+        };
+        if (cfToken.trim()) {
+          headers["Cf-Access-Jwt-Assertion"] = cfToken.trim();
+        }
+
         const res = await fetch(endpoint, {
           credentials: "include",
-          headers: {
-            "Accept": "application/json",
-          },
+          headers,
         });
 
         // ログイン画面へのリダイレクト判定
         if (res.redirected && res.url.includes("cloudflareaccess.com")) {
-          setIsAuthError(true);
-          throw new Error("Cloudflare Access (Zero Trust) のログイン認証が必要です。");
+          throw new Error("Cloudflare Access (Zero Trust) の認証が必要です。下部のトークン入力を行ってください。");
         }
 
         if (!res.ok) {
-          if (res.status === 403 || res.status === 302) {
-            setIsAuthError(true);
-          }
           throw new Error(`APIエラー: HTTP ${res.status} (${endpoint})`);
         }
 
@@ -151,63 +163,85 @@ export default function LargeImageViewerPage() {
             border: "1px solid #cbd5e1",
             borderRadius: 6,
             display: "flex",
-            flexWrap: "wrap",
-            gap: 16,
-            alignItems: "center",
+            flexDirection: "column",
+            gap: 12,
             fontSize: 13,
           }}
         >
-          <div>
-            <label style={{ fontWeight: "bold", marginRight: 6 }}>API URL:</label>
-            <input
-              type="text"
-              value={apiBase}
-              placeholder={`空欄でプロキシ(${DEFAULT_REMOTE_API})経由`}
-              onChange={(e) => setApiBase(e.target.value)}
-              style={{ padding: "4px 8px", border: "1px solid #94a3b8", borderRadius: 4, width: 280, fontFamily: "monospace" }}
-            />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+            <div>
+              <label style={{ fontWeight: "bold", marginRight: 6 }}>API URL:</label>
+              <input
+                type="text"
+                value={apiBase}
+                placeholder={`空欄でプロキシ(${DEFAULT_REMOTE_API})`}
+                onChange={(e) => setApiBase(e.target.value)}
+                style={{ padding: "4px 8px", border: "1px solid #94a3b8", borderRadius: 4, width: 240, fontFamily: "monospace" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontWeight: "bold", marginRight: 6 }}>画質(variant):</label>
+              <select
+                value={imageVariant}
+                onChange={(e) => setImageVariant(e.target.value as any)}
+                style={{ padding: "4px 8px", border: "1px solid #94a3b8", borderRadius: 4 }}
+              >
+                <option value="original">Original (元画像・高画質)</option>
+                <option value="preview">Preview (中サイズ)</option>
+                <option value="thumb">Thumb (サムネイル小)</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontWeight: "bold", marginRight: 6 }}>表示サイズ: {imageSize}px</label>
+              <input
+                type="range"
+                min="100"
+                max="400"
+                step="20"
+                value={imageSize}
+                onChange={(e) => setImageSize(Number(e.target.value))}
+                style={{ verticalAlign: "middle" }}
+              />
+            </div>
+
+            <div>
+              <input
+                type="text"
+                placeholder="キーワードで絞り込み..."
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                style={{ padding: "4px 10px", border: "1px solid #94a3b8", borderRadius: 4, width: 180 }}
+              />
+            </div>
+
             <button
               onClick={fetchItems}
-              style={{ marginLeft: 6, padding: "4px 10px", background: "#000", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}
+              style={{ padding: "5px 14px", background: "#000", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: "bold" }}
             >
               再読み込み
             </button>
           </div>
 
-          <div>
-            <label style={{ fontWeight: "bold", marginRight: 6 }}>画質(variant):</label>
-            <select
-              value={imageVariant}
-              onChange={(e) => setImageVariant(e.target.value as any)}
-              style={{ padding: "4px 8px", border: "1px solid #94a3b8", borderRadius: 4 }}
-            >
-              <option value="original">Original (元画像・高画質)</option>
-              <option value="preview">Preview (中サイズ)</option>
-              <option value="thumb">Thumb (サムネイル小)</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontWeight: "bold", marginRight: 6 }}>表示サイズ: {imageSize}px</label>
+          {/* Cloudflare Access トークン入力エリア */}
+          <div style={{ paddingTop: 8, borderTop: "1px dashed #cbd5e1", display: "flex", alignItems: "center", gap: 8 }}>
+            <label style={{ fontWeight: "bold", color: "#334155" }}>🔒 Cloudflare Access JWT (CF_Authorization):</label>
             <input
-              type="range"
-              min="100"
-              max="400"
-              step="20"
-              value={imageSize}
-              onChange={(e) => setImageSize(Number(e.target.value))}
-              style={{ verticalAlign: "middle" }}
+              type="password"
+              placeholder="トークン文字列を入力（省略時はCookie参照）"
+              value={cfToken}
+              onChange={(e) => handleTokenChange(e.target.value)}
+              style={{ padding: "4px 8px", border: "1px solid #94a3b8", borderRadius: 4, flex: 1, fontFamily: "monospace", fontSize: 12 }}
             />
-          </div>
-
-          <div>
-            <input
-              type="text"
-              placeholder="キーワードで絞り込み..."
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              style={{ padding: "4px 10px", border: "1px solid #94a3b8", borderRadius: 4, width: 200 }}
-            />
+            {cfToken && (
+              <button
+                onClick={() => handleTokenChange("")}
+                style={{ padding: "4px 8px", background: "#ef4444", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 11 }}
+              >
+                クリア
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -217,18 +251,24 @@ export default function LargeImageViewerPage() {
         <div style={{ padding: 16, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 6, marginBottom: 16 }}>
           <div style={{ fontWeight: "bold", fontSize: 15, marginBottom: 4 }}>通信エラーが発生しました</div>
           <div>{error}</div>
-          
+
           <div style={{ marginTop: 12, padding: 12, background: "#fff", border: "1px solid #fca5a5", borderRadius: 4, fontSize: 13, color: "#1e293b" }}>
-            <div style={{ fontWeight: "bold", marginBottom: 6 }}>🔑 解決方法（Cloudflare Access 認証）:</div>
+            <div style={{ fontWeight: "bold", marginBottom: 6 }}>💡 理由と対策 (Cloudflare Access 認証):</div>
+            <p style={{ margin: "0 0 8px 0", lineHeight: 1.5 }}>
+              `https://found.s-t.work` は Cloudflare Access で保護されています。ローカル環境 (`localhost:3000`) からのクロスドメイン通信では、ブラウザのセキュリティ仕様により認証 Cookie がブロックされます。
+            </p>
+            <div style={{ fontWeight: "bold", marginTop: 8, marginBottom: 4 }}>【対処手順】</div>
             <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
               <li>
-                ブラウザの別タブで{" "}
                 <a href="https://found.s-t.work" target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: "bold" }}>
                   https://found.s-t.work
                 </a>{" "}
-                を開いてログイン認証を完了させてください。
+                を開き、DevTools (F12) ➔ 「アプリケーション(Storage)」 ➔ 「Cookie」 を開きます。
               </li>
-              <li>ログイン完了後、このページに戻り「再読み込み」ボタンを押してください。</li>
+              <li>
+                <code style={{ background: "#f1f5f9", padding: "2px 4px", borderRadius: 3 }}>CF_Authorization</code> という名前の Cookie の値をコピーします。
+              </li>
+              <li>上記の「🔒 Cloudflare Access JWT」欄に貼り付け、「再読み込み」を押してください。</li>
             </ol>
           </div>
         </div>
