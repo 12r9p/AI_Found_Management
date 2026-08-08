@@ -25,9 +25,10 @@ const STATUS_LABEL: Record<string, string> = {
   discarded: "処分済",
 };
 
+const DEFAULT_REMOTE_API = "https://found.s-t.work";
+
 export default function LargeImageViewerPage() {
-  // デフォルトは空文字（Next.js のプロキシ rewrite /api/ を使用することでCORS回避）
-  // 外部APIを直接指定する場合は "http://localhost:8787" などを入力可能
+  // 空文字の場合は Next.js の rewrites プロキシ (https://found.s-t.work へ転送) を利用
   const [apiBase, setApiBase] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +121,8 @@ export default function LargeImageViewerPage() {
             <h1 style={{ margin: 0, fontSize: 28, fontWeight: "bold" }}>遺失物 登録一覧（大判画像表示版）</h1>
           </div>
           <div style={{ fontSize: 12, textAlign: "right" }}>
+            接続先: <strong>{apiBase || DEFAULT_REMOTE_API}</strong>
+            <br />
             データ件数: <strong>{filteredItems.length}</strong> / 全 {items.length} 件
           </div>
         </div>
@@ -140,13 +143,13 @@ export default function LargeImageViewerPage() {
           }}
         >
           <div>
-            <label style={{ fontWeight: "bold", marginRight: 6 }}>API接続URL (空欄=プロキシ利用):</label>
+            <label style={{ fontWeight: "bold", marginRight: 6 }}>API URL:</label>
             <input
               type="text"
               value={apiBase}
-              placeholder="http://localhost:8787 などの直接指定も可"
+              placeholder={`空欄でプロキシ(${DEFAULT_REMOTE_API})経由`}
               onChange={(e) => setApiBase(e.target.value)}
-              style={{ padding: "4px 8px", border: "1px solid #94a3b8", borderRadius: 4, width: 260, fontFamily: "monospace" }}
+              style={{ padding: "4px 8px", border: "1px solid #94a3b8", borderRadius: 4, width: 280, fontFamily: "monospace" }}
             />
             <button
               onClick={fetchItems}
@@ -199,7 +202,7 @@ export default function LargeImageViewerPage() {
         <div style={{ padding: 12, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 6, marginBottom: 16 }}>
           <strong>通信エラー:</strong> {error}
           <div style={{ fontSize: 11, marginTop: 4, color: "#7f1d1d" }}>
-            ※ CORSエラーを回比するため、API接続URLを空欄にしてNext.jsのプロキシ機能経由でアクセスすることを推奨します。
+            ※ 直接URLを入力してCORSエラーになる場合は、入力欄を空欄にしてNext.jsのプロキシ機能経由でアクセスしてください。
           </div>
         </div>
       )}
@@ -207,7 +210,7 @@ export default function LargeImageViewerPage() {
       {/* ローディング表示 */}
       {loading ? (
         <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
-          データを取得中...
+          データを取得中 ({DEFAULT_REMOTE_API})...
         </div>
       ) : (
         /* メインテーブル */
