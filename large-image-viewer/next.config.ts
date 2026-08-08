@@ -1,16 +1,7 @@
 import type { NextConfig } from "next";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://found.s-t.work";
-
 const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${API_BASE}/api/:path*`,
-      },
-    ];
-  },
+  /* Route Handlers (/src/app/api) handle proxying to Cloudflare Access */
 };
 
 export default nextConfig;
