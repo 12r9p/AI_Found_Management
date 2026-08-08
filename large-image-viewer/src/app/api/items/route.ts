@@ -7,24 +7,33 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams.toString();
     const url = `${TARGET_API}/api/items${searchParams ? `?${searchParams}` : ""}`;
 
-    const token = request.headers.get("cf-access-jwt-assertion");
     const headers: Record<string, string> = {
       Accept: "application/json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NextJS-Proxy",
+      "User-Agent": request.headers.get("user-agent") || "NextJS-Proxy",
     };
 
-    if (token && token.trim()) {
-      headers["Cf-Access-Jwt-Assertion"] = token.trim();
-      headers["Cookie"] = `CF_Authorization=${token.trim()}`;
+    // クライアントからの認証ヘッダーおよびCookieをそのままターゲットAPIへ転送
+    const jwtHeader = request.headers.get("cf-access-jwt-assertion");
+    const cookieHeader = request.headers.get("cookie");
+    const authHeader = request.headers.get("authorization");
+
+    if (jwtHeader) {
+      headers["Cf-Access-Jwt-Assertion"] = jwtHeader.trim();
+      headers["Cookie"] = `CF_Authorization=${jwtHeader.trim()}`;
+    } else if (cookieHeader) {
+      headers["Cookie"] = cookieHeader;
+    }
+
+    if (authHeader) {
+      headers["Authorization"] = authHeader;
     }
 
     const res = await fetch(url, {
       headers,
       cache: "no-store",
-      redirect: "manual", // リダイレクトを自前で検出
+      redirect: "manual",
     });
 
-    // Cloudflare Access の 302 リダイレクト（未認証）
     if (res.status === 302 || res.status === 301 || res.status === 307 || res.type === "opaqueredirect") {
       return NextResponse.json(
         { error: "Cloudflare Access (Zero Trust) の認証が必要です。画面下の入力欄に CF_Authorization トークンを設定してください。" },

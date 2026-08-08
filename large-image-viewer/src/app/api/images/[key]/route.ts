@@ -11,14 +11,23 @@ export async function GET(
     const variant = request.nextUrl.searchParams.get("variant") || "original";
     const url = `${TARGET_API}/api/images/${encodeURIComponent(key)}?variant=${variant}`;
 
-    const token = request.headers.get("cf-access-jwt-assertion");
     const headers: Record<string, string> = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NextJS-Proxy",
+      "User-Agent": request.headers.get("user-agent") || "NextJS-Proxy",
     };
 
-    if (token && token.trim()) {
-      headers["Cf-Access-Jwt-Assertion"] = token.trim();
-      headers["Cookie"] = `CF_Authorization=${token.trim()}`;
+    const jwtHeader = request.headers.get("cf-access-jwt-assertion");
+    const cookieHeader = request.headers.get("cookie");
+    const authHeader = request.headers.get("authorization");
+
+    if (jwtHeader) {
+      headers["Cf-Access-Jwt-Assertion"] = jwtHeader.trim();
+      headers["Cookie"] = `CF_Authorization=${jwtHeader.trim()}`;
+    } else if (cookieHeader) {
+      headers["Cookie"] = cookieHeader;
+    }
+
+    if (authHeader) {
+      headers["Authorization"] = authHeader;
     }
 
     const res = await fetch(url, {
