@@ -6,26 +6,29 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ key: string }> }
 ) {
-  const { key } = await params;
-  const variant = request.nextUrl.searchParams.get("variant") || "original";
-  const url = `${TARGET_API}/api/images/${encodeURIComponent(key)}?variant=${variant}`;
-
-  const token = request.headers.get("cf-access-jwt-assertion");
-  const headers: Record<string, string> = {};
-
-  if (token) {
-    headers["Cf-Access-Jwt-Assertion"] = token;
-    headers["Cookie"] = `CF_Authorization=${token}`;
-  }
-
   try {
+    const { key } = await params;
+    const variant = request.nextUrl.searchParams.get("variant") || "original";
+    const url = `${TARGET_API}/api/images/${encodeURIComponent(key)}?variant=${variant}`;
+
+    const token = request.headers.get("cf-access-jwt-assertion");
+    const headers: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NextJS-Proxy",
+    };
+
+    if (token && token.trim()) {
+      headers["Cf-Access-Jwt-Assertion"] = token.trim();
+      headers["Cookie"] = `CF_Authorization=${token.trim()}`;
+    }
+
     const res = await fetch(url, {
       headers,
       cache: "no-store",
+      redirect: "manual",
     });
 
-    if (res.redirected && res.url.includes("cloudflareaccess.com")) {
-      return new NextResponse("Unauthorized by Cloudflare Access", { status: 401 });
+    if (res.status === 302 || res.status === 301 || res.status === 307 || res.type === "opaqueredirect") {
+      return new NextResponse("Cloudflare Access Unauthorized", { status: 401 });
     }
 
     if (!res.ok) {
@@ -43,6 +46,7 @@ export async function GET(
       },
     });
   } catch (error) {
+    console.error("[Route Handler /api/images error]:", error);
     return new NextResponse((error as Error).message, { status: 500 });
   }
 }
