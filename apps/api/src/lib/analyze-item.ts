@@ -38,8 +38,8 @@ async function analyzeOnce(c: AppContext, item: Item): Promise<void> {
   const patch = {
     ai_description: d.description,
     tags: d.tags,
-    // 人間が既に入力していれば維持し、未入力の場合だけ画像解析の推定を採用する。
-    category: item.category || d.category,
+    // 現在値があれば維持し、未設定の場合だけ画像解析の推定を採用する。
+    category: item.category.trim() ? item.category : d.category,
     color: item.color || d.color,
     brand: item.brand || d.brand,
   };

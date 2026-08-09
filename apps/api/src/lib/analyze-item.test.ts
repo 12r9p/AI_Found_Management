@@ -50,7 +50,7 @@ test("runBackgroundAnalysis は一時的な失敗をリトライして最終的�
   expect(embeddedText.startsWith("財布 ")).toBe(true);
 });
 
-test("runBackgroundAnalysis はスタッフが入力済みの種別をAI推定で上書きしない", async () => {
+test("runBackgroundAnalysis は設定済みの種別をAI推定で上書きしない", async () => {
   const store = new MemoryStore();
   const item = await store.createItem({
     status: "stored",

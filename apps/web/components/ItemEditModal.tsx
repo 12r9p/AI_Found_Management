@@ -17,6 +17,7 @@ import { ImageEditor } from "./ImageEditor";
 import { useMeta } from "./useMeta";
 import { useLocationPresets } from "./useLocationPresets";
 import { api, isAppliedApiError } from "../lib/api";
+import { fillMissingAiValue } from "../lib/aiAnalysis";
 import { formatIsoForDateTimeLocal, parseDateTimeLocalToIso } from "../lib/datetime";
 import { STATUS_LABEL, type Item } from "../lib/types";
 
@@ -77,9 +78,9 @@ export function ItemEditModal({
         ai_description: d.description || f.ai_description,
         tags: d.tags,
         tagsText: d.tags.length ? d.tags.join("、") : f.tagsText,
-        category: f.category,
-        color: f.color || d.color,
-        brand: f.brand || d.brand,
+        category: fillMissingAiValue(f.category, d.category),
+        color: fillMissingAiValue(f.color, d.color),
+        brand: fillMissingAiValue(f.brand, d.brand),
       }));
       toast("AI解析が完了しました。内容を確認・修正してください", "success");
     } catch (e) {
