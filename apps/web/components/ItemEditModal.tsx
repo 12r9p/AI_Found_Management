@@ -77,7 +77,7 @@ export function ItemEditModal({
         ai_description: d.description || f.ai_description,
         tags: d.tags,
         tagsText: d.tags.length ? d.tags.join("、") : f.tagsText,
-        category: f.category || d.category,
+        category: f.category,
         color: f.color || d.color,
         brand: f.brand || d.brand,
       }));

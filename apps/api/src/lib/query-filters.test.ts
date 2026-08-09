@@ -28,52 +28,22 @@ function aiReturning(json: string): AIProvider {
   };
 }
 
-test("検索文のタオルと色からフィルターを自動判定する", async () => {
+test("検索文から色のみを判定し、種別（カテゴリ）は自動補完せず空文字にする", async () => {
   const inferred = await inferQueryFilters(
-    aiReturning('{"category":"","color":""}'),
+    aiReturning('{"color":""}'),
     "青いタオルを探しています",
     categories,
     colors,
   );
-  expect(inferred).toEqual({ category: "タオル", color: "青" });
+  expect(inferred).toEqual({ category: "", color: "青" });
 });
 
-test("専用カテゴリがないキーホルダーはアクセサリーに寄せる", async () => {
+test("ローカル判定できない色のみAIで補完し種別は空文字にする", async () => {
   const inferred = await inferQueryFilters(
-    aiReturning('{"category":"","color":""}'),
-    "黒い猫のキーホルダー",
-    categories,
-    colors,
-  );
-  expect(inferred).toEqual({ category: "アクセサリー", color: "黒" });
-});
-
-test("ハンカチをタオルへ丸めず専用カテゴリにする", async () => {
-  const inferred = await inferQueryFilters(
-    aiReturning('{"category":"","color":""}'),
-    "赤いハンカチ",
-    categories,
-    colors,
-  );
-  expect(inferred).toEqual({ category: "ハンカチ", color: "赤" });
-});
-
-test("表記揺れしたハンディファンを本番カテゴリへ寄せる", async () => {
-  const inferred = await inferQueryFilters(
-    aiReturning('{"category":"","color":""}'),
-    "黒いハンディファン",
-    categories,
-    colors,
-  );
-  expect(inferred).toEqual({ category: "ハンディーファン", color: "黒" });
-});
-
-test("ローカル判定できない語だけAIの選択肢判定で補完する", async () => {
-  const inferred = await inferQueryFilters(
-    aiReturning('{"category":"アクセサリー","color":"赤"}'),
+    aiReturning('{"color":"赤"}'),
     "ルビー色のブローチ",
     categories,
     colors,
   );
-  expect(inferred).toEqual({ category: "アクセサリー", color: "赤" });
+  expect(inferred).toEqual({ category: "", color: "赤" });
 });

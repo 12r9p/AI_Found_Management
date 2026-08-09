@@ -87,7 +87,6 @@ export default function ItemDetailPage() {
       const d = await api.analyze({ keys: imageKeys, hint: form.notes || undefined });
       set("ai_description", d.description || form.ai_description);
       if (d.tags.length) set("tagsText", d.tags.join("、"));
-      if (!form.category && d.category) set("category", d.category);
       if (!form.color && d.color) set("color", d.color);
       if (!form.brand && d.brand) set("brand", d.brand);
       toast("AI解析が完了しました。内容を確認・修正してください", "success");

@@ -58,7 +58,7 @@ test("CSV APIは問い合わせを取り込み、同じ受付番号と特徴の�
       inquiries: { reference_no: string; category: string; color: string }[];
     }
   ).inquiries.find((inquiry) => inquiry.reference_no === referenceNo);
-  expect(imported).toMatchObject({ category: "傘", color: "青" });
+  expect(imported).toMatchObject({ category: "", color: "青" });
 
   const second = await request();
   expect(second.status).toBe(200);

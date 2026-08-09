@@ -39,7 +39,7 @@ test("runBackgroundAnalysis は一時的な失敗をリトライして最終的�
   await runBackgroundAnalysis(c, item);
   const updated = await store.getItem(item.id);
   expect(updated?.ai_status).toBe("ready");
-  expect(updated?.category).toBe("財布");
+  expect(updated?.color).toBe("黒");
 });
 
 test("runBackgroundAnalysis は Vision解析に失敗しても埋め込みだけは作り、検索不能にしない", async () => {
