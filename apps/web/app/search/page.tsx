@@ -36,6 +36,7 @@ export default function SearchPage() {
   const [items, setItems] = usePersistentState<Item[] | null>("search:results", null);
   const [loading, setLoading] = useState(false);
   const [degraded, setDegraded] = useState(false);
+  const [autoFilters, setAutoFilters] = useState({ category: false, color: false });
 
   const [inqOpen, setInqOpen] = useState(false);
   const [inqRef, setInqRef] = useState("");
@@ -44,18 +45,58 @@ export default function SearchPage() {
   const [lookup, setLookup] = useState<Item | null>(null);
   const [editing, setEditing] = useState<Item | null>(null);
 
-  const setF = (k: keyof typeof filters, v: string) => setFilters((f) => ({ ...f, [k]: v }));
+  const setF = (k: keyof typeof filters, v: string) => {
+    setFilters((f) => ({ ...f, [k]: v }));
+    if (k === "category" || k === "color") {
+      setAutoFilters((current) => ({ ...current, [k]: false }));
+    }
+  };
+
+  const setSearchText = (value: string) => {
+    // 検索文が変わったら、前の文章から自動設定した条件だけを解除する。
+    // スタッフが手動で選んだ条件は維持する。
+    if (autoFilters.category || autoFilters.color) {
+      setFilters((current) => ({
+        ...current,
+        category: autoFilters.category ? "" : current.category,
+        color: autoFilters.color ? "" : current.color,
+      }));
+      setAutoFilters({ category: false, color: false });
+    }
+    setQ(value);
+  };
 
   const doSearch = async () => {
     setLoading(true);
     try {
-      const { items: res, degraded: isDegraded } = await api.search({
+      const {
+        items: res,
+        degraded: isDegraded,
+        inferredFilters,
+      } = await api.search({
         q: q || undefined,
         ...filters,
         limit: 50,
       });
       setItems(res);
       setDegraded(!!isDegraded);
+      const autoCategory = !filters.category && !!inferredFilters?.category;
+      const autoColor = !filters.color && !!inferredFilters?.color;
+      if (autoCategory || autoColor) {
+        setFilters((current) => ({
+          ...current,
+          category: autoCategory ? inferredFilters?.category || "" : current.category,
+          color: autoColor ? inferredFilters?.color || "" : current.color,
+        }));
+        setAutoFilters({ category: autoCategory, color: autoColor });
+      }
+      const inferred = [
+        !filters.category && inferredFilters?.category ? `種別: ${inferredFilters.category}` : "",
+        !filters.color && inferredFilters?.color ? `色: ${inferredFilters.color}` : "",
+      ].filter(Boolean);
+      if (inferred.length > 0) {
+        toast(`検索文から${inferred.join("・")}を自動判定しました`, "success");
+      }
       if (isDegraded) {
         toast("AI検索が利用できないため、絞り込み条件だけの結果を表示しています", "error");
       } else if (res.length === 0) {
@@ -120,13 +161,19 @@ export default function SearchPage() {
         category: filters.category,
         color: filters.color,
       });
+      const inferred = [res.inferredFilters.category, res.inferredFilters.color].filter(Boolean);
       if (res.matches.length > 0) {
         toast(
           `保管中の物品と${res.matches.length}件一致しました。照合画面で確認してください`,
           "success",
         );
       } else {
-        toast("未解決として保存しました。新規登録時に自動照合されます", "success");
+        toast(
+          inferred.length > 0
+            ? `未解決として保存しました（自動設定: ${inferred.join("・")}）。管理画面で修正できます`
+            : "未解決として保存しました。新規登録時に自動照合されます",
+          "success",
+        );
       }
       setInqOpen(false);
       setInqRef("");
@@ -147,12 +194,12 @@ export default function SearchPage() {
       <div className="rb-split">
         <div className="rb-split__side">
           <Card variant="bordered">
-            <Field label="特徴で検索" hint="自然文でOK（例: 黒い革の長財布）">
+            <Field label="特徴で検索">
               {(id) => (
                 <Input
                   id={id}
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onChange={(e) => setSearchText(e.target.value)}
                   // IME 変換確定の Enter で検索が走らないようにする
                   onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && doSearch()}
                   placeholder="紺色の折りたたみ傘 …"
@@ -163,26 +210,36 @@ export default function SearchPage() {
             <div className="rb-eyebrow mt-16 mb-8">フィルター</div>
             <Field label="種別">
               {(id) => (
-                <Select
-                  id={id}
-                  value={filters.category}
-                  onChange={(e) => setF("category", e.target.value)}
-                >
-                  <option value="">すべて</option>
-                  <MetaOptionList options={meta.categories} />
-                </Select>
+                <div>
+                  <Select
+                    id={id}
+                    value={filters.category}
+                    onChange={(e) => setF("category", e.target.value)}
+                  >
+                    <option value="">すべて</option>
+                    <MetaOptionList options={meta.categories} />
+                  </Select>
+                  {autoFilters.category && (
+                    <div className="rb-tiny muted-text mt-8">特徴文から自動設定・変更できます</div>
+                  )}
+                </div>
               )}
             </Field>
             <Field label="色">
               {(id) => (
-                <Select
-                  id={id}
-                  value={filters.color}
-                  onChange={(e) => setF("color", e.target.value)}
-                >
-                  <option value="">すべて</option>
-                  <MetaOptionList options={meta.colors} />
-                </Select>
+                <div>
+                  <Select
+                    id={id}
+                    value={filters.color}
+                    onChange={(e) => setF("color", e.target.value)}
+                  >
+                    <option value="">すべて</option>
+                    <MetaOptionList options={meta.colors} />
+                  </Select>
+                  {autoFilters.color && (
+                    <div className="rb-tiny muted-text mt-8">特徴文から自動設定・変更できます</div>
+                  )}
+                </div>
               )}
             </Field>
             <Field label="状態">
@@ -251,6 +308,7 @@ export default function SearchPage() {
                   onClick={() => {
                     setQ("");
                     setFilters(EMPTY_FILTERS);
+                    setAutoFilters({ category: false, color: false });
                     setItems(null);
                     setDegraded(false);
                   }}
@@ -394,7 +452,7 @@ export default function SearchPage() {
           探し物の特徴を未解決として保存します。<strong>個人情報は入力しないでください</strong>。
           連絡先等は紙台帳で管理し、ここには受付番号のみ記録します。
         </p>
-        <Field label="受付番号（紙台帳）" hint="個人情報ではありません">
+        <Field label="受付番号（紙台帳）">
           {(id) => (
             <Input
               id={id}
@@ -405,7 +463,7 @@ export default function SearchPage() {
           )}
         </Field>
         <Field label="特徴（検索文を引用）">
-          {(id) => <Textarea id={id} value={q} onChange={(e) => setQ(e.target.value)} />}
+          {(id) => <Textarea id={id} value={q} onChange={(e) => setSearchText(e.target.value)} />}
         </Field>
         <div className="rb-tiny muted-text">
           種別: {filters.category || "未指定"} / 色: {filters.color || "未指定"}

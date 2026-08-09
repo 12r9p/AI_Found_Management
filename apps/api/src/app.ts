@@ -7,6 +7,9 @@ import {
   matchNewItem,
   matchNewInquiry,
   rematchPage,
+  categoryRelation,
+  hasExplicitObjectTypeTextConflict,
+  hasExplicitObjectTypeTextMatch,
   type RematchPageOutcome,
 } from "./lib/matching.ts";
 import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
@@ -26,6 +29,7 @@ import {
   normalizeMetaOptions,
 } from "./lib/meta.ts";
 import { createItemsCsvStream } from "./lib/items-csv.ts";
+import { inferQueryFilters } from "./lib/query-filters.ts";
 import type { SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
 import {
@@ -188,7 +192,7 @@ async function refreshItemVector(c: AppContext, id: string, shouldEmbed: boolean
   const updated = await c.store.updateItem(id, { embedding, ai_status: "ready" });
   if (updated?.status === "stored") {
     updated.embedding = embedding;
-    await matchNewItem(c.store, updated, c.cfg.matchThreshold);
+    await matchNewItem(c.store, updated, c.cfg.matchThreshold, c.ai);
   }
 }
 
@@ -206,10 +210,14 @@ async function refreshInquiryVector(
   }
 
   const embedding = await safeEmbed(c.ai, inquiryEmbedText(inquiry));
-  await c.store.updateInquiry(
+  const updated = await c.store.updateInquiry(
     id,
     embedding.length ? { embedding } : { status: inquiry.status, category: inquiry.category },
   );
+  if (updated && embedding.length && (updated.status === "open" || updated.status === "matched")) {
+    updated.embedding = embedding;
+    await matchNewInquiry(c.store, updated, c.cfg.matchThreshold, c.ai);
+  }
 }
 
 function runAfterSave(task: Promise<void>, entity: "item" | "inquiry", id: string): void {
@@ -519,7 +527,7 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       item.embedding = embedding; // pg/D1 実装は embedding を返さないため補完
       const outcome =
         item.status === "stored" && embedding.length
-          ? await matchNewItem(c.store, item, c.cfg.matchThreshold)
+          ? await matchNewItem(c.store, item, c.cfg.matchThreshold, c.ai)
           : { matches: [], topScore: 0 };
       return { item, matches: outcome.matches, topScore: outcome.topScore };
     })
@@ -605,6 +613,8 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
         return { items: page.items.map((i) => ({ ...i, score: null })) };
       }
+      const { categories, colors } = await getMetaLists(c.store);
+      const inferredFilters = await inferQueryFilters(c.ai, filters.q, categories, colors);
       const embedding = await safeEmbed(c.ai, filters.q);
       if (!embedding.length) {
         // AI障害時は特徴文検索を諦め、フィルタだけの一覧にフォールバック
@@ -612,10 +622,43 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         // 「ベクトル検索はできていない」ことを伝える（何も伝えないと検索してるのに
         // スコアが出ず、壊れているようにしか見えない）。
         const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
-        return { items: page.items.map((i) => ({ ...i, score: null })), degraded: true };
+        return {
+          items: page.items.map((i) => ({ ...i, score: null })),
+          degraded: true,
+          inferredFilters,
+        };
       }
-      const items = await c.store.searchItems(embedding, filters);
-      return { items };
+      const items = (await c.store.searchItems(embedding, filters)).filter((item) => {
+        if (item.score < c.cfg.searchThreshold) return false;
+        if (!filters.category && inferredFilters.category) {
+          const relation = categoryRelation(item.category, inferredFilters.category);
+          if (relation === "incompatible") return false;
+          // 「その他」やカテゴリ空欄を救済するのは、特徴文にも同じ物品名がある場合だけ。
+          // タオル検索で説明の薄い無関係な「その他」が混ざるのを防ぐ。
+          if (
+            relation === "broad" &&
+            !hasExplicitObjectTypeTextMatch(
+              [item.ai_description, ...item.tags].filter(Boolean).join(" "),
+              filters.q ?? "",
+            )
+          ) {
+            return false;
+          }
+        }
+        if (
+          !filters.color &&
+          inferredFilters.color &&
+          item.color &&
+          item.color !== inferredFilters.color
+        ) {
+          return false;
+        }
+        return !hasExplicitObjectTypeTextConflict(
+          [item.ai_description, ...item.tags].filter(Boolean).join(" "),
+          filters.q ?? "",
+        );
+      });
+      return { items, inferredFilters };
     })
 
     // ---- ページ単位の全件再照合（管理画面の手動トリガー） ----
@@ -704,12 +747,19 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
     .post("/api/inquiries", async ({ body }) => {
       const c = await ctx();
       const b = (body as any) ?? {};
+      const description = typeof b.description === "string" ? b.description : "";
+      const { categories, colors } = await getMetaLists(c.store);
+      const inferredFilters = await inferQueryFilters(c.ai, description, categories, colors);
+      const requestedCategory = typeof b.category === "string" ? b.category.trim() : "";
+      const requestedColor = typeof b.color === "string" ? b.color.trim() : "";
+      const category = requestedCategory || inferredFilters.category;
+      const color = requestedColor || inferredFilters.color;
       const draft = {
         status: "open" as const,
-        description: b.description ?? "",
-        category: b.category ?? "",
-        color: b.color ?? "",
-        ai_description: b.description ?? "",
+        description,
+        category,
+        color,
+        ai_description: description,
         tags: Array.isArray(b.tags) ? b.tags : [],
         reference_no: b.reference_no ?? "",
         notes: b.notes ?? "",
@@ -719,9 +769,17 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       const inquiry = await c.store.createInquiry({ ...draft, embedding });
       inquiry.embedding = embedding;
       const outcome = embedding.length
-        ? await matchNewInquiry(c.store, inquiry, c.cfg.matchThreshold)
+        ? await matchNewInquiry(c.store, inquiry, c.cfg.matchThreshold, c.ai)
         : { matches: [], topScore: 0 };
-      return { inquiry, matches: outcome.matches, topScore: outcome.topScore };
+      return {
+        inquiry,
+        matches: outcome.matches,
+        topScore: outcome.topScore,
+        inferredFilters: {
+          category: requestedCategory ? "" : inferredFilters.category,
+          color: requestedColor ? "" : inferredFilters.color,
+        },
+      };
     })
     .get("/api/inquiries/:id", async ({ params, set }) => {
       const c = await ctx();

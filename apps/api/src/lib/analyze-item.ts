@@ -50,7 +50,7 @@ async function analyzeOnce(c: AppContext, item: Item): Promise<void> {
     ai_status: "ready",
   });
   if (updated && updated.status === "stored") {
-    await matchNewItem(c.store, { ...updated, embedding }, c.cfg.matchThreshold);
+    await matchNewItem(c.store, { ...updated, embedding }, c.cfg.matchThreshold, c.ai);
   }
 }
 
@@ -65,7 +65,7 @@ async function fallbackEmbedOnly(c: AppContext, item: Item): Promise<void> {
   const embedding = await c.ai.embed(itemEmbedText(item));
   const updated = await c.store.updateItem(item.id, { embedding, ai_status: "error" });
   if (updated && updated.status === "stored") {
-    await matchNewItem(c.store, { ...updated, embedding }, c.cfg.matchThreshold);
+    await matchNewItem(c.store, { ...updated, embedding }, c.cfg.matchThreshold, c.ai);
   }
 }
 

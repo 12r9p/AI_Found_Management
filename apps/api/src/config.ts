@@ -8,6 +8,7 @@ export interface Env {
   AI_EFFORT?: string;
   EMBED_DIM?: string;
   MATCH_THRESHOLD?: string;
+  SEARCH_THRESHOLD?: string;
   WEB_ORIGIN?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
@@ -32,6 +33,7 @@ export interface Config {
     embedDim: number;
   };
   matchThreshold: number;
+  searchThreshold: number;
   webOrigin: string;
   r2: R2Bucket | null;
   /** Cloudflare Access 検証設定。両方揃った時のみ検証が有効。 */
@@ -56,6 +58,7 @@ export function resolveConfig(env: Env = {} as Env): Config {
       embedDim: parseInt(get("EMBED_DIM") ?? "1536", 10),
     },
     matchThreshold: parseFloat(get("MATCH_THRESHOLD") ?? "0.5"),
+    searchThreshold: parseFloat(get("SEARCH_THRESHOLD") ?? get("MATCH_THRESHOLD") ?? "0.5"),
     webOrigin: get("WEB_ORIGIN") ?? "http://localhost:3000",
     r2: env.IMAGES ?? null,
     access: (() => {

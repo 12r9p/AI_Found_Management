@@ -51,6 +51,7 @@ AI_EMBED_MODEL = "text-embedding-3-small"
 AI_EFFORT = "low"
 EMBED_DIM = "1536"
 MATCH_THRESHOLD = "0.5"
+SEARCH_THRESHOLD = "0.5"
 
 # シークレットは wrangler secret put で設定:
 #   wrangler secret put AI_API_KEY
