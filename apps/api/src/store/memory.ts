@@ -8,6 +8,7 @@ import type {
   SearchFilters,
 } from "../types.ts";
 import { cosineSimilarity } from "../lib/vector.ts";
+import { eventBus } from "../lib/events.ts";
 import {
   type Store,
   type ScoredItem,
@@ -331,6 +332,10 @@ export class MemoryStore implements Store {
     const notif: Notification = { ...n, id: newId(), read: false, created_at: nowIso() };
     this.notifications.unshift(notif);
     this.persist();
+    eventBus.emit({
+      type: "notification",
+      data: { id: notif.id, title: notif.title, body: notif.body, type: notif.type },
+    });
     return notif;
   }
   async listNotifications(unreadOnly = false): Promise<Notification[]> {

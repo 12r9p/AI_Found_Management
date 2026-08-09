@@ -7,6 +7,7 @@ import { ADMIN_TABS, adminTabHref, requestAdminTab } from "../lib/adminTabs";
 import { Button, ThemeToggle } from "./ui";
 import { NotificationsPopup } from "./NotificationsPopup";
 import { OfflineBanner } from "./OfflineBanner";
+import { useRealtimeEvents } from "./useRealtimeEvents";
 
 const PRIMARY_NAV = [
   { href: "/register", label: "登録" },
@@ -29,12 +30,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const hasHealthIssue = apiUnreachable || aiMock;
 
+  useRealtimeEvents();
+
   const refreshUnread = useCallback(() => {
     api
       .unreadCount()
       .then(setUnread)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const handleNotification = () => {
+      refreshUnread();
+    };
+    window.addEventListener("app:notification_received", handleNotification);
+    return () => {
+      window.removeEventListener("app:notification_received", handleNotification);
+    };
+  }, [refreshUnread]);
 
   useEffect(() => {
     let alive = true;
