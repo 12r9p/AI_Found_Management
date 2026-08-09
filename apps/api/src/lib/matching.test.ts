@@ -2,7 +2,16 @@ import { test, expect } from "bun:test";
 import { MemoryStore } from "../store/memory.ts";
 import type { ItemCursorPosition } from "../store/item-pagination.ts";
 import { deterministicEmbed } from "../ai/provider.ts";
-import { matchNewItem, matchNewInquiry, rematchPage, calculateColorPenalty } from "./matching.ts";
+import {
+  calculateColorPenalty,
+  categoryRelation,
+  hasExplicitObjectTypeConflict,
+  hasExplicitObjectTypeTextConflict,
+  hasExplicitObjectTypeTextMatch,
+  matchNewItem,
+  matchNewInquiry,
+  rematchPage,
+} from "./matching.ts";
 import type { AIProvider } from "../ai/provider.ts";
 import { createApp } from "../app.ts";
 import { setEnv } from "../env-holder.ts";
@@ -123,6 +132,130 @@ test("calculateColorPenalty: 同じ色なら0、近い色なら小ペナルテ�
   expect(penaltyFar2).toBeGreaterThan(penaltyClose);
 });
 
+test("カテゴリ揺れは候補に残し、明確に異なる種別だけを除外する", () => {
+  expect(categoryRelation("アクセサリー", "キーホルダー")).toBe("related");
+  expect(categoryRelation("その他", "キーホルダー")).toBe("broad");
+  expect(categoryRelation("", "キーホルダー")).toBe("broad");
+  expect(categoryRelation("財布", "傘")).toBe("incompatible");
+});
+
+test("同じ物品種別の候補は最大8件まで提示する", async () => {
+  const store = new MemoryStore();
+  const vector = [1, 0];
+  for (let index = 0; index < 8; index++) {
+    const inquiry = await store.createInquiry({
+      status: "open",
+      category: "その他",
+      description: `紺色のタオル 候補${index}`,
+      embedding: vector,
+      reference_no: `R-${index}`,
+    });
+    inquiry.embedding = vector;
+  }
+  const item = await store.createItem({
+    status: "stored",
+    category: "その他",
+    ai_description: "紺色のタオル",
+    embedding: vector,
+  });
+  item.embedding = vector;
+
+  const outcome = await matchNewItem(store, item, 0.5);
+  expect(outcome.matches).toHaveLength(8);
+  expect(await store.listNotifications()).toHaveLength(8);
+});
+
+test("『タオル』と明記された問い合わせから別の物品種別を除外する", async () => {
+  const store = new MemoryStore();
+  const vector = [1, 0];
+  const inquiry = await store.createInquiry({
+    status: "open",
+    category: "その他",
+    description: "青いタオルをなくした",
+    embedding: vector,
+  });
+  inquiry.embedding = vector;
+  const item = await store.createItem({
+    status: "stored",
+    category: "その他",
+    ai_description: "青い二つ折り財布",
+    embedding: vector,
+  });
+  item.embedding = vector;
+
+  expect(hasExplicitObjectTypeConflict(item, inquiry)).toBe(true);
+  expect(hasExplicitObjectTypeTextConflict("青いシャツ", "青いタオル")).toBe(true);
+  expect(hasExplicitObjectTypeTextConflict("紺色のタオル", "青いタオル")).toBe(false);
+  expect(hasExplicitObjectTypeTextMatch("紺色のタオル", "青いタオル")).toBe(true);
+  expect(hasExplicitObjectTypeTextMatch("紺色の布製品", "青いタオル")).toBe(false);
+  expect((await matchNewInquiry(store, inquiry, 0)).matches).toHaveLength(0);
+});
+
+test("既知候補が上位を占めても未照合の次候補を再判定する", async () => {
+  const store = new MemoryStore();
+  const vector = [1, 0];
+  for (let index = 0; index < 4; index++) {
+    await store.createInquiry({
+      status: "open",
+      category: "傘",
+      description: `候補${index}`,
+      embedding: vector,
+    });
+  }
+  const item = await store.createItem({ status: "stored", category: "傘", embedding: vector });
+  item.embedding = vector;
+  const ranked = await store.searchInquiries(vector, 4);
+  for (const inquiry of ranked.slice(0, 3)) {
+    await store.createMatch({
+      item_id: item.id,
+      inquiry_id: inquiry.id,
+      score: 1,
+      status: "rejected",
+      direction: "item_to_inquiry",
+    });
+  }
+
+  const outcome = await matchNewItem(store, item, 0.5);
+  expect(outcome.matches).toHaveLength(1);
+  expect(outcome.matches[0]?.inquiry_id).toBe(ranked[3]?.id);
+});
+
+test("本番AIの再判定が不一致としたVectorize候補は通知しない", async () => {
+  const store = new MemoryStore();
+  const vector = [1, 0];
+  const inquiry = await store.createInquiry({
+    status: "open",
+    category: "傘",
+    description: "赤い長傘",
+    embedding: vector,
+    reference_no: "R-AI",
+  });
+  inquiry.embedding = vector;
+  const item = await store.createItem({
+    status: "stored",
+    category: "傘",
+    ai_description: "紺色の折りたたみ傘",
+    embedding: vector,
+  });
+  item.embedding = vector;
+  const rejectingAi: AIProvider = {
+    name: "reranker-test",
+    async describeImages() {
+      throw new Error("not used");
+    },
+    async embed() {
+      return vector;
+    },
+    async chat() {
+      return '{"candidateIds":[]}';
+    },
+  };
+
+  const outcome = await matchNewItem(store, item, 0, rejectingAi);
+  expect(outcome.matches).toHaveLength(0);
+  expect(await store.listNotifications()).toHaveLength(0);
+});
+
 test("該当なしの問い合わせは open のまま保存され、後日の登録で照合される", async () => {
   const store = new MemoryStore();
   // まだ物品なし → 問い合わせは open
@@ -155,7 +288,7 @@ test("該当なしの問い合わせは open のまま保存され、後日の�
 /** rematchPage は embedding を再取得するだけなので、embed だけ実装したスタブで足りる。 */
 function embedOnlyProvider(): AIProvider {
   return {
-    name: "test-embed-only",
+    name: "mock",
     async describeImages() {
       throw new Error("not used by rematchPage");
     },

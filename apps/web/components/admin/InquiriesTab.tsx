@@ -471,6 +471,9 @@ function InquiryDetailModal({
                 )}
               </Field>
             </div>
+            <div className="rb-tiny muted-text">
+              種別・色は特徴文から自動設定される場合があります。内容を確認し、必要なら修正してください。修正後は再照合されます。
+            </div>
             <Field label="聞き取り内容" hint="保存すると再ベクトル化され、以後の照合に反映されます">
               {(id) => (
                 <Textarea

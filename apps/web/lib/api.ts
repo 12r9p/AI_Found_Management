@@ -132,7 +132,11 @@ export const api = {
   // search
   // degraded: true は埋め込み(AI)に失敗し、フィルタのみの結果にフォールバックしたことを示す。
   search: (body: Record<string, unknown>) =>
-    req<{ items: Item[]; degraded?: boolean }>("/api/search", {
+    req<{
+      items: Item[];
+      degraded?: boolean;
+      inferredFilters?: { category: string; color: string };
+    }>("/api/search", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -177,7 +181,12 @@ export const api = {
   },
   getInquiry: (id: string) => req<{ inquiry: Inquiry; matches: Match[] }>(`/api/inquiries/${id}`),
   createInquiry: (body: Partial<Inquiry>) =>
-    req<{ inquiry: Inquiry; matches: Match[]; topScore: number }>("/api/inquiries", {
+    req<{
+      inquiry: Inquiry;
+      matches: Match[];
+      topScore: number;
+      inferredFilters: { category: string; color: string };
+    }>("/api/inquiries", {
       method: "POST",
       body: JSON.stringify(body),
     }),

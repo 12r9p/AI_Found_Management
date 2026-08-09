@@ -10,25 +10,29 @@ export interface MetaOption {
 }
 
 const DEFAULT_CATEGORIES: MetaOption[] = [
-  "財布",
-  "かばん",
-  "傘",
-  "スマートフォン",
-  "携帯電話",
-  "鍵",
-  "水筒",
-  "眼鏡",
-  "帽子",
-  "衣類",
-  "イヤホン",
-  "時計",
-  "アクセサリー",
-  "書類",
-  "カード類",
-  "現金",
-  "おもちゃ",
-  "その他",
-].map((name) => ({ name }));
+  { name: "財布", group: "貴重品" },
+  { name: "かばん" },
+  { name: "傘", group: "布" },
+  { name: "スマートフォン", group: "貴重品" },
+  { name: "携帯電話", group: "貴重品" },
+  { name: "鍵", group: "貴重品" },
+  { name: "水筒", group: "清涼" },
+  { name: "眼鏡", group: "アクセサリー" },
+  { name: "帽子", group: "アクセサリー" },
+  { name: "時計", group: "アクセサリー" },
+  { name: "アクセサリー", group: "アクセサリー" },
+  { name: "衣類" },
+  { name: "イヤホン" },
+  { name: "カード類", group: "貴重品" },
+  { name: "現金", group: "貴重品" },
+  { name: "ハンディーファン", group: "清涼" },
+  { name: "日傘", group: "清涼" },
+  { name: "サングラス", group: "アクセサリー" },
+  { name: "タオル", group: "布" },
+  { name: "ハンカチ", group: "布" },
+  { name: "テント" },
+  { name: "その他" },
+];
 
 // 色名からの色は「だいたいこの色」という目安（正式な色見本ではない）。
 const DEFAULT_COLORS: MetaOption[] = [
