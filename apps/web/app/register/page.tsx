@@ -2,21 +2,10 @@
 import { Button as BaseButton } from "@base-ui/react/button";
 import { useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import {
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-  Textarea,
-  useToast,
-  MetaOptionList,
-} from "../../components/ui";
+import { Badge, Button, Card, Field, Input, Textarea, useToast } from "../../components/ui";
 import { usePersistentState } from "../../components/usePersistentState";
 import { MapPicker, findRegionAt, type Pin } from "../../components/MapPicker";
 import { useLocationPresets } from "../../components/useLocationPresets";
-import { useMeta } from "../../components/useMeta";
 import { ItemEditModal } from "../../components/ItemEditModal";
 import { RegisteredModal } from "../../components/RegisteredModal";
 import { FoundImage } from "../../components/FoundImage";
@@ -33,8 +22,8 @@ const QUICK_TIMES = [
   { label: "1時間前", min: 60 },
 ];
 
+// 種別・色・特徴文・タグはAIが自動で埋める。人間の入力は拾得日時（必須）とメモのみ。
 const EMPTY = {
-  category: "",
   found_at: "",
   notes: "",
 };
@@ -43,7 +32,6 @@ export default function RegisterPage() {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const presets = useLocationPresets();
-  const meta = useMeta();
 
   // 画面を離れても入力を保持（現場では登録途中に別画面を見に行くことが多い）
   const [keys, setKeys] = usePersistentState<string[]>("register:keys", []);
@@ -162,7 +150,6 @@ export default function RegisterPage() {
       }
 
       const item = await api.createItem({
-        category: form.category,
         found_at: foundAt,
         storage_location: normalizedStorageLocation,
         found_location: foundLocation,
@@ -278,17 +265,6 @@ export default function RegisterPage() {
       </Card>
 
       <Card variant="bordered">
-        <Field
-          label="種別（カテゴリ）"
-          hint="選択は任意です。未選択の場合はすべての種別と照合されます"
-        >
-          {(id) => (
-            <Select id={id} value={form.category} onChange={(e) => set("category", e.target.value)}>
-              <option value="">未選択（すべて）</option>
-              <MetaOptionList options={meta.categories} />
-            </Select>
-          )}
-        </Field>
         <Field label="保管場所" hint="棚・受付・倉庫など。次の登録にも引き継がれます" required>
           {(id) => (
             <Input
