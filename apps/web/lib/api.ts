@@ -7,6 +7,7 @@ import type {
   MetaOption,
   IdRule,
   LocationPreset,
+  ThresholdStats,
 } from "./types";
 
 export interface ItemPage {
@@ -247,6 +248,14 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ presets }),
     }).then((r) => r.presets),
+
+  // 動的しきい値（足切り）統計
+  getThresholdStats: () => req<ThresholdStats>("/api/stats/threshold"),
+  updateThreshold: (threshold: number) =>
+    req<{ ok: boolean; stats: ThresholdStats }>("/api/stats/threshold", {
+      method: "POST",
+      body: JSON.stringify({ threshold }),
+    }),
 
   csvUrl: (q: Record<string, string> = {}) =>
     `${API_BASE}/api/export/items.csv?${new URLSearchParams(q)}`,

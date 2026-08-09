@@ -38,6 +38,11 @@ import {
 import { normalizeFoundDateRange } from "./lib/date-filters.ts";
 import { eventBus, type AppEvent } from "./lib/events.ts";
 import type { SearchFilters } from "./types.ts";
+import {
+  calculateThresholdStats,
+  getEffectiveThreshold,
+  MATCH_THRESHOLD_SETTING_KEY,
+} from "./lib/threshold-stats.ts";
 import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
 import {
   InvalidItemCursorError,
@@ -586,9 +591,10 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         ai_status: embedding.length ? "ready" : "error",
       });
       item.embedding = embedding; // pg/D1 実装は embedding を返さないため補完
+      const threshold = await getEffectiveThreshold(c.store, c.cfg.matchThreshold);
       const outcome =
         item.status === "stored" && embedding.length
-          ? await matchNewItem(c.store, item, c.cfg.matchThreshold, c.ai)
+          ? await matchNewItem(c.store, item, threshold, c.ai)
           : { matches: [], topScore: 0 };
       return { item, matches: outcome.matches, topScore: outcome.topScore };
     })
@@ -844,8 +850,9 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       const embedding = await safeEmbed(c.ai, inquiryEmbedText(draft));
       const inquiry = await c.store.createInquiry({ ...draft, embedding });
       inquiry.embedding = embedding;
+      const threshold = await getEffectiveThreshold(c.store, c.cfg.matchThreshold);
       const outcome = embedding.length
-        ? await matchNewInquiry(c.store, inquiry, c.cfg.matchThreshold, c.ai)
+        ? await matchNewInquiry(c.store, inquiry, threshold, c.ai)
         : { matches: [], topScore: 0 };
       return {
         inquiry,
@@ -1054,6 +1061,28 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
           "content-disposition": 'attachment; filename="items.csv"',
         },
       });
+    })
+
+    // ---- 統計・適正しきい値算出 ----
+    .get("/api/stats/threshold", async () => {
+      const c = await ctx();
+      return await calculateThresholdStats(c.store, c.cfg.matchThreshold);
+    })
+    .post("/api/stats/threshold", async ({ body, set }) => {
+      const c = await ctx();
+      const threshold = (body as any)?.threshold;
+      if (
+        typeof threshold !== "number" ||
+        Number.isNaN(threshold) ||
+        threshold < 0.1 ||
+        threshold > 0.95
+      ) {
+        set.status = 400;
+        return { error: "invalid_threshold" };
+      }
+      await c.store.setSetting(MATCH_THRESHOLD_SETTING_KEY, String(threshold));
+      const stats = await calculateThresholdStats(c.store, c.cfg.matchThreshold);
+      return { ok: true, stats };
     });
 
   return app;

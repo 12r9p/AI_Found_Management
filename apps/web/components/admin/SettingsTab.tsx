@@ -15,7 +15,7 @@ import {
 } from "../ui";
 import { MapPicker, invalidateMapCache, type Pin } from "../MapPicker";
 import { api } from "../../lib/api";
-import type { IdRule, LocationPreset, MetaOption } from "../../lib/types";
+import type { IdRule, LocationPreset, MetaOption, ThresholdStats } from "../../lib/types";
 import { normalizeImageFile } from "../../lib/image";
 import { clearPwaCaches } from "../../lib/pwa";
 
@@ -23,6 +23,7 @@ import { clearPwaCaches } from "../../lib/pwa";
 export function SettingsTab() {
   return (
     <div className="rb-col" id="settings">
+      <ThresholdSetting />
       <IdRuleSetting />
       <MapSetting />
       <LocationPresetSetting />
@@ -40,6 +41,110 @@ export function SettingsTab() {
       />
       <PwaCacheSetting />
     </div>
+  );
+}
+
+function ThresholdSetting() {
+  const toast = useToast();
+  const [stats, setStats] = useState<ThresholdStats | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = () => {
+    api
+      .getThresholdStats()
+      .then(setStats)
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (!stats) return null;
+
+  const applyRecommended = async () => {
+    setSaving(true);
+    try {
+      const res = await api.updateThreshold(stats.recommendedThreshold);
+      setStats(res.stats);
+      toast(
+        `最適足切りスコア (${(stats.recommendedThreshold * 100).toFixed(0)}%) を適用しました`,
+        "success",
+      );
+    } catch (e) {
+      toast(`適用に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card variant="bordered">
+      <div className="rb-between mb-8">
+        <h3 style={{ margin: 0 }}>照合通知の足切りライン（しきい値）</h3>
+        <Badge tone={stats.status === "sufficient_data" ? "success" : undefined}>
+          {stats.status === "sufficient_data" ? "最適化有効" : "データ蓄積中"}
+        </Badge>
+      </div>
+      <p className="rb-small muted-text">
+        照合結果の通知判定で使用される適合度スコアの下限値です。過去に一致確定した実績データを元に統計的に推奨値を算出します。
+      </p>
+
+      <div className="rb-grid rb-grid--2 mt-16" style={{ gap: 16 }}>
+        <Card variant="muted">
+          <div className="rb-eyebrow mb-4">現在の足切り設定</div>
+          <div style={{ fontSize: 24, fontWeight: "bold" }}>
+            {(stats.currentThreshold * 100).toFixed(0)}%
+            <span className="rb-small muted-text" style={{ fontSize: 14, marginLeft: 6 }}>
+              ({stats.currentThreshold.toFixed(2)})
+            </span>
+          </div>
+        </Card>
+
+        <Card variant="muted">
+          <div className="rb-eyebrow mb-4">実績に基づく推奨値</div>
+          <div style={{ fontSize: 24, fontWeight: "bold", color: "var(--primary)" }}>
+            {(stats.recommendedThreshold * 100).toFixed(0)}%
+            <span className="rb-small muted-text" style={{ fontSize: 14, marginLeft: 6 }}>
+              ({stats.recommendedThreshold.toFixed(2)})
+            </span>
+          </div>
+        </Card>
+      </div>
+
+      {stats.distribution ? (
+        <Card variant="muted" className="mt-16">
+          <div className="rb-eyebrow mb-8">確定データ ({stats.sampleCount}件) のスコア分布</div>
+          <div className="rb-grid rb-grid--4" style={{ gap: 8, fontSize: 13 }}>
+            <div>
+              最小: <strong>{(stats.distribution.min * 100).toFixed(1)}%</strong>
+            </div>
+            <div>
+              平均: <strong>{(stats.distribution.average * 100).toFixed(1)}%</strong>
+            </div>
+            <div>
+              中央値 (p50): <strong>{(stats.distribution.p50 * 100).toFixed(1)}%</strong>
+            </div>
+            <div>
+              下位5% (p5): <strong>{(stats.distribution.p5 * 100).toFixed(1)}%</strong>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <p className="rb-tiny muted-text mt-12">{stats.message}</p>
+      )}
+
+      {stats.status === "sufficient_data" &&
+        stats.currentThreshold !== stats.recommendedThreshold && (
+          <div className="rb-row mt-16">
+            <Button onClick={() => void applyRecommended()} disabled={saving}>
+              {saving
+                ? "適用中…"
+                : `推奨値 (${(stats.recommendedThreshold * 100).toFixed(0)}%) を適用する`}
+            </Button>
+          </div>
+        )}
+    </Card>
   );
 }
 

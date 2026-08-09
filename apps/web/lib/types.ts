@@ -109,3 +109,18 @@ export const STATUS_LABEL: Record<string, string> = {
   confirmed: "一致確定",
   rejected: "不一致",
 };
+
+export interface ThresholdStats {
+  status: "sufficient_data" | "insufficient_data";
+  sampleCount: number;
+  currentThreshold: number;
+  recommendedThreshold: number;
+  message: string;
+  distribution: {
+    min: number;
+    max: number;
+    average: number;
+    p5: number;
+    p50: number;
+  } | null;
+}
