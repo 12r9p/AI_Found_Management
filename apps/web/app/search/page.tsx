@@ -25,7 +25,6 @@ import { api, isAppliedApiError } from "../../lib/api";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
 const EMPTY_FILTERS = {
-  display_id: "",
   category: "",
   color: "",
   status: "",
@@ -40,7 +39,7 @@ export default function SearchPage() {
   const toast = useToast();
   // 検索条件と結果を保持（照会ポップアップを閉じても検索し直さなくてよい）
   const [q, setQ] = usePersistentState("search:q", "");
-  const [filters, setFilters] = usePersistentState("search:filters", EMPTY_FILTERS);
+  const [filters, setFilters] = usePersistentState("search:filters:v2", EMPTY_FILTERS);
   const [items, setItems] = usePersistentState<Item[] | null>("search:results", null);
   const [loading, setLoading] = useState(false);
   const [degraded, setDegraded] = useState(false);
@@ -210,23 +209,12 @@ export default function SearchPage() {
                   onChange={(e) => setSearchText(e.target.value)}
                   // IME 変換確定の Enter で検索が走らないようにする
                   onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && doSearch()}
-                  placeholder="紺色の折りたたみ傘 …"
+                  placeholder="紺色の折りたたみ傘、管理番号 …"
                 />
               )}
             </Field>
 
             <div className="rb-eyebrow mt-16 mb-8">フィルター</div>
-            <Field label="管理番号">
-              {(id) => (
-                <Input
-                  id={id}
-                  value={filters.display_id}
-                  onChange={(e) => setF("display_id", e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && doSearch()}
-                  placeholder="FD-20260729-0001"
-                />
-              )}
-            </Field>
             <Field label="種別">
               {(id) => (
                 <div>
