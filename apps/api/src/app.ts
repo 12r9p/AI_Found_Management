@@ -622,6 +622,21 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
         return { items: page.items.map((i) => ({ ...i, score: null })) };
       }
+      // 採番ルールは設定で変更できるため形式を決め打ちせず、検索文全体を管理番号として
+      // 先に部分一致検索する。該当する場合はAIを使わず、管理番号の結果を優先する。
+      const displayIdQuery = filters.q.trim();
+      if (displayIdQuery) {
+        const displayIdPage = await c.store.listItems(
+          { ...filters, q: undefined, display_id: displayIdQuery },
+          { limit: filters.limit ?? 50 },
+        );
+        if (displayIdPage.items.length > 0) {
+          return {
+            items: displayIdPage.items.map((item) => ({ ...item, score: null })),
+            inferredFilters: { category: "", color: "" },
+          };
+        }
+      }
       const { categories, colors } = await getMetaLists(c.store);
       const inferredFilters = await inferQueryFilters(c.ai, filters.q, categories, colors);
       const embedding = await safeEmbed(c.ai, filters.q);
