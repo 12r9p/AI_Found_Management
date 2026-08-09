@@ -38,8 +38,8 @@ async function analyzeOnce(c: AppContext, item: Item): Promise<void> {
   const patch = {
     ai_description: d.description,
     tags: d.tags,
-    // 種別は自動推定せず、人間が入力・選択した値のみ保持する
-    category: item.category,
+    // 人間が既に入力していれば維持し、未入力の場合だけ画像解析の推定を採用する。
+    category: item.category || d.category,
     color: item.color || d.color,
     brand: item.brand || d.brand,
   };
