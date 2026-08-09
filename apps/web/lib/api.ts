@@ -190,6 +190,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  importInquiries: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return req<{
+      total: number;
+      imported: number;
+      skipped: number;
+      failed: number;
+      matchesCreated: number;
+      warnings: { row: number; message: string }[];
+      errors: { row: number; message: string }[];
+    }>("/api/inquiries/import", { method: "POST", body });
+  },
   updateInquiry: (id: string, patch: Partial<Inquiry>) =>
     req<{ inquiry: Inquiry }>(`/api/inquiries/${id}`, {
       method: "PATCH",

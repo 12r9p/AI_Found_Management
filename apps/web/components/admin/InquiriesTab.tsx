@@ -1,6 +1,6 @@
 "use client";
 import { Button as BaseButton } from "@base-ui/react/button";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -52,6 +52,8 @@ export function InquiriesTab() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Inquiry | null>(null);
   const [rematching, setRematching] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [rematchProgress, setRematchProgress] = useState<RematchProgress | null>(null);
 
   const load = useCallback(() => {
@@ -138,6 +140,28 @@ export function InquiriesTab() {
   // 選択中の問い合わせを最新に保つ（判断後にダイアログの中身も更新）
   const current = selected ? (inquiries.find((i) => i.id === selected.id) ?? selected) : null;
 
+  const importCsv = async (file: File | undefined) => {
+    if (!file) return;
+    setImporting(true);
+    try {
+      const result = await api.importInquiries(file);
+      const details = [
+        `${result.imported}件取込`,
+        result.skipped ? `${result.skipped}件重複` : "",
+        result.failed ? `${result.failed}件失敗` : "",
+        result.warnings.length ? `${result.warnings.length}件要確認` : "",
+        result.matchesCreated ? `${result.matchesCreated}件候補作成` : "",
+      ].filter(Boolean);
+      toast(details.join("・"), result.failed || result.warnings.length ? "error" : "success");
+      load();
+    } catch (error) {
+      toast(`CSV取込に失敗しました: ${(error as Error).message}`, "error");
+    } finally {
+      setImporting(false);
+      if (importFileRef.current) importFileRef.current.value = "";
+    }
+  };
+
   return (
     <div className="rb-col">
       <Card variant="bordered" className="no-print">
@@ -158,6 +182,20 @@ export function InquiriesTab() {
               <Button variant="outline" onClick={load}>
                 再読込
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => importFileRef.current?.click()}
+                disabled={importing || rematching}
+              >
+                {importing ? "CSV取込中…" : "CSV取込"}
+              </Button>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".csv,text/csv"
+                hidden
+                onChange={(event) => importCsv(event.target.files?.[0])}
+              />
               <Button variant="outline" onClick={() => runRematch(false)} disabled={rematching}>
                 {rematching ? "再照合中…" : "全件再照合"}
               </Button>
@@ -189,6 +227,7 @@ export function InquiriesTab() {
         )}
         <p className="rb-tiny muted-text" style={{ margin: 0 }}>
           行をクリックすると詳細と照合候補を確認できます。個人情報は紙台帳（受付No）で管理します。
+          CSVは「落とし物の特徴」列が必須で、カテゴリ・色・受付番号・タグ・備考を任意で取り込めます。
         </p>
       </Card>
 

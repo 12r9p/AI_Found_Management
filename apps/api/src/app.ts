@@ -30,6 +30,11 @@ import {
 } from "./lib/meta.ts";
 import { createItemsCsvStream } from "./lib/items-csv.ts";
 import { inferQueryFilters } from "./lib/query-filters.ts";
+import {
+  configuredOption,
+  inquiryImportFingerprint,
+  parseInquiryCsv,
+} from "./lib/inquiry-import.ts";
 import type { SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
 import {
@@ -116,6 +121,8 @@ function rematchPageCacheKey(cursor: ItemCursorPosition | undefined): string {
  * に備え、R2/AI（Vision）へのコスト爆発を防ぐ安全網としてサーバー側にも上限を設ける。
  */
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_INQUIRY_IMPORT_BYTES = 2 * 1024 * 1024;
+const MAX_INQUIRY_IMPORT_ROWS = 500;
 
 function parseFilters(q: Record<string, any>): SearchFilters {
   return {
@@ -781,6 +788,115 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
           color: requestedColor ? "" : inferredFilters.color,
         },
       };
+    })
+    .post("/api/inquiries/import", async ({ body, set }) => {
+      const c = await ctx();
+      const values = body && typeof body === "object" ? Object.values(body as object) : [];
+      const file = values.find((value): value is File => value instanceof File);
+      if (!file) {
+        set.status = 400;
+        return { error: "csv_file_required" };
+      }
+      if (file.size > MAX_INQUIRY_IMPORT_BYTES) {
+        set.status = 413;
+        return { error: "csv_file_too_large" };
+      }
+
+      let rows;
+      try {
+        rows = parseInquiryCsv(await file.text());
+      } catch (error) {
+        set.status = 400;
+        return { error: error instanceof Error ? error.message : "invalid_csv" };
+      }
+      if (rows.length > MAX_INQUIRY_IMPORT_ROWS) {
+        set.status = 400;
+        return { error: "too_many_rows", maxRows: MAX_INQUIRY_IMPORT_ROWS };
+      }
+
+      const { categories, colors } = await getMetaLists(c.store);
+      const existing = await c.store.listInquiries();
+      const fingerprints = new Set(
+        existing.map((inquiry) =>
+          inquiryImportFingerprint(inquiry.reference_no, inquiry.description),
+        ),
+      );
+      const result = {
+        total: rows.length,
+        imported: 0,
+        skipped: 0,
+        failed: 0,
+        matchesCreated: 0,
+        warnings: [] as { row: number; message: string }[],
+        errors: [] as { row: number; message: string }[],
+      };
+
+      // AI APIのレート制限と通知の順序を安定させるため、行単位で順番に保存・照合する。
+      for (const row of rows) {
+        if (!row.description) {
+          result.failed++;
+          result.errors.push({ row: row.rowNumber, message: "特徴が空です" });
+          continue;
+        }
+        const fingerprint = inquiryImportFingerprint(row.referenceNo, row.description);
+        if (fingerprints.has(fingerprint)) {
+          result.skipped++;
+          continue;
+        }
+        const configuredCategory = configuredOption(row.category, categories);
+        const configuredColor = configuredOption(row.color, colors);
+        const inferredFilters =
+          configuredCategory && configuredColor
+            ? { category: "", color: "" }
+            : await inferQueryFilters(c.ai, row.description, categories, colors);
+        const category = configuredCategory || inferredFilters.category;
+        const color = configuredColor || inferredFilters.color;
+        if (row.category && !configuredCategory) {
+          result.warnings.push({
+            row: row.rowNumber,
+            message: `未登録カテゴリ「${row.category}」は${category ? `「${category}」へ自動補完` : "未指定として取込"}しました`,
+          });
+        }
+        if (row.color && !configuredColor) {
+          result.warnings.push({
+            row: row.rowNumber,
+            message: `未登録色「${row.color}」は${color ? `「${color}」へ自動補完` : "未指定として取込"}しました`,
+          });
+        }
+        const draft = {
+          status: "open" as const,
+          description: row.description,
+          category,
+          color,
+          ai_description: row.description,
+          tags: row.tags,
+          reference_no: row.referenceNo,
+          notes: row.notes,
+        };
+        try {
+          const embedding = await safeEmbed(c.ai, inquiryEmbedText(draft));
+          const inquiry = await c.store.createInquiry({ ...draft, embedding });
+          inquiry.embedding = embedding;
+          if (embedding.length) {
+            const outcome = await matchNewInquiry(c.store, inquiry, c.cfg.matchThreshold, c.ai);
+            result.matchesCreated += outcome.matches.length;
+          } else {
+            result.warnings.push({
+              row: row.rowNumber,
+              message: "問い合わせは保存しましたがAI照合を実行できませんでした",
+            });
+          }
+          fingerprints.add(fingerprint);
+          result.imported++;
+        } catch (error) {
+          result.failed++;
+          result.errors.push({
+            row: row.rowNumber,
+            message: error instanceof Error ? error.message : "import_failed",
+          });
+        }
+      }
+      return result;
     })
     .get("/api/inquiries/:id", async ({ params, set }) => {
       const c = await ctx();
