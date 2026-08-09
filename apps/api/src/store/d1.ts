@@ -989,6 +989,10 @@ function buildItemWhere(
 ): { where: string; params: any[] } {
   const clauses: string[] = [];
   const params: any[] = [];
+  if (f.display_id) {
+    clauses.push("display_id LIKE ?");
+    params.push(`%${f.display_id}%`);
+  }
   if (f.category) {
     clauses.push("category = ?");
     params.push(f.category);

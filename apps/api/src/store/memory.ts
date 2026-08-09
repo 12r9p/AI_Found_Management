@@ -400,6 +400,8 @@ function clean<T extends object>(o: T): Partial<T> {
 
 export function applyItemFilters(items: Item[], f: SearchFilters): Item[] {
   return items.filter((it) => {
+    if (f.display_id && !it.display_id.toLowerCase().includes(f.display_id.toLowerCase()))
+      return false;
     if (f.category && it.category !== f.category) return false;
     if (f.color && it.color !== f.color) return false;
     if (f.status && it.status !== f.status) return false;

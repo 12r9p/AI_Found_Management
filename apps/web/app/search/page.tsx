@@ -24,7 +24,15 @@ import { FoundImage } from "../../components/FoundImage";
 import { api, isAppliedApiError } from "../../lib/api";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
-const EMPTY_FILTERS = { category: "", color: "", status: "", location: "", from: "", to: "" };
+const EMPTY_FILTERS = {
+  display_id: "",
+  category: "",
+  color: "",
+  status: "",
+  location: "",
+  from: "",
+  to: "",
+};
 
 export default function SearchPage() {
   const meta = useMeta();
@@ -208,6 +216,17 @@ export default function SearchPage() {
             </Field>
 
             <div className="rb-eyebrow mt-16 mb-8">フィルター</div>
+            <Field label="管理番号">
+              {(id) => (
+                <Input
+                  id={id}
+                  value={filters.display_id}
+                  onChange={(e) => setF("display_id", e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && doSearch()}
+                  placeholder="FD-20260729-0001"
+                />
+              )}
+            </Field>
             <Field label="種別">
               {(id) => (
                 <div>
