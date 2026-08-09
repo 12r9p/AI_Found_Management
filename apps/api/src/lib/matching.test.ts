@@ -4,6 +4,8 @@ import type { ItemCursorPosition } from "../store/item-pagination.ts";
 import { deterministicEmbed } from "../ai/provider.ts";
 import {
   calculateColorPenalty,
+  calculateMatchBonus,
+  areTermsMatching,
   categoryRelation,
   hasExplicitObjectTypeConflict,
   hasExplicitObjectTypeTextConflict,
@@ -481,4 +483,48 @@ test("POST /api/rematchは同じrunIdとcursorのページ結果を再利用す�
   );
   expect(finished.status).toBe(200);
   expect(await finished.json()).toEqual({ ok: true });
+});
+
+test("areTermsMatching: 表記揺れと同義語（エイリアス）の一致判定ができる", () => {
+  expect(areTermsMatching("Apple", "アップル")).toBe(true);
+  expect(areTermsMatching("AirPods Pro", "エアポッツ")).toBe(true);
+  expect(areTermsMatching("Louis Vuitton", "ルイ・ヴィトン")).toBe(true);
+  expect(areTermsMatching("PORTER", "吉田カバン")).toBe(true);
+  expect(areTermsMatching("Nike", "アディダス")).toBe(false);
+});
+
+test("calculateMatchBonus: ブランドや型番の一致でボーナスが加算される", () => {
+  const itemBase = {
+    id: "item-1",
+    status: "stored" as const,
+    category: "イヤホン",
+    created_at: "2026-08-09T00:00:00Z",
+  };
+  const inquiryBase = {
+    id: "inq-1",
+    status: "open" as const,
+    category: "イヤホン",
+    created_at: "2026-08-09T00:00:00Z",
+  };
+
+  // ブランド一致
+  const bonusBrand = calculateMatchBonus(
+    { ...itemBase, brand: "Apple" },
+    { ...inquiryBase, description: "アップルのスマホを失くしました" },
+  );
+  expect(bonusBrand).toBeGreaterThanOrEqual(0.15);
+
+  // 特徴文内の型番一致 (AirPods)
+  const bonusModel = calculateMatchBonus(
+    { ...itemBase, ai_description: "白のAirPods Proケース付き" },
+    { ...inquiryBase, description: "エアポッツプロを失くしました" },
+  );
+  expect(bonusModel).toBeGreaterThanOrEqual(0.1);
+
+  // 一致なしは0
+  const bonusNone = calculateMatchBonus(
+    { ...itemBase, brand: "Sony" },
+    { ...inquiryBase, description: "Appleのキーケース" },
+  );
+  expect(bonusNone).toBe(0);
 });
