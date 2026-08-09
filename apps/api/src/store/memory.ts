@@ -406,8 +406,8 @@ export function applyItemFilters(items: Item[], f: SearchFilters): Item[] {
     if (f.color && it.color !== f.color) return false;
     if (f.status && it.status !== f.status) return false;
     if (f.location && !it.found_location.includes(f.location)) return false;
-    if (f.from && it.found_at && it.found_at < f.from) return false;
-    if (f.to && it.found_at && it.found_at > f.to) return false;
+    if (f.from && (!it.found_at || it.found_at < f.from)) return false;
+    if (f.to && (!it.found_at || it.found_at > f.to)) return false;
     return true;
   });
 }

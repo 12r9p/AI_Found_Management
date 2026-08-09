@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { Button, Card, Select, Field, MetaOptionList } from "../../components/ui";
+import { Button, Card, Select, Field, Input, MetaOptionList } from "../../components/ui";
 import { useMeta } from "../../components/useMeta";
 import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
@@ -28,6 +28,8 @@ export default function AdminPage() {
     category: "",
     status: "",
     location: "",
+    from: "",
+    to: "",
   });
   const [items, setItems] = useState<Item[]>([]);
   const [cursorHistory, setCursorHistory] = useState<(ItemCursor | null)[]>([null]);
@@ -42,6 +44,8 @@ export default function AdminPage() {
     if (filters.category) q.category = filters.category;
     if (filters.status) q.status = filters.status;
     if (filters.location) q.location = filters.location;
+    if (filters.from) q.from = filters.from;
+    if (filters.to) q.to = filters.to;
     if (currentCursor) {
       q.cursorCreatedAt = currentCursor.createdAt;
       q.cursorId = currentCursor.id;
@@ -197,6 +201,26 @@ export default function AdminPage() {
                       <option key={p.name}>{p.name}</option>
                     ))}
                   </Select>
+                )}
+              </Field>
+              <Field label="拾得日（から）">
+                {(id) => (
+                  <Input
+                    id={id}
+                    type="date"
+                    value={filters.from}
+                    onChange={(e) => updateFilter("from", e.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label="拾得日（まで）">
+                {(id) => (
+                  <Input
+                    id={id}
+                    type="date"
+                    value={filters.to}
+                    onChange={(e) => updateFilter("to", e.target.value)}
+                  />
                 )}
               </Field>
             </div>
