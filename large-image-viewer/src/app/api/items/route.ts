@@ -34,10 +34,18 @@ export async function GET(request: NextRequest) {
       redirect: "manual",
     });
 
-    if (res.status === 302 || res.status === 301 || res.status === 307 || res.type === "opaqueredirect") {
+    if (
+      res.status === 302 ||
+      res.status === 301 ||
+      res.status === 307 ||
+      res.type === "opaqueredirect"
+    ) {
       return NextResponse.json(
-        { error: "Cloudflare Access (Zero Trust) の認証が必要です。画面下の入力欄に CF_Authorization トークンを設定してください。" },
-        { status: 401 }
+        {
+          error:
+            "Cloudflare Access (Zero Trust) の認証が必要です。画面下の入力欄に CF_Authorization トークンを設定してください。",
+        },
+        { status: 401 },
       );
     }
 
@@ -45,7 +53,7 @@ export async function GET(request: NextRequest) {
       const text = await res.text().catch(() => "");
       return NextResponse.json(
         { error: `リモートAPIエラー (HTTP ${res.status}): ${text.slice(0, 200)}` },
-        { status: res.status }
+        { status: res.status },
       );
     }
 
@@ -55,7 +63,7 @@ export async function GET(request: NextRequest) {
     console.error("[Route Handler /api/items error]:", error);
     return NextResponse.json(
       { error: `サーバープロキシ例外: ${(error as Error).message}` },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

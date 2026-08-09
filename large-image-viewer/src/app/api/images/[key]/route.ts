@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const TARGET_API = process.env.NEXT_PUBLIC_API_BASE ?? "https://found.s-t.work";
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ key: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ key: string }> }) {
   try {
     const { key } = await params;
     const variant = request.nextUrl.searchParams.get("variant") || "original";
@@ -36,7 +33,12 @@ export async function GET(
       redirect: "manual",
     });
 
-    if (res.status === 302 || res.status === 301 || res.status === 307 || res.type === "opaqueredirect") {
+    if (
+      res.status === 302 ||
+      res.status === 301 ||
+      res.status === 307 ||
+      res.type === "opaqueredirect"
+    ) {
       return new NextResponse("Cloudflare Access Unauthorized", { status: 401 });
     }
 

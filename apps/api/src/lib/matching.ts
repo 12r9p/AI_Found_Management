@@ -17,11 +17,7 @@ function hexToRgb(hex: string): [number, number, number] | null {
   const c = hex.replace("#", "").trim();
   if (!/^[0-9a-fA-F]{3,8}$/.test(c)) return null;
   if (c.length === 3) {
-    return [
-      parseInt(c[0] + c[0], 16),
-      parseInt(c[1] + c[1], 16),
-      parseInt(c[2] + c[2], 16),
-    ];
+    return [parseInt(c[0] + c[0], 16), parseInt(c[1] + c[1], 16), parseInt(c[2] + c[2], 16)];
   }
   return [
     parseInt(c.substring(0, 2), 16),

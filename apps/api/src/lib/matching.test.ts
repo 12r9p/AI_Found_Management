@@ -99,7 +99,7 @@ test("calculateColorPenalty: 同じ色なら0、近い色なら小ペナルテ�
 
   // 同じ色
   expect(calculateColorPenalty("赤", "赤", colors)).toBe(0);
-  
+
   // 片方または両方が未指定
   expect(calculateColorPenalty("赤", undefined, colors)).toBe(0);
   expect(calculateColorPenalty(undefined, undefined, colors)).toBe(0);
@@ -115,9 +115,9 @@ test("calculateColorPenalty: 同じ色なら0、近い色なら小ペナルテ�
 
   // 遠い色（黒と白） -> ペナルティは最大に近いはず
   const penaltyFar = calculateColorPenalty("黒", "白", colors);
-  expect(penaltyFar).toBeGreaterThan(0.20);
+  expect(penaltyFar).toBeGreaterThan(0.2);
   expect(penaltyFar).toBeLessThanOrEqual(0.25);
-  
+
   // 遠い色2（赤と黒）
   const penaltyFar2 = calculateColorPenalty("赤", "黒", colors);
   expect(penaltyFar2).toBeGreaterThan(penaltyClose);

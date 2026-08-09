@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps, jsx-a11y/label-has-associated-control, jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-static-element-interactions */
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -125,12 +126,29 @@ export default function LargeImageViewerPage() {
           marginBottom: 16,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-end",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
           <div>
-            <div style={{ textTransform: "uppercase", letterSpacing: 2, fontSize: 11, fontWeight: "bold" }}>
+            <div
+              style={{
+                textTransform: "uppercase",
+                letterSpacing: 2,
+                fontSize: 11,
+                fontWeight: "bold",
+              }}
+            >
               LOST &amp; FOUND / LARGE IMAGE VIEWER
             </div>
-            <h1 style={{ margin: 0, fontSize: 28, fontWeight: "bold" }}>遺失物 登録一覧（大判画像表示版）</h1>
+            <h1 style={{ margin: 0, fontSize: 28, fontWeight: "bold" }}>
+              遺失物 登録一覧（大判画像表示版）
+            </h1>
           </div>
           <div style={{ fontSize: 12, textAlign: "right" }}>
             接続先: <strong>{DEFAULT_REMOTE_API}</strong> (Server Route Proxy)
@@ -168,7 +186,9 @@ export default function LargeImageViewerPage() {
             </div>
 
             <div>
-              <label style={{ fontWeight: "bold", marginRight: 6 }}>表示サイズ: {imageSize}px</label>
+              <label style={{ fontWeight: "bold", marginRight: 6 }}>
+                表示サイズ: {imageSize}px
+              </label>
               <input
                 type="range"
                 min="100"
@@ -186,32 +206,70 @@ export default function LargeImageViewerPage() {
                 placeholder="キーワードで絞り込み..."
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
-                style={{ padding: "4px 10px", border: "1px solid #94a3b8", borderRadius: 4, width: 220 }}
+                style={{
+                  padding: "4px 10px",
+                  border: "1px solid #94a3b8",
+                  borderRadius: 4,
+                  width: 220,
+                }}
               />
             </div>
 
             <button
               onClick={fetchItems}
-              style={{ padding: "5px 14px", background: "#000", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: "bold" }}
+              style={{
+                padding: "5px 14px",
+                background: "#000",
+                color: "#fff",
+                border: "none",
+                borderRadius: 4,
+                cursor: "pointer",
+                fontWeight: "bold",
+              }}
             >
               再読み込み
             </button>
           </div>
 
           {/* Cloudflare Access トークン入力エリア */}
-          <div style={{ paddingTop: 8, borderTop: "1px dashed #cbd5e1", display: "flex", alignItems: "center", gap: 8 }}>
-            <label style={{ fontWeight: "bold", color: "#334155" }}>🔒 Cloudflare Access JWT (CF_Authorization):</label>
+          <div
+            style={{
+              paddingTop: 8,
+              borderTop: "1px dashed #cbd5e1",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <label style={{ fontWeight: "bold", color: "#334155" }}>
+              🔒 Cloudflare Access JWT (CF_Authorization):
+            </label>
             <input
               type="password"
               placeholder="Cloudflare Access の CF_Authorization Cookie 値を貼り付け"
               value={cfToken}
               onChange={(e) => handleTokenChange(e.target.value)}
-              style={{ padding: "4px 8px", border: "1px solid #94a3b8", borderRadius: 4, flex: 1, fontFamily: "monospace", fontSize: 12 }}
+              style={{
+                padding: "4px 8px",
+                border: "1px solid #94a3b8",
+                borderRadius: 4,
+                flex: 1,
+                fontFamily: "monospace",
+                fontSize: 12,
+              }}
             />
             {cfToken && (
               <button
                 onClick={() => handleTokenChange("")}
-                style={{ padding: "4px 8px", background: "#ef4444", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 11 }}
+                style={{
+                  padding: "4px 8px",
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontSize: 11,
+                }}
               >
                 クリア
               </button>
@@ -222,25 +280,61 @@ export default function LargeImageViewerPage() {
 
       {/* エラー表示 */}
       {error && (
-        <div style={{ padding: 16, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", borderRadius: 6, marginBottom: 16 }}>
-          <div style={{ fontWeight: "bold", fontSize: 15, marginBottom: 4 }}>通信エラーが発生しました</div>
+        <div
+          style={{
+            padding: 16,
+            background: "#fef2f2",
+            color: "#991b1b",
+            border: "1px solid #fecaca",
+            borderRadius: 6,
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ fontWeight: "bold", fontSize: 15, marginBottom: 4 }}>
+            通信エラーが発生しました
+          </div>
           <div>{error}</div>
 
-          <div style={{ marginTop: 12, padding: 12, background: "#fff", border: "1px solid #fca5a5", borderRadius: 4, fontSize: 13, color: "#1e293b" }}>
-            <div style={{ fontWeight: "bold", marginBottom: 6 }}>💡 解決手順 (Cloudflare Access 認証):</div>
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              background: "#fff",
+              border: "1px solid #fca5a5",
+              borderRadius: 4,
+              fontSize: 13,
+              color: "#1e293b",
+            }}
+          >
+            <div style={{ fontWeight: "bold", marginBottom: 6 }}>
+              💡 解決手順 (Cloudflare Access 認証):
+            </div>
             <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
               <li>
                 ブラウザの別タブで{" "}
-                <a href="https://found.s-t.work" target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: "bold" }}>
+                <a
+                  href="https://found.s-t.work"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "#2563eb", textDecoration: "underline", fontWeight: "bold" }}
+                >
                   https://found.s-t.work
                 </a>{" "}
                 を開きます。
               </li>
-              <li>DevTools (F12) ➔ 「アプリケーション(Storage)」 ➔ 「Cookie」 ➔ `found.s-t.work` を開きます。</li>
               <li>
-                <code style={{ background: "#f1f5f9", padding: "2px 4px", borderRadius: 3 }}>CF_Authorization</code> の値をコピーします。
+                DevTools (F12) ➔ 「アプリケーション(Storage)」 ➔ 「Cookie」 ➔ `found.s-t.work`
+                を開きます。
               </li>
-              <li>上の「🔒 Cloudflare Access JWT」欄に貼り付け、「再読み込み」を押してください。</li>
+              <li>
+                <code style={{ background: "#f1f5f9", padding: "2px 4px", borderRadius: 3 }}>
+                  CF_Authorization
+                </code>{" "}
+                の値をコピーします。
+              </li>
+              <li>
+                上の「🔒 Cloudflare Access JWT」欄に貼り付け、「再読み込み」を押してください。
+              </li>
             </ol>
           </div>
         </div>
@@ -256,7 +350,18 @@ export default function LargeImageViewerPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
-              {["No", "画像 (拡大表示)", "管理番号", "状態", "種別", "色", "ブランド", "拾得場所", "拾得日", "特徴"].map((h) => (
+              {[
+                "No",
+                "画像 (拡大表示)",
+                "管理番号",
+                "状態",
+                "種別",
+                "色",
+                "ブランド",
+                "拾得場所",
+                "拾得日",
+                "特徴",
+              ].map((h) => (
                 <th
                   key={h}
                   style={{
