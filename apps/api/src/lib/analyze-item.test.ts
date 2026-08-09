@@ -35,11 +35,42 @@ const fakeImages = { get: async () => null, put: async () => {}, delete: async (
 test("runBackgroundAnalysis は一時的な失敗をリトライして最終的に成功する", async () => {
   const store = new MemoryStore();
   const item = await store.createItem({ status: "stored", image_keys: [], ai_status: "pending" });
-  const c: AppContext = { cfg: resolveConfig({}), store, ai: flakyProvider(2), images: fakeImages };
+  const ai = flakyProvider(2);
+  let embeddedText = "";
+  ai.embed = async (text: string) => {
+    embeddedText = text;
+    return [1, 0];
+  };
+  const c: AppContext = { cfg: resolveConfig({}), store, ai, images: fakeImages };
   await runBackgroundAnalysis(c, item);
   const updated = await store.getItem(item.id);
   expect(updated?.ai_status).toBe("ready");
+  expect(updated?.category).toBe("財布");
   expect(updated?.color).toBe("黒");
+  expect(embeddedText.startsWith("財布 ")).toBe(true);
+});
+
+test("runBackgroundAnalysis はスタッフが入力済みの種別をAI推定で上書きしない", async () => {
+  const store = new MemoryStore();
+  const item = await store.createItem({
+    status: "stored",
+    category: "傘",
+    image_keys: [],
+    ai_status: "pending",
+  });
+  const ai = flakyProvider(0);
+  let embeddedText = "";
+  ai.embed = async (text: string) => {
+    embeddedText = text;
+    return [1, 0];
+  };
+  const c: AppContext = { cfg: resolveConfig({}), store, ai, images: fakeImages };
+
+  await runBackgroundAnalysis(c, item);
+
+  const updated = await store.getItem(item.id);
+  expect(updated?.category).toBe("傘");
+  expect(embeddedText.startsWith("傘 ")).toBe(true);
 });
 
 test("runBackgroundAnalysis は Vision解析に失敗しても埋め込みだけは作り、検索不能にしない", async () => {
