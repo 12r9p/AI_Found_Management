@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { ADMIN_TABS, adminTabHref, requestAdminTab } from "../lib/adminTabs";
+import { ADMIN_NAV, isAdminNavActive } from "../lib/adminNavigation";
 import { Button, ThemeToggle } from "./ui";
 import { NotificationsPopup } from "./NotificationsPopup";
 import { OfflineBanner } from "./OfflineBanner";
@@ -14,11 +14,6 @@ const PRIMARY_NAV = [
   { href: "/search", label: "探す" },
   { href: "/matches", label: "照合" },
 ];
-
-// トップバーは横幅が限られるので、管理はタブを畳んで1項目として見せる。
-// メニュー側は縦に伸ばせるので「管理」を見出しにしてタブを直接並べる
-// （「管理」と「設定」が同列だと、設定が管理の中にあることが読み取れない）。
-const NAV = [...PRIMARY_NAV, { href: "/admin", label: "管理" }];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -104,11 +99,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             遺失物管理
           </Link>
           <nav className="rb-nav" aria-label="主要ナビゲーション">
-            {NAV.map((n) => (
+            {PRIMARY_NAV.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
                 className={pathname.startsWith(n.href) ? "active" : ""}
+                aria-current={pathname.startsWith(n.href) ? "page" : undefined}
+              >
+                {n.label}
+              </Link>
+            ))}
+            <span className="rb-nav__label">管理</span>
+            {ADMIN_NAV.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                className={isAdminNavActive(pathname, n.href) ? "active" : ""}
+                aria-current={isAdminNavActive(pathname, n.href) ? "page" : undefined}
               >
                 {n.label}
               </Link>
@@ -154,23 +161,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     key={n.href}
                     href={n.href}
                     role="menuitem"
+                    aria-current={pathname.startsWith(n.href) ? "page" : undefined}
                     onClick={() => setMenuOpen(false)}
                   >
                     {n.label}
                   </Link>
                 ))}
                 <span className="rb-menu__label">管理</span>
-                {ADMIN_TABS.map((t) => (
+                {ADMIN_NAV.map((n) => (
                   <Link
-                    key={t.id}
-                    href={adminTabHref(t.id)}
+                    key={n.href}
+                    href={n.href}
                     role="menuitem"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      requestAdminTab(t.id);
-                    }}
+                    aria-current={isAdminNavActive(pathname, n.href) ? "page" : undefined}
+                    onClick={() => setMenuOpen(false)}
                   >
-                    {t.label}
+                    {n.label}
                   </Link>
                 ))}
               </div>
