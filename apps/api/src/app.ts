@@ -7,9 +7,7 @@ import {
   matchNewItem,
   matchNewInquiry,
   rematchPage,
-  categoryRelation,
   hasExplicitObjectTypeTextConflict,
-  hasExplicitObjectTypeTextMatch,
   type RematchPageOutcome,
 } from "./lib/matching.ts";
 import { runBackgroundAnalysis } from "./lib/analyze-item.ts";
@@ -36,6 +34,7 @@ import {
   parseInquiryCsv,
 } from "./lib/inquiry-import.ts";
 import { normalizeFoundDateRange } from "./lib/date-filters.ts";
+import { buildSemanticSearchText, strictSearchFilters } from "./lib/search-query.ts";
 import { eventBus, type AppEvent } from "./lib/events.ts";
 import type { SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
@@ -664,36 +663,35 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       return { deleted: deletedItem !== null };
     })
 
-    // ---- search (vector + filters) ----
+    // ---- search (vector + strict filters) ----
     .post("/api/search", async ({ body }) => {
       const c = await ctx();
       const b = (body as any) ?? {};
       const filters: SearchFilters = { ...parseFilters(b), limit: b.limit ?? 50 };
-      if (!filters.q) {
-        // クエリ無しならフィルタのみの一覧
+      const semanticText = buildSemanticSearchText(filters);
+      if (!semanticText) {
+        // 意味検索する属性が無ければ、状態・日付などの条件だけで一覧表示する。
         const page = await c.store.listItems(filters, { limit: filters.limit ?? 50 });
         return { items: page.items.map((i) => ({ ...i, score: null })) };
       }
+      const strictFilters = strictSearchFilters(filters);
       // 採番ルールは設定で変更できるため形式を決め打ちせず、検索文全体を管理番号として
       // 先に部分一致検索する。該当する場合はAIを使わず、管理番号の結果を優先する。
-      const displayIdQuery = filters.q.trim();
+      const displayIdQuery = filters.q?.trim() ?? "";
       if (displayIdQuery) {
         const displayIdPage = await c.store.listItems(
-          { ...filters, q: undefined, display_id: displayIdQuery },
+          { ...strictFilters, display_id: displayIdQuery },
           { limit: filters.limit ?? 50 },
         );
         if (displayIdPage.items.length > 0) {
           return {
             items: displayIdPage.items.map((item) => ({ ...item, score: null })),
-            inferredFilters: { category: "", color: "" },
           };
         }
       }
-      const { categories, colors } = await getMetaLists(c.store);
-      const inferredFilters = await inferQueryFilters(c.ai, filters.q, categories, colors);
-      const embedding = await safeEmbed(c.ai, filters.q);
+      const embedding = await safeEmbed(c.ai, semanticText);
       if (!embedding.length) {
-        // AI障害時は特徴文検索を諦め、フィルタだけの一覧にフォールバック
+        // AI障害時は意味検索を諦め、入力された条件の完全一致一覧にフォールバック
         // （検索自体を丸ごとエラーにしない）。degraded を立てて呼び出し側に
         // 「ベクトル検索はできていない」ことを伝える（何も伝えないと検索してるのに
         // スコアが出ず、壊れているようにしか見えない）。
@@ -701,40 +699,16 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         return {
           items: page.items.map((i) => ({ ...i, score: null })),
           degraded: true,
-          inferredFilters,
         };
       }
-      const items = (await c.store.searchItems(embedding, filters)).filter((item) => {
+      const items = (await c.store.searchItems(embedding, strictFilters)).filter((item) => {
         if (item.score < c.cfg.searchThreshold) return false;
-        if (!filters.category && inferredFilters.category) {
-          const relation = categoryRelation(item.category, inferredFilters.category);
-          if (relation === "incompatible") return false;
-          // 「その他」やカテゴリ空欄を救済するのは、特徴文にも同じ物品名がある場合だけ。
-          // タオル検索で説明の薄い無関係な「その他」が混ざるのを防ぐ。
-          if (
-            relation === "broad" &&
-            !hasExplicitObjectTypeTextMatch(
-              [item.ai_description, ...item.tags].filter(Boolean).join(" "),
-              filters.q ?? "",
-            )
-          ) {
-            return false;
-          }
-        }
-        if (
-          !filters.color &&
-          inferredFilters.color &&
-          item.color &&
-          item.color !== inferredFilters.color
-        ) {
-          return false;
-        }
         return !hasExplicitObjectTypeTextConflict(
           [item.ai_description, ...item.tags].filter(Boolean).join(" "),
           filters.q ?? "",
         );
       });
-      return { items, inferredFilters };
+      return { items };
     })
 
     // ---- ページ単位の全件再照合（管理画面の手動トリガー） ----
