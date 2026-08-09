@@ -21,6 +21,7 @@ import { ImageEditor } from "../../../components/ImageEditor";
 import { MatchReviewModal } from "../../../components/MatchReviewModal";
 import { FoundImage } from "../../../components/FoundImage";
 import { api, isAppliedApiError } from "../../../lib/api";
+import { fillMissingAiValue } from "../../../lib/aiAnalysis";
 import { formatIsoForDateTimeLocal, parseDateTimeLocalToIso } from "../../../lib/datetime";
 import { STATUS_LABEL, type Item, type Match } from "../../../lib/types";
 
@@ -87,8 +88,10 @@ export default function ItemDetailPage() {
       const d = await api.analyze({ keys: imageKeys, hint: form.notes || undefined });
       set("ai_description", d.description || form.ai_description);
       if (d.tags.length) set("tagsText", d.tags.join("、"));
-      if (!form.color && d.color) set("color", d.color);
-      if (!form.brand && d.brand) set("brand", d.brand);
+      if (!form.category?.trim() && d.category)
+        set("category", fillMissingAiValue(form.category, d.category));
+      if (!form.color && d.color) set("color", fillMissingAiValue(form.color, d.color));
+      if (!form.brand && d.brand) set("brand", fillMissingAiValue(form.brand, d.brand));
       toast("AI解析が完了しました。内容を確認・修正してください", "success");
     } catch (e) {
       toast(`AI解析失敗: ${(e as Error).message}`, "error");
