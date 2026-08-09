@@ -136,7 +136,7 @@ export default function ItemDetailPage() {
   /** 直前の画面へ戻る。単独で開かれた場合（履歴なし）は物品一覧へ。 */
   const goBack = () => {
     if (window.history.length > 1) router.back();
-    else router.push("/admin#items");
+    else router.push("/admin");
   };
 
   const del = async () => {

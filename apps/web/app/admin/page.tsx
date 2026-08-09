@@ -6,16 +6,7 @@ import { useMeta } from "../../components/useMeta";
 import { useLocationPresets } from "../../components/useLocationPresets";
 import { usePersistentState } from "../../components/usePersistentState";
 import { ItemsTable } from "../../components/ItemsTable";
-import { InquiriesTab } from "../../components/admin/InquiriesTab";
-import { SettingsTab } from "../../components/admin/SettingsTab";
 import { api, type ItemCursor } from "../../lib/api";
-import {
-  ADMIN_TABS,
-  ADMIN_TAB_EVENT,
-  adminTabHref,
-  isAdminTab,
-  type AdminTab,
-} from "../../lib/adminTabs";
 import { STATUS_LABEL, type Item } from "../../lib/types";
 
 const ITEM_PAGE_SIZE = 100;
@@ -23,7 +14,6 @@ const ITEM_PAGE_SIZE = 100;
 export default function AdminPage() {
   const meta = useMeta();
   const presets = useLocationPresets();
-  const [tab, setTab] = usePersistentState<AdminTab>("admin:tab", "items");
   const [filters, setFilters] = usePersistentState("admin:filters", {
     category: "",
     status: "",
@@ -79,27 +69,6 @@ export default function AdminPage() {
     return () => clearInterval(t);
   }, [items, loadItems]);
 
-  // メニューからのタブ遷移。別ページから来たときはマウント時のハッシュで足りるが、
-  // すでに /admin にいる場合、ハッシュだけの遷移は Next が pushState で処理するため
-  // hashchange が発火しない。メニュー側から飛ぶ明示イベントで補う（lib/adminTabs.ts）。
-  useEffect(() => {
-    const fromHash = () => {
-      const h = location.hash.replace("#", "");
-      if (isAdminTab(h)) setTab(h);
-    };
-    const fromEvent = (e: Event) => {
-      const t = (e as CustomEvent<string>).detail;
-      if (isAdminTab(t)) setTab(t);
-    };
-    fromHash();
-    window.addEventListener("hashchange", fromHash);
-    window.addEventListener(ADMIN_TAB_EVENT, fromEvent);
-    return () => {
-      window.removeEventListener("hashchange", fromHash);
-      window.removeEventListener(ADMIN_TAB_EVENT, fromEvent);
-    };
-  }, [setTab]);
-
   const csvHref = api.csvUrl(
     Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) as Record<string, string>,
   );
@@ -129,139 +98,103 @@ export default function AdminPage() {
     setNextCursor(null);
   };
 
-  const selectTab = (t: AdminTab) => {
-    setTab(t);
-    history.replaceState(null, "", adminTabHref(t));
-  };
-
   return (
     <AppShell>
-      <div className="rb-between mb-16">
-        <div>
-          <h2>管理コンソール</h2>
+      <h2 className="mb-16">物品一覧</h2>
+      <Card variant="bordered" className="mb-16 no-print">
+        <div className="rb-grid rb-grid--3">
+          <Field label="種別で絞込">
+            {(id) => (
+              <Select
+                id={id}
+                value={filters.category}
+                onChange={(e) => updateFilter("category", e.target.value)}
+              >
+                <option value="">すべて</option>
+                <MetaOptionList options={meta.categories} />
+              </Select>
+            )}
+          </Field>
+          <Field label="状態で絞込">
+            {(id) => (
+              <Select
+                id={id}
+                value={filters.status}
+                onChange={(e) => updateFilter("status", e.target.value)}
+              >
+                <option value="">すべて</option>
+                {meta.itemStatuses.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="拾得場所">
+            {(id) => (
+              <Select
+                id={id}
+                value={filters.location}
+                onChange={(e) => updateFilter("location", e.target.value)}
+              >
+                <option value="">すべて</option>
+                {presets.map((p) => (
+                  <option key={p.name}>{p.name}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label="拾得日（から）">
+            {(id) => (
+              <Input
+                id={id}
+                type="date"
+                value={filters.from}
+                onChange={(e) => updateFilter("from", e.target.value)}
+              />
+            )}
+          </Field>
+          <Field label="拾得日（まで）">
+            {(id) => (
+              <Input
+                id={id}
+                type="date"
+                value={filters.to}
+                onChange={(e) => updateFilter("to", e.target.value)}
+              />
+            )}
+          </Field>
         </div>
-        <div className="rb-nav">
-          {ADMIN_TABS.map((t) => (
-            <a
-              key={t.id}
-              href={`#${t.id}`}
-              className={tab === t.id ? "active" : ""}
-              onClick={(e) => {
-                e.preventDefault();
-                selectTab(t.id);
-              }}
-            >
-              {t.label}
-            </a>
-          ))}
+        <div className="rb-row">
+          <Button variant="outline" onClick={loadItems}>
+            再読込
+          </Button>
+          <Button onClick={printPdf}>PDF出力</Button>
+          <a className="rb-btn rb-btn--outline" href={csvHref} target="_blank" rel="noreferrer">
+            CSV出力
+          </a>
+          <span className="rb-tiny muted-text">
+            {pageIndex + 1}ページ目・{items.length}件
+          </span>
+        </div>
+      </Card>
+      <ItemsTable items={items} meta={meta} onChanged={loadItems} />
+      <div className="rb-between mt-16 no-print">
+        <span className="rb-tiny muted-text">{pageIndex + 1}ページ目</span>
+        <div className="rb-row">
+          <Button
+            variant="outline"
+            disabled={pageIndex === 0 || itemsLoading}
+            onClick={showPreviousPage}
+          >
+            前へ
+          </Button>
+          <Button variant="outline" disabled={!nextCursor || itemsLoading} onClick={showNextPage}>
+            次へ
+          </Button>
         </div>
       </div>
-
-      {tab === "items" && (
-        <>
-          <Card variant="bordered" className="mb-16 no-print">
-            <div className="rb-grid rb-grid--3">
-              <Field label="種別で絞込">
-                {(id) => (
-                  <Select
-                    id={id}
-                    value={filters.category}
-                    onChange={(e) => updateFilter("category", e.target.value)}
-                  >
-                    <option value="">すべて</option>
-                    <MetaOptionList options={meta.categories} />
-                  </Select>
-                )}
-              </Field>
-              <Field label="状態で絞込">
-                {(id) => (
-                  <Select
-                    id={id}
-                    value={filters.status}
-                    onChange={(e) => updateFilter("status", e.target.value)}
-                  >
-                    <option value="">すべて</option>
-                    {meta.itemStatuses.map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field label="拾得場所">
-                {(id) => (
-                  <Select
-                    id={id}
-                    value={filters.location}
-                    onChange={(e) => updateFilter("location", e.target.value)}
-                  >
-                    <option value="">すべて</option>
-                    {presets.map((p) => (
-                      <option key={p.name}>{p.name}</option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field label="拾得日（から）">
-                {(id) => (
-                  <Input
-                    id={id}
-                    type="date"
-                    value={filters.from}
-                    onChange={(e) => updateFilter("from", e.target.value)}
-                  />
-                )}
-              </Field>
-              <Field label="拾得日（まで）">
-                {(id) => (
-                  <Input
-                    id={id}
-                    type="date"
-                    value={filters.to}
-                    onChange={(e) => updateFilter("to", e.target.value)}
-                  />
-                )}
-              </Field>
-            </div>
-            <div className="rb-row">
-              <Button variant="outline" onClick={loadItems}>
-                再読込
-              </Button>
-              <Button onClick={printPdf}>PDF出力</Button>
-              <a className="rb-btn rb-btn--outline" href={csvHref} target="_blank" rel="noreferrer">
-                CSV出力
-              </a>
-              <span className="rb-tiny muted-text">
-                {pageIndex + 1}ページ目・{items.length}件
-              </span>
-            </div>
-          </Card>
-          <ItemsTable items={items} meta={meta} onChanged={loadItems} />
-          <div className="rb-between mt-16 no-print">
-            <span className="rb-tiny muted-text">{pageIndex + 1}ページ目</span>
-            <div className="rb-row">
-              <Button
-                variant="outline"
-                disabled={pageIndex === 0 || itemsLoading}
-                onClick={showPreviousPage}
-              >
-                前へ
-              </Button>
-              <Button
-                variant="outline"
-                disabled={!nextCursor || itemsLoading}
-                onClick={showNextPage}
-              >
-                次へ
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {tab === "inquiries" && <InquiriesTab />}
-      {tab === "settings" && <SettingsTab />}
     </AppShell>
   );
 }
