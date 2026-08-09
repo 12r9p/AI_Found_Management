@@ -3,10 +3,104 @@ import type { ItemCursorPosition } from "../store/item-pagination.ts";
 import type { Item, Inquiry, Match } from "../types.ts";
 import type { AIProvider } from "../ai/provider.ts";
 import { itemEmbedText } from "./embed-text.ts";
+import { getMetaOptions, type MetaOption } from "./meta.ts";
 
 export interface MatchOutcome {
   matches: Match[];
   topScore: number;
+}
+
+/**
+ * HEXカラーからRGB配列を抽出する。
+ */
+function hexToRgb(hex: string): [number, number, number] | null {
+  const c = hex.replace("#", "").trim();
+  if (!/^[0-9a-fA-F]{3,8}$/.test(c)) return null;
+  if (c.length === 3) {
+    return [
+      parseInt(c[0] + c[0], 16),
+      parseInt(c[1] + c[1], 16),
+      parseInt(c[2] + c[2], 16),
+    ];
+  }
+  return [
+    parseInt(c.substring(0, 2), 16),
+    parseInt(c.substring(2, 4), 16),
+    parseInt(c.substring(4, 6), 16),
+  ];
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  let h = 0,
+    s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = (g - b) / d + (g < b ? 6 : 0);
+        break;
+      case g:
+        h = (b - r) / d + 2;
+        break;
+      case b:
+        h = (r - g) / d + 4;
+        break;
+    }
+    h /= 6;
+  }
+  return [h * 360, s, l];
+}
+
+/**
+ * 両方の色が設定されている場合、HSL（色相・彩度・明度）の距離からペナルティ（最大0.25）を算出する。
+ */
+export function calculateColorPenalty(
+  c1: string | undefined,
+  c2: string | undefined,
+  colors: MetaOption[],
+): number {
+  if (!c1 || !c2) return 0;
+  if (c1 === c2) return 0;
+
+  const hex1 = colors.find((c) => c.name === c1)?.color;
+  const hex2 = colors.find((c) => c.name === c2)?.color;
+
+  if (hex1 && hex2) {
+    const rgb1 = hexToRgb(hex1);
+    const rgb2 = hexToRgb(hex2);
+    if (rgb1 && rgb2) {
+      const [r1, g1, b1] = rgb1;
+      const [r2, g2, b2] = rgb2;
+      const [h1, s1, l1] = rgbToHsl(r1, g1, b1);
+      const [h2, s2, l2] = rgbToHsl(r2, g2, b2);
+
+      const hueDist = Math.min(Math.abs(h1 - h2), 360 - Math.abs(h1 - h2)) / 180;
+      const isGrey1 = s1 < 0.1 || l1 < 0.2 || l1 > 0.9;
+      const isGrey2 = s2 < 0.1 || l2 < 0.2 || l2 > 0.9;
+
+      let dist = 0;
+      if (isGrey1 && isGrey2) {
+        dist = Math.abs(l1 - l2);
+      } else if (isGrey1 || isGrey2) {
+        dist = 0.8 + Math.abs(l1 - l2) * 0.2;
+      } else {
+        dist = hueDist * 0.7 + Math.abs(l1 - l2) * 0.2 + Math.abs(s1 - s2) * 0.1;
+      }
+
+      const MAX_PENALTY = 0.25;
+      return Math.min(dist, 1) * MAX_PENALTY;
+    }
+  }
+
+  // hexがない（「透明」等）かつ文字列が一致しない場合の一律ペナルティ
+  return 0.15;
 }
 
 /**
@@ -30,7 +124,13 @@ export async function matchNewItem(
   if (!item.embedding?.length) {
     // pg 実装では list からベクトルが返らないので取得元の embedding を使う
   }
+  const { colors } = await getMetaOptions(store);
   const scored = await scoreInquiries(store, item);
+
+  for (const s of scored) {
+    s.score -= calculateColorPenalty(item.color, s.inquiry.color, colors);
+  }
+
   const hits = scored.filter(
     (s) => s.score >= threshold && categoryConsistent(item.category, s.inquiry.category),
   );
@@ -76,10 +176,16 @@ export async function matchNewInquiry(
   inquiry: Inquiry,
   threshold: number,
 ): Promise<MatchOutcome> {
+  const { colors } = await getMetaOptions(store);
   const scored = await store.searchItems(inquiry.embedding, {
     status: "stored",
     limit: 20,
   });
+
+  for (const s of scored) {
+    s.score -= calculateColorPenalty(inquiry.color, s.color, colors);
+  }
+
   const hits = scored.filter(
     (s) => s.score >= threshold && categoryConsistent(inquiry.category, s.category),
   );

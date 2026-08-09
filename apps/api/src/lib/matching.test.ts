@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { MemoryStore } from "../store/memory.ts";
 import type { ItemCursorPosition } from "../store/item-pagination.ts";
 import { deterministicEmbed } from "../ai/provider.ts";
-import { matchNewItem, matchNewInquiry, rematchPage } from "./matching.ts";
+import { matchNewItem, matchNewInquiry, rematchPage, calculateColorPenalty } from "./matching.ts";
 import type { AIProvider } from "../ai/provider.ts";
 import { createApp } from "../app.ts";
 import { setEnv } from "../env-holder.ts";
@@ -85,6 +85,42 @@ test("カテゴリ整合ガード: 種別が違えば一致させない", async 
 
   const out = await matchNewItem(store, item, 0.3); // 低しきい値でもガードで弾く
   expect(out.matches.length).toBe(0);
+});
+
+test("calculateColorPenalty: 同じ色なら0、近い色なら小ペナルティ、遠い色なら大ペナルティ、透明等は固定ペナルティ", () => {
+  const colors = [
+    { name: "黒", color: "#1a1a1a" },
+    { name: "白", color: "#f5f5f5" },
+    { name: "赤", color: "#dc2626" },
+    { name: "ピンク", color: "#f472b6" },
+    { name: "透明" }, // hexなし
+    { name: "その他" }, // hexなし
+  ];
+
+  // 同じ色
+  expect(calculateColorPenalty("赤", "赤", colors)).toBe(0);
+  
+  // 片方または両方が未指定
+  expect(calculateColorPenalty("赤", undefined, colors)).toBe(0);
+  expect(calculateColorPenalty(undefined, undefined, colors)).toBe(0);
+
+  // HEXがないが文字列が違う場合
+  expect(calculateColorPenalty("透明", "その他", colors)).toBe(0.15);
+  expect(calculateColorPenalty("赤", "透明", colors)).toBe(0.15);
+
+  // 近い色（赤とピンク） -> ペナルティは小さいはず
+  const penaltyClose = calculateColorPenalty("赤", "ピンク", colors);
+  expect(penaltyClose).toBeGreaterThan(0);
+  expect(penaltyClose).toBeLessThan(0.15); // 透明の固定値よりは小さい
+
+  // 遠い色（黒と白） -> ペナルティは最大に近いはず
+  const penaltyFar = calculateColorPenalty("黒", "白", colors);
+  expect(penaltyFar).toBeGreaterThan(0.20);
+  expect(penaltyFar).toBeLessThanOrEqual(0.25);
+  
+  // 遠い色2（赤と黒）
+  const penaltyFar2 = calculateColorPenalty("赤", "黒", colors);
+  expect(penaltyFar2).toBeGreaterThan(penaltyClose);
 });
 
 test("該当なしの問い合わせは open のまま保存され、後日の登録で照合される", async () => {
