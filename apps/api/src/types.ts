@@ -96,6 +96,7 @@ export type NewInquiry = Partial<Omit<Inquiry, "id" | "created_at" | "updated_at
 
 export interface SearchFilters {
   q?: string; // 自然文クエリ（ベクトル検索）
+  display_id?: string; // 管理番号（部分一致）
   category?: string;
   color?: string;
   status?: ItemStatus;

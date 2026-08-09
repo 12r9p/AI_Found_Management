@@ -116,6 +116,7 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
 function parseFilters(q: Record<string, any>): SearchFilters {
   return {
     q: q.q || undefined,
+    display_id: q.display_id || undefined,
     category: q.category || undefined,
     color: q.color || undefined,
     status: q.status || undefined,

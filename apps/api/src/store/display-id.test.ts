@@ -47,4 +47,14 @@ describe("管理番号の一意性", () => {
     expect(mapDisplayIdWriteError(duplicate)).toBeInstanceOf(DuplicateDisplayIdError);
     expect(mapDisplayIdWriteError(unrelated)).toBe(unrelated);
   });
+
+  test("display_idでのフィルタ検索ができる", async () => {
+    const store = new MemoryStore();
+    await store.createItem({ display_id: "FD-2026-0001", category: "傘" });
+    await store.createItem({ display_id: "FD-2026-0002", category: "財布" });
+
+    const filtered = await store.listItems({ display_id: "0001" });
+    expect(filtered.items).toHaveLength(1);
+    expect(filtered.items[0].display_id).toBe("FD-2026-0001");
+  });
 });
