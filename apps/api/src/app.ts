@@ -36,6 +36,7 @@ import {
   parseInquiryCsv,
 } from "./lib/inquiry-import.ts";
 import { normalizeFoundDateRange } from "./lib/date-filters.ts";
+import { eventBus, type AppEvent } from "./lib/events.ts";
 import type { SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
 import {
@@ -304,6 +305,57 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
         embedDim: c.cfg.ai.embedDim,
         accessProtected: c.cfg.access.enabled,
       };
+    })
+    .get("/api/events", ({ request }) => {
+      let unsubscribe: (() => void) | undefined;
+      let timer: ReturnType<typeof setInterval> | undefined;
+
+      const stream = new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder();
+
+          const sendEvent = (event: AppEvent) => {
+            try {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            } catch {
+              // Stream is closed
+            }
+          };
+
+          timer = setInterval(() => {
+            sendEvent({ type: "ping", data: { timestamp: new Date().toISOString() } });
+          }, 15000);
+
+          unsubscribe = eventBus.subscribe((event) => {
+            sendEvent(event);
+          });
+
+          sendEvent({ type: "ping", data: { timestamp: new Date().toISOString() } });
+
+          request.signal.addEventListener("abort", () => {
+            if (timer) clearInterval(timer);
+            if (unsubscribe) unsubscribe();
+            try {
+              controller.close();
+            } catch {
+              // Already closed
+            }
+          });
+        },
+        cancel() {
+          if (timer) clearInterval(timer);
+          if (unsubscribe) unsubscribe();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      });
     })
     // 種別・色はスタッフが設定画面から編集できる（現場ごとに扱う物品が違うため）。
     // 未設定なら既定リストを返す。並び順・グループ見出し・色タグ込みで返す。

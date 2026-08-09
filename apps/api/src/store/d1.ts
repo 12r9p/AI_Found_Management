@@ -22,6 +22,7 @@ import {
 import { applyItemFilters } from "./memory.ts";
 import { cosineSimilarity } from "../lib/vector.ts";
 import { mapDisplayIdWriteError } from "./errors.ts";
+import { eventBus } from "../lib/events.ts";
 import {
   normalizeItemPageLimit,
   parseItemCursor,
@@ -800,7 +801,12 @@ export class D1VectorizeStore implements Store {
         created_at,
       )
       .first();
-    return rowToNotif(row);
+    const notif = rowToNotif(row);
+    eventBus.emit({
+      type: "notification",
+      data: { id: notif.id, title: notif.title, body: notif.body, type: notif.type },
+    });
+    return notif;
   }
   async listNotifications(unreadOnly = false): Promise<Notification[]> {
     const { results } = unreadOnly
