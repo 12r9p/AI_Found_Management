@@ -35,6 +35,7 @@ import {
   inquiryImportFingerprint,
   parseInquiryCsv,
 } from "./lib/inquiry-import.ts";
+import { normalizeFoundDateRange } from "./lib/date-filters.ts";
 import type { SearchFilters } from "./types.ts";
 import { DuplicateDisplayIdError, VectorMetadataSyncError } from "./store/index.ts";
 import {
@@ -125,6 +126,7 @@ const MAX_INQUIRY_IMPORT_BYTES = 2 * 1024 * 1024;
 const MAX_INQUIRY_IMPORT_ROWS = 500;
 
 function parseFilters(q: Record<string, any>): SearchFilters {
+  const dateRange = normalizeFoundDateRange(q.from || undefined, q.to || undefined);
   return {
     q: q.q || undefined,
     display_id: q.display_id || undefined,
@@ -132,8 +134,7 @@ function parseFilters(q: Record<string, any>): SearchFilters {
     color: q.color || undefined,
     status: q.status || undefined,
     location: q.location || undefined,
-    from: q.from || undefined,
-    to: q.to || undefined,
+    ...dateRange,
     limit: q.limit ? parseInt(q.limit, 10) : undefined,
   };
 }
