@@ -125,6 +125,9 @@ export default function MatchesPage() {
                         {[m.item?.color, m.item?.brand, m.item?.category]
                           .filter(Boolean)
                           .join(" ") || "物品"}
+                        <span className="muted-text">
+                          （管理番号: {m.item?.display_id || "—"}）
+                        </span>
                         <span className="muted-text">　↔　</span>
                         受付No: {m.inquiry?.reference_no || "—"}
                       </strong>

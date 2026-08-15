@@ -168,7 +168,9 @@ export default function ItemDetailPage() {
     <AppShell>
       <div className="rb-between mb-16">
         <div>
-          <div className="rb-eyebrow muted-text">物品 / {item.id.slice(0, 8)}</div>
+          <div className="rb-eyebrow muted-text">
+            管理番号: {item.display_id || "未設定"} / 物品ID: {item.id.slice(0, 8)}
+          </div>
           <h2>{[item.color, item.category].filter(Boolean).join(" ") || "物品詳細"}</h2>
         </div>
         {/* 直前の画面（照合・探す・一覧）へ戻す。履歴が無ければ物品一覧へ。 */}

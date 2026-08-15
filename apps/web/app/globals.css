@@ -339,6 +339,20 @@ h3,
 .rb-card--interactive:hover .rb-hint {
   color: inherit;
 }
+.rb-candidate-card {
+  border: var(--bw-thick) solid var(--border);
+  background: var(--background);
+}
+.rb-candidate-card__detail {
+  border: none;
+}
+.rb-candidate-card__detail:hover {
+  background: var(--muted);
+}
+.rb-candidate-card__action {
+  padding: 8px;
+  border-top: var(--bw-thick) solid var(--border);
+}
 .rb-interactive-card {
   appearance: none;
   display: block;
@@ -518,7 +532,8 @@ h3,
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 200;
+  /* Dialog の Portal より高い層へ描画し、取り消し操作を常に押せるようにする。 */
+  z-index: 1000;
   max-width: min(92vw, 380px);
 }
 .rb-toast {

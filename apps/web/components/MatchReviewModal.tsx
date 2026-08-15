@@ -5,7 +5,7 @@ import { Badge, Button, Card, Modal, useConfirm, useToast } from "./ui";
 import { MapPicker } from "./MapPicker";
 import { FoundImage } from "./FoundImage";
 import { api, imageUrl, isAppliedApiError } from "../lib/api";
-import { STATUS_LABEL, type Match } from "../lib/types";
+import { STATUS_LABEL, type Inquiry, type Match } from "../lib/types";
 
 /**
  * 突き合わせの確認ダイアログ。
@@ -21,7 +21,7 @@ export function MatchReviewModal({
   match: Match | null;
   context: string;
   onClose: () => void;
-  onDecided: () => void;
+  onDecided: (result: { inquiry: Inquiry; match: Match }) => void;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -33,26 +33,45 @@ export function MatchReviewModal({
   const pct = Math.round(match.score * 100);
 
   const decide = async (status: "confirmed" | "rejected") => {
-    const ok = await confirm({
-      title: status === "confirmed" ? "一致の確定" : "不一致の確認",
-      body:
-        status === "confirmed"
-          ? `この遺失物を受付No: ${inquiry?.reference_no || "—"} の問い合わせと一致として確定します。\n問い合わせは「連絡済」になります。`
-          : `この組み合わせを不一致として処理します。\n以後この組み合わせでは通知されません。`,
-      danger: status === "rejected",
-      okLabel: status === "confirmed" ? "一致を確定" : "不一致にする",
-    });
-    if (!ok) return;
+    if (status === "confirmed") {
+      const ok = await confirm({
+        title: "一致の確定",
+        body: `この遺失物を受付No: ${inquiry?.reference_no || "—"} の問い合わせと一致として確定します。\n問い合わせは「連絡済」になります。`,
+        okLabel: "一致を確定",
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     try {
-      await api.updateMatch(match.id, status);
-      toast(
-        status === "confirmed"
-          ? "一致を確定し、連絡済みに更新しました"
-          : "不一致として処理しました",
-        "success",
-      );
-      onDecided();
+      const result = await api.updateMatch(match.id, status);
+      if (status === "confirmed") {
+        toast("一致を確定し、連絡済みに更新しました", "success");
+      } else {
+        toast("不一致として処理しました", {
+          tone: "success",
+          action: {
+            label: "やり直す",
+            onClick: async () => {
+              try {
+                const { restored, inquiry: updated } = await api.restoreRejectedMatches(
+                  match.inquiry_id,
+                  [match.id],
+                );
+                toast(
+                  restored.length
+                    ? "不一致の処理を取り消しました"
+                    : "この候補は既に変更されているため取り消せません",
+                  restored.length ? "success" : "error",
+                );
+                onDecided({ inquiry: updated, match: { ...match, status: "pending" } });
+              } catch (e) {
+                toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
+              }
+            },
+          },
+        });
+      }
+      onDecided(result);
       onClose();
     } catch (e) {
       if (isAppliedApiError(e)) {
@@ -62,7 +81,7 @@ export function MatchReviewModal({
             : "不一致の判断は反映済みです。検索データの同期は保留中です",
           "success",
         );
-        onDecided();
+        onDecided({ inquiry: inquiry ?? match.inquiry!, match: { ...match, status } });
         onClose();
         return;
       }
@@ -131,6 +150,8 @@ export function MatchReviewModal({
             <strong>
               {[item?.color, item?.brand, item?.category].filter(Boolean).join(" ") || "—"}
             </strong>
+            <br />
+            管理番号: {item?.display_id || "—"}
             <br />
             保管場所: {item?.storage_location || "—"}
             <br />

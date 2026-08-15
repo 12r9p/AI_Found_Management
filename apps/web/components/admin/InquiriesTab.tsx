@@ -56,6 +56,29 @@ export function InquiriesTab() {
   const importFileRef = useRef<HTMLInputElement>(null);
   const [rematchProgress, setRematchProgress] = useState<RematchProgress | null>(null);
 
+  const applyInquiryUpdate = useCallback(
+    (updated: Inquiry, matchStatuses: Record<string, Match["status"]> = {}) => {
+      setInquiries((current) =>
+        current.map((inquiry) => {
+          if (inquiry.id !== updated.id) return inquiry;
+          return {
+            ...inquiry,
+            ...updated,
+            matches: inquiry.matches?.map((match) =>
+              matchStatuses[match.id] ? { ...match, status: matchStatuses[match.id] } : match,
+            ),
+          };
+        }),
+      );
+      setSelected(null);
+    },
+    [],
+  );
+  const removeInquiry = useCallback((id: string) => {
+    setInquiries((current) => current.filter((inquiry) => inquiry.id !== id));
+    setSelected(null);
+  }, []);
+
   const load = useCallback(() => {
     setLoading(true);
     api
@@ -307,7 +330,12 @@ export function InquiriesTab() {
         </>
       )}
 
-      <InquiryDetailModal inquiry={current} onClose={() => setSelected(null)} onChanged={load} />
+      <InquiryDetailModal
+        inquiry={current}
+        onClose={() => setSelected(null)}
+        onChanged={applyInquiryUpdate}
+        onDeleted={removeInquiry}
+      />
     </div>
   );
 }
@@ -317,10 +345,12 @@ function InquiryDetailModal({
   inquiry,
   onClose,
   onChanged,
+  onDeleted,
 }: {
   inquiry: Inquiry | null;
   onClose: () => void;
-  onChanged: () => void;
+  onChanged: (updated: Inquiry, matchStatuses?: Record<string, Match["status"]>) => void;
+  onDeleted: (id: string) => void;
 }) {
   const meta = useMeta();
   const toast = useToast();
@@ -343,7 +373,7 @@ function InquiryDetailModal({
   const save = async () => {
     setSaving(true);
     try {
-      await api.updateInquiry(inquiry.id, {
+      const { inquiry: updated } = await api.updateInquiry(inquiry.id, {
         status: form.status,
         category: form.category,
         color: form.color,
@@ -353,12 +383,12 @@ function InquiryDetailModal({
       });
       toast("保存しました", "success");
       setEdit(false);
-      onChanged();
+      onChanged(updated);
     } catch (e) {
       if (isAppliedApiError(e)) {
         toast("保存内容は反映済みです。検索データの同期は保留中です", "success");
         setEdit(false);
-        onChanged();
+        onChanged({ ...inquiry, ...form, updated_at: new Date().toISOString() });
         return;
       }
       toast(`保存に失敗しました: ${(e as Error).message}`, "error");
@@ -377,8 +407,105 @@ function InquiryDetailModal({
     if (!ok) return;
     await api.deleteInquiry(inquiry.id);
     toast("削除しました", "success");
-    onChanged();
-    onClose();
+    onDeleted(inquiry.id);
+  };
+
+  const rejectCandidate = async (match: Match) => {
+    setSaving(true);
+    try {
+      const { inquiry: updated } = await api.updateMatch(match.id, "rejected");
+      if (reviewing?.id === match.id) setReviewing(null);
+      toast("候補を不一致として処理しました", {
+        tone: "success",
+        action: {
+          label: "やり直す",
+          onClick: async () => {
+            try {
+              const { restored, inquiry: restoredInquiry } = await api.restoreRejectedMatches(
+                inquiry.id,
+                [match.id],
+              );
+              toast(
+                restored.length
+                  ? "不一致の処理を取り消しました"
+                  : "この候補は既に変更されているため取り消せません",
+                restored.length ? "success" : "error",
+              );
+              onChanged(restoredInquiry, Object.fromEntries(restored.map((id) => [id, "pending"])));
+            } catch (e) {
+              toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
+            }
+          },
+        },
+      });
+      onChanged(updated, { [match.id]: "rejected" });
+    } catch (e) {
+      if (isAppliedApiError(e)) {
+        if (reviewing?.id === match.id) setReviewing(null);
+        toast("不一致の判断は反映済みです。検索データの同期は保留中です", "success");
+        onChanged(inquiry, { [match.id]: "rejected" });
+        return;
+      }
+      toast(`更新に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const rejectAllCandidates = async () => {
+    const pendingCount = cands.filter((match) => match.status === "pending").length;
+    if (!pendingCount) return;
+
+    setSaving(true);
+    try {
+      const {
+        rejected,
+        rejectedMatchIds,
+        inquiry: updated,
+      } = await api.rejectPendingMatches(inquiry.id);
+      if (reviewing) setReviewing(null);
+      toast(`${rejected}件の候補を不一致として処理しました`, {
+        tone: "success",
+        action: {
+          label: "やり直す",
+          onClick: async () => {
+            try {
+              const { restored, inquiry: restoredInquiry } = await api.restoreRejectedMatches(
+                inquiry.id,
+                rejectedMatchIds,
+              );
+              toast(
+                restored.length
+                  ? `${restored.length}件の不一致処理を取り消しました`
+                  : "候補は既に変更されているため取り消せません",
+                restored.length ? "success" : "error",
+              );
+              onChanged(restoredInquiry, Object.fromEntries(restored.map((id) => [id, "pending"])));
+            } catch (e) {
+              toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
+            }
+          },
+        },
+      });
+      onChanged(updated, Object.fromEntries(rejectedMatchIds.map((id) => [id, "rejected"])));
+    } catch (e) {
+      if (isAppliedApiError(e)) {
+        if (reviewing) setReviewing(null);
+        toast("不一致の判断は反映済みです。検索データの同期は保留中です", "success");
+        onChanged(
+          inquiry,
+          Object.fromEntries(
+            cands
+              .filter((match) => match.status === "pending")
+              .map((match) => [match.id, "rejected"]),
+          ),
+        );
+        return;
+      }
+      toast(`更新に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -534,7 +661,14 @@ function InquiryDetailModal({
           </Card>
         )}
 
-        <div className="rb-label mb-8">照合候補（{cands.length}件）</div>
+        <div className="rb-between mb-8">
+          <div className="rb-label">照合候補（{cands.length}件）</div>
+          {cands.some((match) => match.status === "pending") && (
+            <Button variant="destructive" size="sm" onClick={rejectAllCandidates} disabled={saving}>
+              全候補を不一致
+            </Button>
+          )}
+        </div>
         {cands.length === 0 ? (
           <Card variant="muted">
             <p className="rb-small" style={{ margin: 0 }}>
@@ -547,32 +681,49 @@ function InquiryDetailModal({
             {cands.map((m) => {
               const pct = Math.round(m.score * 100);
               return (
-                <BaseButton
-                  key={m.id}
-                  className="rb-card rb-card--interactive rb-interactive-card"
-                  onClick={() => setReviewing({ ...m, inquiry })}
-                  aria-label={`${[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}の照合候補を確認`}
-                >
-                  <span className="rb-between mb-8">
-                    <strong className="rb-small">
-                      {[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}
-                    </strong>
-                    <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
-                  </span>
-                  {m.item?.image_keys?.[0] ? (
-                    <FoundImage
-                      imageKey={m.item.image_keys[0]}
-                      variant="preview"
-                      alt=""
-                      className="thumb mb-8"
-                    />
-                  ) : (
-                    <span className="thumb thumb--empty mb-8">画像なし</span>
+                <div key={m.id} className="rb-candidate-card">
+                  <BaseButton
+                    className="rb-interactive-card rb-candidate-card__detail"
+                    onClick={() => setReviewing({ ...m, inquiry })}
+                    aria-label={`${[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}の照合候補を確認`}
+                  >
+                    <span className="rb-between mb-8">
+                      <strong className="rb-small">
+                        {[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}
+                      </strong>
+                      <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
+                    </span>
+                    <span className="rb-tiny" style={{ display: "block" }}>
+                      管理番号: {m.item?.display_id || "—"}
+                    </span>
+                    {m.item?.image_keys?.[0] ? (
+                      <FoundImage
+                        imageKey={m.item.image_keys[0]}
+                        variant="preview"
+                        alt=""
+                        className="thumb mb-8"
+                      />
+                    ) : (
+                      <span className="thumb thumb--empty mb-8">画像なし</span>
+                    )}
+                    <span className="rb-tiny muted-text" style={{ display: "block" }}>
+                      拾得場所: {m.item?.found_location || "—"} / {STATUS_LABEL[m.status]}
+                    </span>
+                  </BaseButton>
+                  {m.status === "pending" && (
+                    <div className="rb-candidate-card__action">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        block
+                        onClick={() => rejectCandidate(m)}
+                        disabled={saving}
+                      >
+                        不一致
+                      </Button>
+                    </div>
                   )}
-                  <span className="rb-tiny muted-text" style={{ display: "block" }}>
-                    拾得場所: {m.item?.found_location || "—"} / {STATUS_LABEL[m.status]}
-                  </span>
-                </BaseButton>
+                </div>
               );
             })}
           </div>
@@ -584,7 +735,9 @@ function InquiryDetailModal({
         match={reviewing}
         context="管理 › 問い合わせ › 候補"
         onClose={() => setReviewing(null)}
-        onDecided={onChanged}
+        onDecided={({ inquiry: updated, match }) =>
+          onChanged(updated, { [match.id]: match.status })
+        }
       />
     </>
   );

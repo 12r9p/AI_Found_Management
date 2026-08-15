@@ -966,6 +966,38 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       runAfterSave(refreshInquiryVector(c, params.id, touches), "inquiry", params.id);
       return { inquiry: updated };
     })
+    .post("/api/inquiries/:id/reject-pending-matches", async ({ params, set }) => {
+      const c = await ctx();
+      const result = await c.store.rejectPendingMatches(params.id);
+      if (!result.ok) {
+        set.status = 404;
+        return { error: "not found" };
+      }
+      return {
+        rejected: result.rejected,
+        rejectedMatchIds: result.rejectedMatchIds,
+        inquiry: result.inquiry,
+      };
+    })
+    .post("/api/inquiries/:id/restore-rejected-matches", async ({ params, body, set }) => {
+      const matchIds = (body as { matchIds?: unknown })?.matchIds;
+      if (
+        !Array.isArray(matchIds) ||
+        matchIds.length === 0 ||
+        matchIds.length > 100 ||
+        matchIds.some((id) => typeof id !== "string" || !id.trim())
+      ) {
+        set.status = 400;
+        return { error: "invalid_match_ids" };
+      }
+      const c = await ctx();
+      const result = await c.store.restoreRejectedMatches(params.id, matchIds);
+      if (!result.ok) {
+        set.status = 404;
+        return { error: "not found" };
+      }
+      return { restored: result.restored, inquiry: result.inquiry };
+    })
     .delete("/api/inquiries/:id", async ({ params }) => {
       const c = await ctx();
       return { deleted: await c.store.deleteInquiry(params.id) };

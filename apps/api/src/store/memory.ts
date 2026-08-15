@@ -16,6 +16,8 @@ import {
   type MatchBulkEntry,
   type MatchDecision,
   type MatchDecisionResult,
+  type RejectPendingMatchesResult,
+  type RestoreRejectedMatchesResult,
   type UpdateOptions,
   nowIso,
   newId,
@@ -289,6 +291,42 @@ export class MemoryStore implements Store {
     this.recomputeInquiryState(inquiry, nowIso());
     this.persist();
     return { ok: true, match, inquiry };
+  }
+
+  async rejectPendingMatches(inquiryId: string): Promise<RejectPendingMatchesResult> {
+    const inquiry = this.inquiries.find((candidate) => candidate.id === inquiryId);
+    if (!inquiry) return { ok: false, reason: "not_found" };
+
+    const rejectedMatchIds: string[] = [];
+    for (const match of this.matches) {
+      if (match.inquiry_id === inquiryId && match.status === "pending") {
+        match.status = "rejected";
+        rejectedMatchIds.push(match.id);
+      }
+    }
+    this.recomputeInquiryState(inquiry, nowIso());
+    this.persist();
+    return { ok: true, rejected: rejectedMatchIds.length, rejectedMatchIds, inquiry };
+  }
+
+  async restoreRejectedMatches(
+    inquiryId: string,
+    matchIds: string[],
+  ): Promise<RestoreRejectedMatchesResult> {
+    const inquiry = this.inquiries.find((candidate) => candidate.id === inquiryId);
+    if (!inquiry) return { ok: false, reason: "not_found" };
+
+    const targets = new Set(matchIds);
+    const restored: string[] = [];
+    for (const match of this.matches) {
+      if (match.inquiry_id === inquiryId && targets.has(match.id) && match.status === "rejected") {
+        match.status = "pending";
+        restored.push(match.id);
+      }
+    }
+    this.recomputeInquiryState(inquiry, nowIso());
+    this.persist();
+    return { ok: true, restored, inquiry };
   }
 
   /** 現在残っている照合候補だけを使い、問い合わせの派生状態を再計算する。 */
