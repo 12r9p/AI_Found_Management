@@ -5,7 +5,7 @@ import { Badge, Button, Card, Modal, useConfirm, useToast } from "./ui";
 import { MapPicker } from "./MapPicker";
 import { FoundImage } from "./FoundImage";
 import { api, imageUrl, isAppliedApiError } from "../lib/api";
-import { STATUS_LABEL, type Match } from "../lib/types";
+import { STATUS_LABEL, type Inquiry, type Match } from "../lib/types";
 
 /**
  * 突き合わせの確認ダイアログ。
@@ -21,7 +21,7 @@ export function MatchReviewModal({
   match: Match | null;
   context: string;
   onClose: () => void;
-  onDecided: () => void;
+  onDecided: (result: { inquiry: Inquiry; match: Match }) => void;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -43,7 +43,7 @@ export function MatchReviewModal({
     }
     setBusy(true);
     try {
-      await api.updateMatch(match.id, status);
+      const result = await api.updateMatch(match.id, status);
       if (status === "confirmed") {
         toast("一致を確定し、連絡済みに更新しました", "success");
       } else {
@@ -53,14 +53,17 @@ export function MatchReviewModal({
             label: "やり直す",
             onClick: async () => {
               try {
-                const { restored } = await api.restoreRejectedMatches(match.inquiry_id, [match.id]);
+                const { restored, inquiry: updated } = await api.restoreRejectedMatches(
+                  match.inquiry_id,
+                  [match.id],
+                );
                 toast(
                   restored.length
                     ? "不一致の処理を取り消しました"
                     : "この候補は既に変更されているため取り消せません",
                   restored.length ? "success" : "error",
                 );
-                onDecided();
+                onDecided({ inquiry: updated, match: { ...match, status: "pending" } });
               } catch (e) {
                 toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
               }
@@ -68,7 +71,7 @@ export function MatchReviewModal({
           },
         });
       }
-      onDecided();
+      onDecided(result);
       onClose();
     } catch (e) {
       if (isAppliedApiError(e)) {
@@ -78,7 +81,7 @@ export function MatchReviewModal({
             : "不一致の判断は反映済みです。検索データの同期は保留中です",
           "success",
         );
-        onDecided();
+        onDecided({ inquiry: inquiry ?? match.inquiry!, match: { ...match, status } });
         onClose();
         return;
       }

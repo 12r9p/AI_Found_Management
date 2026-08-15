@@ -56,6 +56,29 @@ export function InquiriesTab() {
   const importFileRef = useRef<HTMLInputElement>(null);
   const [rematchProgress, setRematchProgress] = useState<RematchProgress | null>(null);
 
+  const applyInquiryUpdate = useCallback(
+    (updated: Inquiry, matchStatuses: Record<string, Match["status"]> = {}) => {
+      setInquiries((current) =>
+        current.map((inquiry) => {
+          if (inquiry.id !== updated.id) return inquiry;
+          return {
+            ...inquiry,
+            ...updated,
+            matches: inquiry.matches?.map((match) =>
+              matchStatuses[match.id] ? { ...match, status: matchStatuses[match.id] } : match,
+            ),
+          };
+        }),
+      );
+      setSelected(null);
+    },
+    [],
+  );
+  const removeInquiry = useCallback((id: string) => {
+    setInquiries((current) => current.filter((inquiry) => inquiry.id !== id));
+    setSelected(null);
+  }, []);
+
   const load = useCallback(() => {
     setLoading(true);
     api
@@ -307,7 +330,12 @@ export function InquiriesTab() {
         </>
       )}
 
-      <InquiryDetailModal inquiry={current} onClose={() => setSelected(null)} onChanged={load} />
+      <InquiryDetailModal
+        inquiry={current}
+        onClose={() => setSelected(null)}
+        onChanged={applyInquiryUpdate}
+        onDeleted={removeInquiry}
+      />
     </div>
   );
 }
@@ -317,10 +345,12 @@ function InquiryDetailModal({
   inquiry,
   onClose,
   onChanged,
+  onDeleted,
 }: {
   inquiry: Inquiry | null;
   onClose: () => void;
-  onChanged: () => void;
+  onChanged: (updated: Inquiry, matchStatuses?: Record<string, Match["status"]>) => void;
+  onDeleted: (id: string) => void;
 }) {
   const meta = useMeta();
   const toast = useToast();
@@ -343,7 +373,7 @@ function InquiryDetailModal({
   const save = async () => {
     setSaving(true);
     try {
-      await api.updateInquiry(inquiry.id, {
+      const { inquiry: updated } = await api.updateInquiry(inquiry.id, {
         status: form.status,
         category: form.category,
         color: form.color,
@@ -353,12 +383,12 @@ function InquiryDetailModal({
       });
       toast("保存しました", "success");
       setEdit(false);
-      onChanged();
+      onChanged(updated);
     } catch (e) {
       if (isAppliedApiError(e)) {
         toast("保存内容は反映済みです。検索データの同期は保留中です", "success");
         setEdit(false);
-        onChanged();
+        onChanged({ ...inquiry, ...form, updated_at: new Date().toISOString() });
         return;
       }
       toast(`保存に失敗しました: ${(e as Error).message}`, "error");
@@ -377,14 +407,13 @@ function InquiryDetailModal({
     if (!ok) return;
     await api.deleteInquiry(inquiry.id);
     toast("削除しました", "success");
-    onChanged();
-    onClose();
+    onDeleted(inquiry.id);
   };
 
   const rejectCandidate = async (match: Match) => {
     setSaving(true);
     try {
-      await api.updateMatch(match.id, "rejected");
+      const { inquiry: updated } = await api.updateMatch(match.id, "rejected");
       if (reviewing?.id === match.id) setReviewing(null);
       toast("候補を不一致として処理しました", {
         tone: "success",
@@ -392,26 +421,29 @@ function InquiryDetailModal({
           label: "やり直す",
           onClick: async () => {
             try {
-              const { restored } = await api.restoreRejectedMatches(inquiry.id, [match.id]);
+              const { restored, inquiry: restoredInquiry } = await api.restoreRejectedMatches(
+                inquiry.id,
+                [match.id],
+              );
               toast(
                 restored.length
                   ? "不一致の処理を取り消しました"
                   : "この候補は既に変更されているため取り消せません",
                 restored.length ? "success" : "error",
               );
-              onChanged();
+              onChanged(restoredInquiry, Object.fromEntries(restored.map((id) => [id, "pending"])));
             } catch (e) {
               toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
             }
           },
         },
       });
-      onChanged();
+      onChanged(updated, { [match.id]: "rejected" });
     } catch (e) {
       if (isAppliedApiError(e)) {
         if (reviewing?.id === match.id) setReviewing(null);
         toast("不一致の判断は反映済みです。検索データの同期は保留中です", "success");
-        onChanged();
+        onChanged(inquiry, { [match.id]: "rejected" });
         return;
       }
       toast(`更新に失敗しました: ${(e as Error).message}`, "error");
@@ -426,7 +458,11 @@ function InquiryDetailModal({
 
     setSaving(true);
     try {
-      const { rejected, rejectedMatchIds } = await api.rejectPendingMatches(inquiry.id);
+      const {
+        rejected,
+        rejectedMatchIds,
+        inquiry: updated,
+      } = await api.rejectPendingMatches(inquiry.id);
       if (reviewing) setReviewing(null);
       toast(`${rejected}件の候補を不一致として処理しました`, {
         tone: "success",
@@ -434,26 +470,36 @@ function InquiryDetailModal({
           label: "やり直す",
           onClick: async () => {
             try {
-              const { restored } = await api.restoreRejectedMatches(inquiry.id, rejectedMatchIds);
+              const { restored, inquiry: restoredInquiry } = await api.restoreRejectedMatches(
+                inquiry.id,
+                rejectedMatchIds,
+              );
               toast(
                 restored.length
                   ? `${restored.length}件の不一致処理を取り消しました`
                   : "候補は既に変更されているため取り消せません",
                 restored.length ? "success" : "error",
               );
-              onChanged();
+              onChanged(restoredInquiry, Object.fromEntries(restored.map((id) => [id, "pending"])));
             } catch (e) {
               toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
             }
           },
         },
       });
-      onChanged();
+      onChanged(updated, Object.fromEntries(rejectedMatchIds.map((id) => [id, "rejected"])));
     } catch (e) {
       if (isAppliedApiError(e)) {
         if (reviewing) setReviewing(null);
         toast("不一致の判断は反映済みです。検索データの同期は保留中です", "success");
-        onChanged();
+        onChanged(
+          inquiry,
+          Object.fromEntries(
+            cands
+              .filter((match) => match.status === "pending")
+              .map((match) => [match.id, "rejected"]),
+          ),
+        );
         return;
       }
       toast(`更新に失敗しました: ${(e as Error).message}`, "error");
@@ -687,7 +733,9 @@ function InquiryDetailModal({
         match={reviewing}
         context="管理 › 問い合わせ › 候補"
         onClose={() => setReviewing(null)}
-        onDecided={onChanged}
+        onDecided={({ inquiry: updated, match }) =>
+          onChanged(updated, { [match.id]: match.status })
+        }
       />
     </>
   );
