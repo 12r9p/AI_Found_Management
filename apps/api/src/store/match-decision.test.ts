@@ -298,6 +298,26 @@ for (const [storeName, createStore] of storeFactories) {
       }
     });
 
+    test("確認待ち候補をまとめて不一致にし、問い合わせを未解決へ戻す", async () => {
+      const fixture = createStore();
+      try {
+        const { store } = fixture;
+        const { inquiry, firstMatch, secondMatch } = await seedDecisionScenario(store);
+
+        const result = await store.rejectPendingMatches(inquiry.id);
+
+        expect(result).toMatchObject({
+          ok: true,
+          rejected: 2,
+          inquiry: { id: inquiry.id, status: "open", matched_item_id: null },
+        });
+        expect(await store.getMatch(firstMatch.id)).toMatchObject({ status: "rejected" });
+        expect(await store.getMatch(secondMatch.id)).toMatchObject({ status: "rejected" });
+      } finally {
+        fixture.close();
+      }
+    });
+
     test("別候補の確定は競合として全変更を取り消し、確定済み候補は維持する", async () => {
       const fixture = createStore();
       try {
@@ -461,6 +481,14 @@ function patchMatch(app: ReturnType<typeof createApp>, id: string, body: unknown
   );
 }
 
+function rejectPendingMatches(app: ReturnType<typeof createApp>, inquiryId: string) {
+  return app.fetch(
+    new Request(`http://localhost/api/inquiries/${inquiryId}/reject-pending-matches`, {
+      method: "POST",
+    }),
+  );
+}
+
 test("PATCHはconfirmedとrejected以外を400で拒否する", async () => {
   const store = new MemoryStore();
   const app = createApp(async () => contextFor(store));
@@ -503,6 +531,20 @@ test("PATCH成功時は更新後の照合結果と問い合わせを返す", asy
     status: "contacted",
     matched_item_id: firstItem.id,
   });
+});
+
+test("POSTは問い合わせの確認待ち候補だけをまとめて不一致にする", async () => {
+  const store = new MemoryStore();
+  const app = createApp(async () => contextFor(store));
+  const { inquiry, firstMatch, secondMatch } = await seedDecisionScenario(store);
+
+  const response = await rejectPendingMatches(app, inquiry.id);
+  const body = (await response.json()) as { rejected: number; inquiry: Inquiry };
+
+  expect(response.status).toBe(200);
+  expect(body).toMatchObject({ rejected: 2, inquiry: { id: inquiry.id, status: "open" } });
+  expect(await store.getMatch(firstMatch.id)).toMatchObject({ status: "rejected" });
+  expect(await store.getMatch(secondMatch.id)).toMatchObject({ status: "rejected" });
 });
 
 test("D1判断後のベクトル同期失敗は適用済み503とし、同じ判断で修復できる", async () => {

@@ -966,6 +966,15 @@ export function createApp(resolveContext: () => Promise<AppContext> = defaultCon
       runAfterSave(refreshInquiryVector(c, params.id, touches), "inquiry", params.id);
       return { inquiry: updated };
     })
+    .post("/api/inquiries/:id/reject-pending-matches", async ({ params, set }) => {
+      const c = await ctx();
+      const result = await c.store.rejectPendingMatches(params.id);
+      if (!result.ok) {
+        set.status = 404;
+        return { error: "not found" };
+      }
+      return { rejected: result.rejected, inquiry: result.inquiry };
+    })
     .delete("/api/inquiries/:id", async ({ params }) => {
       const c = await ctx();
       return { deleted: await c.store.deleteInquiry(params.id) };

@@ -16,6 +16,7 @@ import {
   type MatchBulkEntry,
   type MatchDecision,
   type MatchDecisionResult,
+  type RejectPendingMatchesResult,
   type UpdateOptions,
   nowIso,
   newId,
@@ -289,6 +290,22 @@ export class MemoryStore implements Store {
     this.recomputeInquiryState(inquiry, nowIso());
     this.persist();
     return { ok: true, match, inquiry };
+  }
+
+  async rejectPendingMatches(inquiryId: string): Promise<RejectPendingMatchesResult> {
+    const inquiry = this.inquiries.find((candidate) => candidate.id === inquiryId);
+    if (!inquiry) return { ok: false, reason: "not_found" };
+
+    let rejected = 0;
+    for (const match of this.matches) {
+      if (match.inquiry_id === inquiryId && match.status === "pending") {
+        match.status = "rejected";
+        rejected++;
+      }
+    }
+    this.recomputeInquiryState(inquiry, nowIso());
+    this.persist();
+    return { ok: true, rejected, inquiry };
   }
 
   /** 現在残っている照合候補だけを使い、問い合わせの派生状態を再計算する。 */

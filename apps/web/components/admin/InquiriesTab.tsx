@@ -409,6 +409,37 @@ function InquiryDetailModal({
     }
   };
 
+  const rejectAllCandidates = async () => {
+    const pendingCount = cands.filter((match) => match.status === "pending").length;
+    if (!pendingCount) return;
+
+    const ok = await confirm({
+      title: "全候補を不一致にする",
+      body: `確認待ちの候補 ${pendingCount} 件をすべて不一致として処理します。以後、これらの組み合わせでは通知されません。`,
+      danger: true,
+      okLabel: `${pendingCount}件を不一致にする`,
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      const { rejected } = await api.rejectPendingMatches(inquiry.id);
+      if (reviewing) setReviewing(null);
+      toast(`${rejected}件の候補を不一致として処理しました`, "success");
+      onChanged();
+    } catch (e) {
+      if (isAppliedApiError(e)) {
+        if (reviewing) setReviewing(null);
+        toast("不一致の判断は反映済みです。検索データの同期は保留中です", "success");
+        onChanged();
+        return;
+      }
+      toast(`更新に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <Modal
@@ -562,7 +593,14 @@ function InquiryDetailModal({
           </Card>
         )}
 
-        <div className="rb-label mb-8">照合候補（{cands.length}件）</div>
+        <div className="rb-between mb-8">
+          <div className="rb-label">照合候補（{cands.length}件）</div>
+          {cands.some((match) => match.status === "pending") && (
+            <Button variant="destructive" size="sm" onClick={rejectAllCandidates} disabled={saving}>
+              全候補を不一致
+            </Button>
+          )}
+        </div>
         {cands.length === 0 ? (
           <Card variant="muted">
             <p className="rb-small" style={{ margin: 0 }}>

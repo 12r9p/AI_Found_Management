@@ -208,6 +208,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
+  rejectPendingMatches: (inquiryId: string) =>
+    req<{ rejected: number; inquiry: Inquiry }>(
+      `/api/inquiries/${inquiryId}/reject-pending-matches`,
+      { method: "POST" },
+    ),
   deleteInquiry: (id: string) =>
     req<{ deleted: boolean }>(`/api/inquiries/${id}`, { method: "DELETE" }),
 
