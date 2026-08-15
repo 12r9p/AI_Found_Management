@@ -381,6 +381,34 @@ function InquiryDetailModal({
     onClose();
   };
 
+  const rejectCandidate = async (match: Match) => {
+    const ok = await confirm({
+      title: "不一致の確認",
+      body: "この候補を不一致として処理します。以後、この組み合わせでは通知されません。",
+      danger: true,
+      okLabel: "不一致にする",
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      await api.updateMatch(match.id, "rejected");
+      if (reviewing?.id === match.id) setReviewing(null);
+      toast("候補を不一致として処理しました", "success");
+      onChanged();
+    } catch (e) {
+      if (isAppliedApiError(e)) {
+        if (reviewing?.id === match.id) setReviewing(null);
+        toast("不一致の判断は反映済みです。検索データの同期は保留中です", "success");
+        onChanged();
+        return;
+      }
+      toast(`更新に失敗しました: ${(e as Error).message}`, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <Modal
@@ -547,32 +575,44 @@ function InquiryDetailModal({
             {cands.map((m) => {
               const pct = Math.round(m.score * 100);
               return (
-                <BaseButton
-                  key={m.id}
-                  className="rb-card rb-card--interactive rb-interactive-card"
-                  onClick={() => setReviewing({ ...m, inquiry })}
-                  aria-label={`${[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}の照合候補を確認`}
-                >
-                  <span className="rb-between mb-8">
-                    <strong className="rb-small">
-                      {[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}
-                    </strong>
-                    <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
-                  </span>
-                  {m.item?.image_keys?.[0] ? (
-                    <FoundImage
-                      imageKey={m.item.image_keys[0]}
-                      variant="preview"
-                      alt=""
-                      className="thumb mb-8"
-                    />
-                  ) : (
-                    <span className="thumb thumb--empty mb-8">画像なし</span>
+                <div key={m.id} className="rb-card">
+                  <BaseButton
+                    className="rb-card--interactive rb-interactive-card"
+                    onClick={() => setReviewing({ ...m, inquiry })}
+                    aria-label={`${[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}の照合候補を確認`}
+                  >
+                    <span className="rb-between mb-8">
+                      <strong className="rb-small">
+                        {[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}
+                      </strong>
+                      <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
+                    </span>
+                    {m.item?.image_keys?.[0] ? (
+                      <FoundImage
+                        imageKey={m.item.image_keys[0]}
+                        variant="preview"
+                        alt=""
+                        className="thumb mb-8"
+                      />
+                    ) : (
+                      <span className="thumb thumb--empty mb-8">画像なし</span>
+                    )}
+                    <span className="rb-tiny muted-text" style={{ display: "block" }}>
+                      拾得場所: {m.item?.found_location || "—"} / {STATUS_LABEL[m.status]}
+                    </span>
+                  </BaseButton>
+                  {m.status === "pending" && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="mt-8"
+                      onClick={() => rejectCandidate(m)}
+                      disabled={saving}
+                    >
+                      不一致
+                    </Button>
                   )}
-                  <span className="rb-tiny muted-text" style={{ display: "block" }}>
-                    拾得場所: {m.item?.found_location || "—"} / {STATUS_LABEL[m.status]}
-                  </span>
-                </BaseButton>
+                </div>
               );
             })}
           </div>
