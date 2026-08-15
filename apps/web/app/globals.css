@@ -463,11 +463,11 @@ h3,
 
 /* ---- Modal ---- */
 .rb-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: color-mix(in srgb, var(--foreground) 30%, transparent);
   backdrop-filter: blur(3px);
-  z-index: 100;
+  z-index: calc(100 + var(--rb-dialog-layer, 0) * 2);
 }
 .rb-dialog-viewport {
   position: fixed;
@@ -477,7 +477,7 @@ h3,
   justify-content: center;
   padding: 16px;
   overflow-y: auto;
-  z-index: 101;
+  z-index: calc(101 + var(--rb-dialog-layer, 0) * 2);
 }
 .rb-modal {
   background: var(--background);
@@ -507,6 +507,42 @@ h3,
   justify-content: flex-end;
   padding: 12px 16px;
   border-top: var(--bw-thick) solid var(--border);
+}
+
+@media (max-width: 700px) {
+  .rb-dialog-viewport {
+    align-items: flex-end;
+    padding: 8px;
+  }
+  .rb-modal,
+  .rb-modal--wide,
+  .rb-modal--full {
+    max-width: 100%;
+    max-height: calc(100dvh - 16px);
+    min-width: 0;
+  }
+  .rb-modal__head,
+  .rb-modal__body,
+  .rb-modal__foot {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .rb-modal__body {
+    overflow-x: hidden;
+  }
+  .rb-modal__title {
+    overflow-wrap: anywhere;
+  }
+  .rb-modal__foot {
+    flex-wrap: wrap;
+  }
+  .rb-modal__foot .rb-btn {
+    flex: 1 1 120px;
+  }
+  .rb-modal .rb-between,
+  .rb-modal .rb-row {
+    flex-wrap: wrap;
+  }
 }
 
 /* ---- Banner / notice ---- */

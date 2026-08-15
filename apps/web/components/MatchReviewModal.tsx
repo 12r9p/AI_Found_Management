@@ -1,11 +1,11 @@
 "use client";
-import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, Modal, useConfirm, useToast } from "./ui";
 import { MapPicker } from "./MapPicker";
 import { FoundImage } from "./FoundImage";
+import { ItemEditModal } from "./ItemEditModal";
 import { api, imageUrl, isAppliedApiError } from "../lib/api";
-import { STATUS_LABEL, type Inquiry, type Match } from "../lib/types";
+import { STATUS_LABEL, type Inquiry, type Item, type Match } from "../lib/types";
 
 /**
  * 突き合わせの確認ダイアログ。
@@ -26,6 +26,7 @@ export function MatchReviewModal({
   const toast = useToast();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
 
   if (!match) return null;
   const item = match.item;
@@ -97,6 +98,7 @@ export function MatchReviewModal({
       title="突き合わせの確認"
       context={context}
       size="wide"
+      layer={1}
       onClose={onClose}
       footer={
         <>
@@ -167,9 +169,14 @@ export function MatchReviewModal({
             </div>
           )}
           {item && (
-            <Link href={`/items/${item.id}`} className="rb-btn rb-btn--outline rb-btn--sm mt-16">
-              編集ページを開く →
-            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-16"
+              onClick={() => setEditingItem(item)}
+            >
+              遺失物を編集
+            </Button>
           )}
         </Card>
 
@@ -206,6 +213,11 @@ export function MatchReviewModal({
           </p>
         </Card>
       </div>
+      <ItemEditModal
+        item={editingItem}
+        context={`${context} › 遺失物`}
+        onClose={() => setEditingItem(null)}
+      />
     </Modal>
   );
 }

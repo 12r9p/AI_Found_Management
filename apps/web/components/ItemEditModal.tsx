@@ -32,6 +32,7 @@ export function ItemEditModal({
   onClose,
   onSaved,
   onDeleted,
+  layer = 2,
 }: {
   item: Item | null;
   context: string;
@@ -39,6 +40,8 @@ export function ItemEditModal({
   onSaved?: (updated: Item) => void;
   /** 削除完了時に呼ばれる（一覧側で行を消す・再読込するなどに使う）。 */
   onDeleted?: (id: string) => void;
+  /** 親ポップアップの上で開くための表示レイヤー。 */
+  layer?: number;
 }) {
   const meta = useMeta();
   const presets = useLocationPresets();
@@ -161,6 +164,7 @@ export function ItemEditModal({
       title={`編集: ${item.display_id || [item.color, item.category].filter(Boolean).join(" ") || "物品"}`}
       context={context}
       size="wide"
+      layer={layer}
       onClose={onClose}
       footer={
         <>
