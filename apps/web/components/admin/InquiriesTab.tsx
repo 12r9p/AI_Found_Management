@@ -1,25 +1,11 @@
 "use client";
-import { Button as BaseButton } from "@base-ui/react/button";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Modal,
-  Select,
-  Textarea,
-  useToast,
-  useConfirm,
-  MetaOptionList,
-} from "../ui";
-import { MatchReviewModal } from "../MatchReviewModal";
+import { Badge, Button, Card, Field, Select, useToast } from "../ui";
 import { FoundImage } from "../FoundImage";
-import { useMeta } from "../useMeta";
 import { usePersistentState } from "../usePersistentState";
-import { api, isAppliedApiError, itemCursorsEqual, type ItemCursor } from "../../lib/api";
-import { STATUS_LABEL, type Inquiry, type Match } from "../../lib/types";
+import { api, itemCursorsEqual, type ItemCursor } from "../../lib/api";
+import { STATUS_LABEL, type Inquiry } from "../../lib/types";
 
 const STATUS_FILTERS = [
   { id: "", label: "すべて" },
@@ -42,42 +28,17 @@ interface RematchProgress {
 
 /**
  * 管理 > 問い合わせ。
- * 一覧行をクリックで詳細ポップアップ（照合候補を画像付きで表示）。
- * 候補をさらにクリックすると突き合わせ確認ダイアログへ重なる。
+ * 一覧から固定URLの詳細画面へ移動し、照合と編集を独立した画面で行う。
  */
 export function InquiriesTab() {
   const toast = useToast();
   const [status, setStatus] = usePersistentState("admin:inqStatus", "");
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Inquiry | null>(null);
   const [rematching, setRematching] = useState(false);
   const [importing, setImporting] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const [rematchProgress, setRematchProgress] = useState<RematchProgress | null>(null);
-
-  const applyInquiryUpdate = useCallback(
-    (updated: Inquiry, matchStatuses: Record<string, Match["status"]> = {}) => {
-      setInquiries((current) =>
-        current.map((inquiry) => {
-          if (inquiry.id !== updated.id) return inquiry;
-          return {
-            ...inquiry,
-            ...updated,
-            matches: inquiry.matches?.map((match) =>
-              matchStatuses[match.id] ? { ...match, status: matchStatuses[match.id] } : match,
-            ),
-          };
-        }),
-      );
-      setSelected(null);
-    },
-    [],
-  );
-  const removeInquiry = useCallback((id: string) => {
-    setInquiries((current) => current.filter((inquiry) => inquiry.id !== id));
-    setSelected(null);
-  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -159,9 +120,6 @@ export function InquiriesTab() {
       setRematching(false);
     }
   };
-
-  // 選択中の問い合わせを最新に保つ（判断後にダイアログの中身も更新）
-  const current = selected ? (inquiries.find((i) => i.id === selected.id) ?? selected) : null;
 
   const importCsv = async (file: File | undefined) => {
     if (!file) return;
@@ -275,7 +233,7 @@ export function InquiriesTab() {
           {inquiries.map((inq) => {
             const cands = inq.matches ?? [];
             return (
-              <button key={inq.id} className="rb-listrow" onClick={() => setSelected(inq)}>
+              <Link key={inq.id} className="rb-listrow" href={`/admin/inquiries/${inq.id}`}>
                 {/* 照合候補の画像を一覧段階で見せる（開かずに当たりを付けられる） */}
                 <div className="rb-thumbs">
                   {cands.slice(0, 2).map((m) =>
@@ -324,421 +282,11 @@ export function InquiriesTab() {
                     受付: {new Date(inq.created_at).toLocaleString("ja-JP")}
                   </div>
                 </div>
-              </button>
+              </Link>
             );
           })}
         </>
       )}
-
-      <InquiryDetailModal
-        inquiry={current}
-        onClose={() => setSelected(null)}
-        onChanged={applyInquiryUpdate}
-        onDeleted={removeInquiry}
-      />
     </div>
-  );
-}
-
-/** 問い合わせ詳細＋照合候補（画像付き）。編集もここで行う。 */
-function InquiryDetailModal({
-  inquiry,
-  onClose,
-  onChanged,
-  onDeleted,
-}: {
-  inquiry: Inquiry | null;
-  onClose: () => void;
-  onChanged: (updated: Inquiry, matchStatuses?: Record<string, Match["status"]>) => void;
-  onDeleted: (id: string) => void;
-}) {
-  const meta = useMeta();
-  const toast = useToast();
-  const confirm = useConfirm();
-  const [edit, setEdit] = useState(false);
-  const [form, setForm] = useState<Partial<Inquiry>>({});
-  const [saving, setSaving] = useState(false);
-  const [reviewing, setReviewing] = useState<Match | null>(null);
-
-  useEffect(() => {
-    if (inquiry) {
-      setForm({ ...inquiry });
-      setEdit(false);
-    }
-  }, [inquiry?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!inquiry) return null;
-  const cands = inquiry.matches ?? [];
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const { inquiry: updated } = await api.updateInquiry(inquiry.id, {
-        status: form.status,
-        category: form.category,
-        color: form.color,
-        description: form.description,
-        reference_no: form.reference_no,
-        notes: form.notes,
-      });
-      toast("保存しました", "success");
-      setEdit(false);
-      onChanged(updated);
-    } catch (e) {
-      if (isAppliedApiError(e)) {
-        toast("保存内容は反映済みです。検索データの同期は保留中です", "success");
-        setEdit(false);
-        onChanged({ ...inquiry, ...form, updated_at: new Date().toISOString() });
-        return;
-      }
-      toast(`保存に失敗しました: ${(e as Error).message}`, "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const del = async () => {
-    const ok = await confirm({
-      title: "問い合わせの削除",
-      body: `受付No: ${inquiry.reference_no || "—"} の問い合わせを削除します。元に戻せません。`,
-      danger: true,
-      okLabel: "削除する",
-    });
-    if (!ok) return;
-    await api.deleteInquiry(inquiry.id);
-    toast("削除しました", "success");
-    onDeleted(inquiry.id);
-  };
-
-  const rejectCandidate = async (match: Match) => {
-    setSaving(true);
-    try {
-      const { inquiry: updated } = await api.updateMatch(match.id, "rejected");
-      if (reviewing?.id === match.id) setReviewing(null);
-      toast("候補を不一致として処理しました", {
-        tone: "success",
-        action: {
-          label: "やり直す",
-          onClick: async () => {
-            try {
-              const { restored, inquiry: restoredInquiry } = await api.restoreRejectedMatches(
-                inquiry.id,
-                [match.id],
-              );
-              toast(
-                restored.length
-                  ? "不一致の処理を取り消しました"
-                  : "この候補は既に変更されているため取り消せません",
-                restored.length ? "success" : "error",
-              );
-              onChanged(restoredInquiry, Object.fromEntries(restored.map((id) => [id, "pending"])));
-            } catch (e) {
-              toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
-            }
-          },
-        },
-      });
-      onChanged(updated, { [match.id]: "rejected" });
-    } catch (e) {
-      if (isAppliedApiError(e)) {
-        if (reviewing?.id === match.id) setReviewing(null);
-        toast("不一致の判断は反映済みです。検索データの同期は保留中です", "success");
-        onChanged(inquiry, { [match.id]: "rejected" });
-        return;
-      }
-      toast(`更新に失敗しました: ${(e as Error).message}`, "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const rejectAllCandidates = async () => {
-    const pendingCount = cands.filter((match) => match.status === "pending").length;
-    if (!pendingCount) return;
-
-    setSaving(true);
-    try {
-      const {
-        rejected,
-        rejectedMatchIds,
-        inquiry: updated,
-      } = await api.rejectPendingMatches(inquiry.id);
-      if (reviewing) setReviewing(null);
-      toast(`${rejected}件の候補を不一致として処理しました`, {
-        tone: "success",
-        action: {
-          label: "やり直す",
-          onClick: async () => {
-            try {
-              const { restored, inquiry: restoredInquiry } = await api.restoreRejectedMatches(
-                inquiry.id,
-                rejectedMatchIds,
-              );
-              toast(
-                restored.length
-                  ? `${restored.length}件の不一致処理を取り消しました`
-                  : "候補は既に変更されているため取り消せません",
-                restored.length ? "success" : "error",
-              );
-              onChanged(restoredInquiry, Object.fromEntries(restored.map((id) => [id, "pending"])));
-            } catch (e) {
-              toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
-            }
-          },
-        },
-      });
-      onChanged(updated, Object.fromEntries(rejectedMatchIds.map((id) => [id, "rejected"])));
-    } catch (e) {
-      if (isAppliedApiError(e)) {
-        if (reviewing) setReviewing(null);
-        toast("不一致の判断は反映済みです。検索データの同期は保留中です", "success");
-        onChanged(
-          inquiry,
-          Object.fromEntries(
-            cands
-              .filter((match) => match.status === "pending")
-              .map((match) => [match.id, "rejected"]),
-          ),
-        );
-        return;
-      }
-      toast(`更新に失敗しました: ${(e as Error).message}`, "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <Modal
-        open={!!inquiry && !reviewing}
-        title={`問い合わせ 受付No: ${inquiry.reference_no || "—"}`}
-        context="管理 › 問い合わせ"
-        size="wide"
-        onClose={onClose}
-        footer={
-          edit ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setForm({ ...inquiry });
-                  setEdit(false);
-                }}
-                disabled={saving}
-              >
-                取消
-              </Button>
-              <Button onClick={save} disabled={saving}>
-                {saving ? "保存中…" : "保存"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="destructive" onClick={del}>
-                削除
-              </Button>
-              <Button variant="outline" onClick={() => setEdit(true)}>
-                編集
-              </Button>
-              <Button onClick={onClose}>閉じる</Button>
-            </>
-          )
-        }
-      >
-        {!edit ? (
-          <Card variant="muted" className="mb-16">
-            <div className="rb-between mb-8">
-              <strong>
-                {[inquiry.color, inquiry.category].filter(Boolean).join(" ") || "種別未設定"}
-              </strong>
-              <Badge
-                tone={
-                  inquiry.status === "resolved"
-                    ? "success"
-                    : inquiry.status === "contacted"
-                      ? "info"
-                      : inquiry.status === "open"
-                        ? "warning"
-                        : undefined
-                }
-              >
-                {STATUS_LABEL[inquiry.status]}
-              </Badge>
-            </div>
-            <div className="rb-label mb-8">聞き取り内容</div>
-            <p className="rb-small" style={{ margin: 0 }}>
-              {inquiry.description || "—"}
-            </p>
-            {inquiry.notes && (
-              <>
-                <div className="rb-label mt-16 mb-8">メモ</div>
-                <p className="rb-small" style={{ margin: 0 }}>
-                  {inquiry.notes}
-                </p>
-              </>
-            )}
-            <div className="rb-tiny muted-text mt-16">
-              受付: {new Date(inquiry.created_at).toLocaleString("ja-JP")} / 更新:{" "}
-              {new Date(inquiry.updated_at).toLocaleString("ja-JP")}
-            </div>
-          </Card>
-        ) : (
-          <Card variant="bordered" className="mb-16">
-            <div className="rb-grid rb-grid--2">
-              <Field label="受付番号（紙台帳）">
-                {(id) => (
-                  <Input
-                    id={id}
-                    value={form.reference_no ?? ""}
-                    onChange={(e) => setForm((f) => ({ ...f, reference_no: e.target.value }))}
-                  />
-                )}
-              </Field>
-              <Field label="状態">
-                {(id) => (
-                  <Select
-                    id={id}
-                    value={form.status}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, status: e.target.value as Inquiry["status"] }))
-                    }
-                  >
-                    {meta.inquiryStatuses.map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field label="種別">
-                {(id) => (
-                  <Select
-                    id={id}
-                    value={form.category}
-                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                  >
-                    <option value="">未設定</option>
-                    <MetaOptionList options={meta.categories} />
-                  </Select>
-                )}
-              </Field>
-              <Field label="色">
-                {(id) => (
-                  <Select
-                    id={id}
-                    value={form.color}
-                    onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                  >
-                    <option value="">未設定</option>
-                    <MetaOptionList options={meta.colors} />
-                  </Select>
-                )}
-              </Field>
-            </div>
-            <div className="rb-tiny muted-text">
-              種別・色は特徴文から自動設定される場合があります。内容を確認し、必要なら修正してください。修正後は再照合されます。
-            </div>
-            <Field label="聞き取り内容" hint="保存すると再ベクトル化され、以後の照合に反映されます">
-              {(id) => (
-                <Textarea
-                  id={id}
-                  value={form.description ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                />
-              )}
-            </Field>
-            <Field label="メモ" hint="個人情報は入力しないでください">
-              {(id) => (
-                <Textarea
-                  id={id}
-                  value={form.notes ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                />
-              )}
-            </Field>
-          </Card>
-        )}
-
-        <div className="rb-between mb-8">
-          <div className="rb-label">照合候補（{cands.length}件）</div>
-          {cands.some((match) => match.status === "pending") && (
-            <Button variant="destructive" size="sm" onClick={rejectAllCandidates} disabled={saving}>
-              全候補を不一致
-            </Button>
-          )}
-        </div>
-        {cands.length === 0 ? (
-          <Card variant="muted">
-            <p className="rb-small" style={{ margin: 0 }}>
-              一致する候補はまだありません。新しい遺失物が登録されると自動で照合され、
-              候補が見つかればスタッフに通知されます。
-            </p>
-          </Card>
-        ) : (
-          <div className="rb-grid rb-grid--auto">
-            {cands.map((m) => {
-              const pct = Math.round(m.score * 100);
-              return (
-                <div key={m.id} className="rb-candidate-card">
-                  <BaseButton
-                    className="rb-interactive-card rb-candidate-card__detail"
-                    onClick={() => setReviewing({ ...m, inquiry })}
-                    aria-label={`${[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}の照合候補を確認`}
-                  >
-                    <span className="rb-between mb-8">
-                      <strong className="rb-small">
-                        {[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}
-                      </strong>
-                      <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
-                    </span>
-                    <span className="rb-tiny" style={{ display: "block" }}>
-                      管理番号: {m.item?.display_id || "—"}
-                    </span>
-                    {m.item?.image_keys?.[0] ? (
-                      <FoundImage
-                        imageKey={m.item.image_keys[0]}
-                        variant="preview"
-                        alt=""
-                        className="thumb mb-8"
-                      />
-                    ) : (
-                      <span className="thumb thumb--empty mb-8">画像なし</span>
-                    )}
-                    <span className="rb-tiny muted-text" style={{ display: "block" }}>
-                      拾得場所: {m.item?.found_location || "—"} / {STATUS_LABEL[m.status]}
-                    </span>
-                  </BaseButton>
-                  {m.status === "pending" && (
-                    <div className="rb-candidate-card__action">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        block
-                        onClick={() => rejectCandidate(m)}
-                        disabled={saving}
-                      >
-                        不一致
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Modal>
-
-      {/* 候補 → 突き合わせ確認（さらに一段深い階層） */}
-      <MatchReviewModal
-        match={reviewing}
-        context="管理 › 問い合わせ › 候補"
-        onClose={() => setReviewing(null)}
-        onDecided={({ inquiry: updated, match }) =>
-          onChanged(updated, { [match.id]: match.status })
-        }
-      />
-    </>
   );
 }

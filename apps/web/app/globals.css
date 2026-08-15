@@ -1090,7 +1090,7 @@ button.map-box {
   cursor: pointer;
 }
 
-/* 一覧行（問い合わせ等）: クリックで詳細ポップアップ */
+/* 一覧行（問い合わせ等）: クリックで詳細画面へ移動 */
 .rb-listrow {
   display: flex;
   gap: 12px;
@@ -1103,6 +1103,7 @@ button.map-box {
   padding: 12px;
   cursor: pointer;
   font: inherit;
+  text-decoration: none;
 }
 .rb-listrow:hover {
   background: var(--primary);
