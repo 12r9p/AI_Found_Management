@@ -38,7 +38,11 @@ export type MatchDecisionResult =
   | { ok: false; reason: "not_found" | "confirmation_conflict" };
 
 export type RejectPendingMatchesResult =
-  | { ok: true; rejected: number; inquiry: Inquiry }
+  | { ok: true; rejected: number; rejectedMatchIds: string[]; inquiry: Inquiry }
+  | { ok: false; reason: "not_found" };
+
+export type RestoreRejectedMatchesResult =
+  | { ok: true; restored: string[]; inquiry: Inquiry }
   | { ok: false; reason: "not_found" };
 
 export class VectorMetadataSyncError extends Error {
@@ -102,6 +106,11 @@ export interface Store {
   decideMatch(id: string, decision: MatchDecision): Promise<MatchDecisionResult>;
   /** 問い合わせに残る確認待ち候補をまとめて不一致にし、問い合わせ状態を再計算する。 */
   rejectPendingMatches(inquiryId: string): Promise<RejectPendingMatchesResult>;
+  /** 指定した候補だけを不一致から確認待ちへ戻し、問い合わせ状態を再計算する。 */
+  restoreRejectedMatches(
+    inquiryId: string,
+    matchIds: string[],
+  ): Promise<RestoreRejectedMatchesResult>;
   findMatch(itemId: string, inquiryId: string): Promise<Match | null>;
   /**
    * 複数の突き合わせヒットを一括で確定させる（match作成＋通知作成＋問い合わせ状態更新）。

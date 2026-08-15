@@ -33,25 +33,41 @@ export function MatchReviewModal({
   const pct = Math.round(match.score * 100);
 
   const decide = async (status: "confirmed" | "rejected") => {
-    const ok = await confirm({
-      title: status === "confirmed" ? "一致の確定" : "不一致の確認",
-      body:
-        status === "confirmed"
-          ? `この遺失物を受付No: ${inquiry?.reference_no || "—"} の問い合わせと一致として確定します。\n問い合わせは「連絡済」になります。`
-          : `この組み合わせを不一致として処理します。\n以後この組み合わせでは通知されません。`,
-      danger: status === "rejected",
-      okLabel: status === "confirmed" ? "一致を確定" : "不一致にする",
-    });
-    if (!ok) return;
+    if (status === "confirmed") {
+      const ok = await confirm({
+        title: "一致の確定",
+        body: `この遺失物を受付No: ${inquiry?.reference_no || "—"} の問い合わせと一致として確定します。\n問い合わせは「連絡済」になります。`,
+        okLabel: "一致を確定",
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     try {
       await api.updateMatch(match.id, status);
-      toast(
-        status === "confirmed"
-          ? "一致を確定し、連絡済みに更新しました"
-          : "不一致として処理しました",
-        "success",
-      );
+      if (status === "confirmed") {
+        toast("一致を確定し、連絡済みに更新しました", "success");
+      } else {
+        toast("不一致として処理しました", {
+          tone: "success",
+          action: {
+            label: "やり直す",
+            onClick: async () => {
+              try {
+                const { restored } = await api.restoreRejectedMatches(match.inquiry_id, [match.id]);
+                toast(
+                  restored.length
+                    ? "不一致の処理を取り消しました"
+                    : "この候補は既に変更されているため取り消せません",
+                  restored.length ? "success" : "error",
+                );
+                onDecided();
+              } catch (e) {
+                toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
+              }
+            },
+          },
+        });
+      }
       onDecided();
       onClose();
     } catch (e) {

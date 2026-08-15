@@ -209,9 +209,14 @@ export const api = {
       body: JSON.stringify(patch),
     }),
   rejectPendingMatches: (inquiryId: string) =>
-    req<{ rejected: number; inquiry: Inquiry }>(
+    req<{ rejected: number; rejectedMatchIds: string[]; inquiry: Inquiry }>(
       `/api/inquiries/${inquiryId}/reject-pending-matches`,
       { method: "POST" },
+    ),
+  restoreRejectedMatches: (inquiryId: string, matchIds: string[]) =>
+    req<{ restored: string[]; inquiry: Inquiry }>(
+      `/api/inquiries/${inquiryId}/restore-rejected-matches`,
+      { method: "POST", body: JSON.stringify({ matchIds }) },
     ),
   deleteInquiry: (id: string) =>
     req<{ deleted: boolean }>(`/api/inquiries/${id}`, { method: "DELETE" }),

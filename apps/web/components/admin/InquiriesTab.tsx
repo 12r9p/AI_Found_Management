@@ -382,19 +382,30 @@ function InquiryDetailModal({
   };
 
   const rejectCandidate = async (match: Match) => {
-    const ok = await confirm({
-      title: "不一致の確認",
-      body: "この候補を不一致として処理します。以後、この組み合わせでは通知されません。",
-      danger: true,
-      okLabel: "不一致にする",
-    });
-    if (!ok) return;
-
     setSaving(true);
     try {
       await api.updateMatch(match.id, "rejected");
       if (reviewing?.id === match.id) setReviewing(null);
-      toast("候補を不一致として処理しました", "success");
+      toast("候補を不一致として処理しました", {
+        tone: "success",
+        action: {
+          label: "やり直す",
+          onClick: async () => {
+            try {
+              const { restored } = await api.restoreRejectedMatches(inquiry.id, [match.id]);
+              toast(
+                restored.length
+                  ? "不一致の処理を取り消しました"
+                  : "この候補は既に変更されているため取り消せません",
+                restored.length ? "success" : "error",
+              );
+              onChanged();
+            } catch (e) {
+              toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
+            }
+          },
+        },
+      });
       onChanged();
     } catch (e) {
       if (isAppliedApiError(e)) {
@@ -413,19 +424,30 @@ function InquiryDetailModal({
     const pendingCount = cands.filter((match) => match.status === "pending").length;
     if (!pendingCount) return;
 
-    const ok = await confirm({
-      title: "全候補を不一致にする",
-      body: `確認待ちの候補 ${pendingCount} 件をすべて不一致として処理します。以後、これらの組み合わせでは通知されません。`,
-      danger: true,
-      okLabel: `${pendingCount}件を不一致にする`,
-    });
-    if (!ok) return;
-
     setSaving(true);
     try {
-      const { rejected } = await api.rejectPendingMatches(inquiry.id);
+      const { rejected, rejectedMatchIds } = await api.rejectPendingMatches(inquiry.id);
       if (reviewing) setReviewing(null);
-      toast(`${rejected}件の候補を不一致として処理しました`, "success");
+      toast(`${rejected}件の候補を不一致として処理しました`, {
+        tone: "success",
+        action: {
+          label: "やり直す",
+          onClick: async () => {
+            try {
+              const { restored } = await api.restoreRejectedMatches(inquiry.id, rejectedMatchIds);
+              toast(
+                restored.length
+                  ? `${restored.length}件の不一致処理を取り消しました`
+                  : "候補は既に変更されているため取り消せません",
+                restored.length ? "success" : "error",
+              );
+              onChanged();
+            } catch (e) {
+              toast(`取り消しに失敗しました: ${(e as Error).message}`, "error");
+            }
+          },
+        },
+      });
       onChanged();
     } catch (e) {
       if (isAppliedApiError(e)) {

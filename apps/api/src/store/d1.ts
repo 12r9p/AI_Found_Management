@@ -15,6 +15,7 @@ import {
   type MatchDecision,
   type MatchDecisionResult,
   type RejectPendingMatchesResult,
+  type RestoreRejectedMatchesResult,
   type UpdateOptions,
   VectorMetadataSyncError,
   nowIso,
@@ -565,7 +566,41 @@ export class D1VectorizeStore implements Store {
 
     const inquiry = rowToInquiry(inquiryRow);
     await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, inquiry.id);
-    return { ok: true, rejected: results[0]?.results?.length ?? 0, inquiry };
+    const rejectedMatchIds = (results[0]?.results ?? []).map((row) =>
+      String((row as { id: string }).id),
+    );
+    return { ok: true, rejected: rejectedMatchIds.length, rejectedMatchIds, inquiry };
+  }
+
+  async restoreRejectedMatches(
+    inquiryId: string,
+    matchIds: string[],
+  ): Promise<RestoreRejectedMatchesResult> {
+    const current = await this.getInquiry(inquiryId);
+    if (!current) return { ok: false, reason: "not_found" };
+    if (!matchIds.length) return { ok: true, restored: [], inquiry: current };
+
+    const placeholders = matchIds.map(() => "?").join(", ");
+    const results = await this.db.batch([
+      this.db
+        .prepare(
+          `UPDATE matches SET status='pending'
+           WHERE inquiry_id=? AND status='rejected' AND id IN (${placeholders})
+           RETURNING id`,
+        )
+        .bind(inquiryId, ...matchIds),
+      this.prepareInquiryStateUpdate({ kind: "inquiry", id: inquiryId }, nowIso()),
+    ]);
+    const inquiryRow = results[1]?.results?.[0];
+    if (!inquiryRow) throw new Error(`問い合わせ ${inquiryId} が見つかりません`);
+
+    const inquiry = rowToInquiry(inquiryRow);
+    await this.syncAppliedVectorMetadata("inquiry", this.vectorizeInquiries, inquiry.id);
+    return {
+      ok: true,
+      restored: (results[0]?.results ?? []).map((row) => String((row as { id: string }).id)),
+      inquiry,
+    };
   }
 
   /** 照合判断と物品削除で共通の問い合わせ状態再計算をD1文として組み立てる。 */

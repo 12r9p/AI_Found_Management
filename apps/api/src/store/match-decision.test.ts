@@ -318,6 +318,27 @@ for (const [storeName, createStore] of storeFactories) {
       }
     });
 
+    test("指定した不一致候補だけを確認待ちへ戻し、問い合わせを再照合中へ戻す", async () => {
+      const fixture = createStore();
+      try {
+        const { store } = fixture;
+        const { inquiry, firstMatch, secondMatch } = await seedDecisionScenario(store);
+        await store.rejectPendingMatches(inquiry.id);
+
+        const result = await store.restoreRejectedMatches(inquiry.id, [firstMatch.id]);
+
+        expect(result).toMatchObject({
+          ok: true,
+          restored: [firstMatch.id],
+          inquiry: { id: inquiry.id, status: "matched", matched_item_id: null },
+        });
+        expect(await store.getMatch(firstMatch.id)).toMatchObject({ status: "pending" });
+        expect(await store.getMatch(secondMatch.id)).toMatchObject({ status: "rejected" });
+      } finally {
+        fixture.close();
+      }
+    });
+
     test("別候補の確定は競合として全変更を取り消し、確定済み候補は維持する", async () => {
       const fixture = createStore();
       try {
@@ -489,6 +510,20 @@ function rejectPendingMatches(app: ReturnType<typeof createApp>, inquiryId: stri
   );
 }
 
+function restoreRejectedMatches(
+  app: ReturnType<typeof createApp>,
+  inquiryId: string,
+  matchIds: string[],
+) {
+  return app.fetch(
+    new Request(`http://localhost/api/inquiries/${inquiryId}/restore-rejected-matches`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ matchIds }),
+    }),
+  );
+}
+
 test("PATCHはconfirmedとrejected以外を400で拒否する", async () => {
   const store = new MemoryStore();
   const app = createApp(async () => contextFor(store));
@@ -539,12 +574,43 @@ test("POSTは問い合わせの確認待ち候補だけをまとめて不一致�
   const { inquiry, firstMatch, secondMatch } = await seedDecisionScenario(store);
 
   const response = await rejectPendingMatches(app, inquiry.id);
-  const body = (await response.json()) as { rejected: number; inquiry: Inquiry };
+  const body = (await response.json()) as {
+    rejected: number;
+    rejectedMatchIds: string[];
+    inquiry: Inquiry;
+  };
 
   expect(response.status).toBe(200);
   expect(body).toMatchObject({ rejected: 2, inquiry: { id: inquiry.id, status: "open" } });
+  expect(body.rejectedMatchIds.sort()).toEqual([firstMatch.id, secondMatch.id].sort());
   expect(await store.getMatch(firstMatch.id)).toMatchObject({ status: "rejected" });
   expect(await store.getMatch(secondMatch.id)).toMatchObject({ status: "rejected" });
+});
+
+test("POSTは今回不一致にした候補だけを確認待ちへ戻す", async () => {
+  const store = new MemoryStore();
+  const app = createApp(async () => contextFor(store));
+  const { inquiry, firstMatch, secondMatch } = await seedDecisionScenario(store);
+  await store.rejectPendingMatches(inquiry.id);
+  await store.decideMatch(secondMatch.id, "confirmed");
+
+  const response = await restoreRejectedMatches(app, inquiry.id, [firstMatch.id, secondMatch.id]);
+  const body = (await response.json()) as { restored: string[]; inquiry: Inquiry };
+
+  expect(response.status).toBe(200);
+  expect(body).toMatchObject({ restored: [firstMatch.id], inquiry: { status: "contacted" } });
+  expect(await store.getMatch(firstMatch.id)).toMatchObject({ status: "pending" });
+  expect(await store.getMatch(secondMatch.id)).toMatchObject({ status: "confirmed" });
+});
+
+test("POSTは空の復元候補を400で拒否する", async () => {
+  const store = new MemoryStore();
+  const app = createApp(async () => contextFor(store));
+
+  const response = await restoreRejectedMatches(app, "inquiry-1", []);
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_match_ids" });
 });
 
 test("D1判断後のベクトル同期失敗は適用済み503とし、同じ判断で修復できる", async () => {
