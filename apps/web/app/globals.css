@@ -339,6 +339,20 @@ h3,
 .rb-card--interactive:hover .rb-hint {
   color: inherit;
 }
+.rb-candidate-card {
+  border: var(--bw-thick) solid var(--border);
+  background: var(--background);
+}
+.rb-candidate-card__detail {
+  border: none;
+}
+.rb-candidate-card__detail:hover {
+  background: var(--muted);
+}
+.rb-candidate-card__action {
+  padding: 8px;
+  border-top: var(--bw-thick) solid var(--border);
+}
 .rb-interactive-card {
   appearance: none;
   display: block;

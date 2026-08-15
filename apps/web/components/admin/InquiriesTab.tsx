@@ -681,9 +681,9 @@ function InquiryDetailModal({
             {cands.map((m) => {
               const pct = Math.round(m.score * 100);
               return (
-                <div key={m.id} className="rb-card">
+                <div key={m.id} className="rb-candidate-card">
                   <BaseButton
-                    className="rb-card--interactive rb-interactive-card"
+                    className="rb-interactive-card rb-candidate-card__detail"
                     onClick={() => setReviewing({ ...m, inquiry })}
                     aria-label={`${[m.item?.color, m.item?.category].filter(Boolean).join(" ") || "物品"}の照合候補を確認`}
                   >
@@ -711,15 +711,17 @@ function InquiryDetailModal({
                     </span>
                   </BaseButton>
                   {m.status === "pending" && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="mt-8"
-                      onClick={() => rejectCandidate(m)}
-                      disabled={saving}
-                    >
-                      不一致
-                    </Button>
+                    <div className="rb-candidate-card__action">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        block
+                        onClick={() => rejectCandidate(m)}
+                        disabled={saving}
+                      >
+                        不一致
+                      </Button>
+                    </div>
                   )}
                 </div>
               );
