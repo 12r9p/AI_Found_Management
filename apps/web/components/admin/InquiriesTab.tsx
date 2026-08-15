@@ -625,6 +625,9 @@ function InquiryDetailModal({
                       </strong>
                       <Badge tone={pct >= 60 ? "success" : "warning"}>{pct}%</Badge>
                     </span>
+                    <span className="rb-tiny" style={{ display: "block" }}>
+                      管理番号: {m.item?.display_id || "—"}
+                    </span>
                     {m.item?.image_keys?.[0] ? (
                       <FoundImage
                         imageKey={m.item.image_keys[0]}

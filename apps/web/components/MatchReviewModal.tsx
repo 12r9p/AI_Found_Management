@@ -132,6 +132,8 @@ export function MatchReviewModal({
               {[item?.color, item?.brand, item?.category].filter(Boolean).join(" ") || "—"}
             </strong>
             <br />
+            管理番号: {item?.display_id || "—"}
+            <br />
             保管場所: {item?.storage_location || "—"}
             <br />
             拾得場所: {item?.found_location || "—"}
