@@ -204,6 +204,7 @@ export function Modal({
   context,
   description,
   size,
+  layer = 0,
 }: {
   open: boolean;
   title: string;
@@ -215,13 +216,21 @@ export function Modal({
   /** 支援技術がダイアログの目的を読み上げるための説明。 */
   description?: string;
   size?: "wide" | "full";
+  /** 重ねたダイアログの前後関係。大きいほど最前面になる。 */
+  layer?: number;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="rb-overlay" />
-        <Dialog.Viewport className="rb-dialog-viewport">
+        <Dialog.Backdrop
+          className="rb-overlay"
+          style={{ "--rb-dialog-layer": layer } as React.CSSProperties}
+        />
+        <Dialog.Viewport
+          className="rb-dialog-viewport"
+          style={{ "--rb-dialog-layer": layer } as React.CSSProperties}
+        >
           <Dialog.Popup
             className={cx("rb-modal", size && `rb-modal--${size}`)}
             initialFocus={bodyRef}
@@ -325,6 +334,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
           open={!!confirmState}
           title={confirmState?.title ?? "確認"}
           onClose={() => settle(false)}
+          layer={3}
           footer={
             <>
               <Button variant="outline" onClick={() => settle(false)}>
