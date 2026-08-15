@@ -11,6 +11,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import type { MetaOption } from "../lib/types";
 
 const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(" ");
@@ -270,6 +271,8 @@ export const useToast = () => useContext(ToastCtx);
 
 export function UIProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
   const push = useCallback<ToastFn>((msg, opts) => {
     // 旧シグネチャ toast(msg, "success") も受ける
@@ -292,29 +295,32 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
     confirmState?.resolve(v);
     setConfirmState(null);
   };
+  const toastViewport = (
+    <div className="rb-toasts" aria-live="polite">
+      {toasts.map((t) => (
+        <div key={t.id} className={cx("rb-toast", t.tone && `rb-toast--${t.tone}`)}>
+          <span className="rb-toast__msg">{t.msg}</span>
+          {t.action && (
+            <button
+              className="rb-toast__action"
+              onClick={() => {
+                t.action!.onClick();
+                dismiss(t.id);
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <ToastCtx.Provider value={push}>
       <ConfirmCtx.Provider value={confirm}>
         {children}
-        <div className="rb-toasts" aria-live="polite">
-          {toasts.map((t) => (
-            <div key={t.id} className={cx("rb-toast", t.tone && `rb-toast--${t.tone}`)}>
-              <span className="rb-toast__msg">{t.msg}</span>
-              {t.action && (
-                <button
-                  className="rb-toast__action"
-                  onClick={() => {
-                    t.action!.onClick();
-                    dismiss(t.id);
-                  }}
-                >
-                  {t.action.label}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+        {mounted && createPortal(toastViewport, document.body)}
         <Modal
           open={!!confirmState}
           title={confirmState?.title ?? "確認"}
